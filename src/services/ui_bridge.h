@@ -6,6 +6,7 @@
 #include "../domain/skill_counts.h"
 #include "../domain/officer_roster.h"
 #include "../domain/ownership.h"
+#include "../domain/trait_runtime.h"
 #include "config_save.h"
 #include "config_json.h"
 #include "service_wake.h"
@@ -88,6 +89,8 @@ public:
     own::shared_owner<const domain::TraitEffectDefinitions> trait_effects_view();
     void publish_custom_traits(domain::CustomTraits traits);
     own::shared_owner<const domain::CustomTraits> custom_traits_view();
+    void publish_trait_catalog(own::shared_owner<const domain::TraitRuntimeCatalog> catalog);
+    own::shared_owner<const domain::TraitRuntimeCatalog> take_trait_catalog();
     bool request_officer_name(OfficerNameEdit edit);
     void close_officer_name_requests();
     std::optional<OfficerNameEdit> take_officer_name();
@@ -124,6 +127,7 @@ private:
     own::shared_owner<const domain::OfficerNames> current_officer_names;
     own::shared_owner<const domain::TraitEffectDefinitions> current_trait_effects;
     own::shared_owner<const domain::CustomTraits> current_custom_traits;
+    own::shared_owner<const domain::TraitRuntimeCatalog> pending_trait_catalog;
     std::optional<OfficerNameEdit> pending_officer_name;
     bool officer_name_requests_open = true;
     std::optional<ConfigSaveStatus> officer_name_result;

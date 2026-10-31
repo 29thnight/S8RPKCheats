@@ -19,6 +19,9 @@
   <ItemGroup><ProjectReference Include="..\domain\S8.Domain.vcxproj"><Project>{0EA2D584-8408-44F9-9AA0-D6B5EF1E3E62}</Project></ProjectReference><ProjectReference Include="..\platform\windows\S8.Windows.vcxproj"><Project>{9EF95D4D-3DAF-4BCF-915E-633442D816A1}</Project></ProjectReference></ItemGroup>
   <ItemGroup>
     <ClInclude Include="tengi_config_keys.h" />
+    <ClInclude Include="service_wake.h" />
+    <ClInclude Include="trait_runtime_config.h" />
+    <ClCompile Include="trait_runtime_config.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

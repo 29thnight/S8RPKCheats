@@ -2,6 +2,7 @@
 
 #include "config_save_service.h"
 #include "config_json.h"
+#include "trait_runtime_config.h"
 #include "../platform/windows/config_commit.h"
 #include "../platform/windows/speed_clock.h"
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
@@ -154,7 +155,19 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                         traits[static_cast<std::uint16_t>(index + 1)] = {name, grade};
                     }
                 }
-                bridge.publish_custom_traits(std::move(traits));
+                if (!text.empty()) {
+                    domain::Result<domain::TraitRuntimeCatalog> catalog = read_trait_runtime_config(text);
+
+                    if (catalog) {
+                        bridge.publish_trait_catalog(own::make_shared<domain::TraitRuntimeCatalog>(std::move(*catalog)));
+                        bridge.publish_custom_traits(std::move(traits));
+                    } else {
+                        bridge.publish_notice("특기 설정 형식이 올바르지 않아 이전 설정을 유지합니다.");
+                    }
+                } else {
+                    bridge.publish_trait_catalog(own::make_shared<domain::TraitRuntimeCatalog>());
+                    bridge.publish_custom_traits({});
+                }
                 trait_loaded = true;
                 trait_from_default = from_default;
                 trait_write_time = !from_default && !text.empty() ? write_time : std::nullopt;

@@ -64,6 +64,25 @@ own::shared_owner<const domain::CustomTraits> UiBridge::custom_traits_view() {
     return current_custom_traits;
 }
 
+void UiBridge::publish_trait_catalog(own::shared_owner<const domain::TraitRuntimeCatalog> catalog) {
+    {
+        std::lock_guard lock(mutex);
+
+        pending_trait_catalog.swap(catalog);
+    }
+}
+
+own::shared_owner<const domain::TraitRuntimeCatalog> UiBridge::take_trait_catalog() {
+    own::shared_owner<const domain::TraitRuntimeCatalog> catalog;
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_trait_catalog.swap(catalog);
+    }
+    return catalog;
+}
+
 bool UiBridge::request_officer_name(OfficerNameEdit edit) {
     {
         std::lock_guard lock(mutex);
