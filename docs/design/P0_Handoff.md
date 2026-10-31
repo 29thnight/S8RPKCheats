@@ -25,8 +25,8 @@
 
 P0 이후의 현재 구현·원본 기능 대응은 [원본 기능 대응과 구현 상태](Implementation_Parity.md)를 기준으로 확인한다. 위 표의 P0 조사와 실행 미확인 범위는 조사 이력으로 유지한다.
 
-현재 `src/proxy/entry.cpp`는 `DllMain`에서 최소한의 bootstrap만 시작하고, `runtime/game_loop.cpp`의 coordinator가 loader lock 밖에서 초기화를 이어간다. 창 소유 스레드에 subclass를 설치하며, Present가 합쳐 보낸 메시지에서 `tick_game`, `commit_ui_commands`와 증분 편집 작업을 처리한다. 설정과 로그의 파일 처리는 별도 서비스에 있다. native 책략 UI callback은 지정 스레드·현재 epoch/root를 통과한 경우에만 연결된다.
+현재 `src/proxy/entry.cpp`는 `DllMain`에서 최소한의 bootstrap만 시작하고, `runtime/game_loop.cpp`의 coordinator가 loader lock 밖에서 초기화를 이어간다. 창 소유 스레드에 subclass를 설치하며, Present가 합쳐 보낸 메시지에서 root/player 관측 후 공통 1,500µs deadline과 250µs 그룹 slice로 `tick_game`, `commit_ui_commands`와 증분 편집 작업을 순환 처리한다. 읽기 실패는 세션 종료로 취급하지 않고 해당 갱신을 보류한다. 설정과 로그의 파일 처리는 별도 서비스에 있다. native 책략 UI callback은 지정 스레드·현재 epoch/root를 통과한 경우에만 연결된다.
 
-종료는 요청 차단, 진행 중 작업의 복구, native 진입점 정리, 렌더 자원 정리를 단계별로 수행한다. 실패한 복구는 다음 메시지에서 같은 단계부터 재시도한다. 창 소실 시에는 추가 게임 쓰기를 막고 callback이 참조할 수 있는 상태를 보존한다.
+종료는 요청 차단, 진행 중 작업의 복구, native 진입점 정리, 렌더 자원 정리를 단계별로 수행한다. 실패한 복구는 다음 메시지에서 같은 단계부터 재시도한다. 주막의 불확정 pair, 군주 보너스·맵 journal, 공성 이동 비용 복원 상태도 성공 확인 전까지 보존한다. 창 소실 시에는 추가 게임 쓰기를 막고 callback이 참조할 수 있는 상태를 보존한다.
 
 이 연결은 소스에 구현되어 있다. 창 스레드가 게임의 모든 메모리를 배타적으로 소유한다는 뜻은 아니며, 실제 callback 스레드·종료 경합·빌드와 게임 동작은 실행으로 확인하지 않았다.
