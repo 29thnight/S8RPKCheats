@@ -5,6 +5,7 @@
 #include "trait_catalog_service.h"
 #include "trait_text_service.h"
 #include "city_support_service.h"
+#include "native_officer_name_service.h"
 #include "../platform/windows/config_commit.h"
 #include "../platform/windows/speed_clock.h"
 #include <chrono>
@@ -19,6 +20,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     TraitTextService trait_texts(path.parent_path());
     TraitCatalogService trait_catalogs(path.parent_path());
     CitySupportService city_support(path.parent_path());
+    NativeOfficerNameService native_names;
     FileLogWriter file_log(path.parent_path() / L"S8RPK_cheat.log");
     bool log_failure_reported = false;
     const auto skill_path = path.parent_path() / L"S8RPK_skill_counts.json";
@@ -115,6 +117,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         service.poll();
         poll_skills(false);
         poll_names();
+        poll_native_officer_names(native_names, bridge);
         trait_texts.poll(bridge);
         city_support.poll(bridge);
         file_log.poll(bridge.file_log);
@@ -136,7 +139,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                 deadline = std::min(deadline, debounce);
             }
         }
-        if (bridge.file_log.pending()) {
+        if (bridge.file_log.pending() || bridge.native_officer_names.pending()) {
             deadline = now;
         }
         bridge.config_wake.wait_until(observed, deadline, stop);
@@ -153,6 +156,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     } while (active_counts || (pending_counts && !skill_save_failed) || name_active || pending_name);
     const bool config_saved = service.close_and_wait();
 
+    poll_native_officer_names(native_names, bridge);
     trait_texts.poll(bridge);
     city_support.poll(bridge);
     file_log.close(bridge.file_log);

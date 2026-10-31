@@ -251,5 +251,9 @@
     <ClInclude Include="ruler_transfer_proposal.h" />
     <ClCompile Include="ruler_transfer_proposal.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="native_officer_names.h" />
+    <ClCompile Include="native_officer_names.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

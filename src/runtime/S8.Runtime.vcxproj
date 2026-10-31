@@ -43,5 +43,9 @@
     <ClInclude Include="native_preparation.h" />
     <ClCompile Include="native_preparation.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="officer_names_control.h" />
+    <ClCompile Include="officer_names_control.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

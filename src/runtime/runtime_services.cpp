@@ -209,21 +209,33 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                     }
                 }
             }
+            own::shared_owner<domain::SpecialtyDefinitions> specialty_definitions =
+                own::make_shared<domain::SpecialtyDefinitions>();
+
             if (!specialty_text.empty()) {
-                const auto json = nlohmann::json::parse(specialty_text, nullptr, false);
+                const nlohmann::json json = nlohmann::json::parse(specialty_text, nullptr, false);
                 if (json.is_object() && json.contains("items") && json["items"].is_array()) {
-                    for (const auto& item : json["items"]) {
+                    for (const nlohmann::json& item : json["items"]) {
                         if (!item.is_object() || !item.contains("id") || !item["id"].is_number_integer() ||
                             !item.contains("name") || !item["name"].is_string()) {
                             continue;
                         }
-                        const auto id = item["id"].get<std::int64_t>();
+                        const std::int64_t id = item["id"].get<std::int64_t>();
+
                         if (id >= 1 && id <= 300 && !item["name"].get_ref<const std::string&>().empty()) {
-                            named[static_cast<std::size_t>(id)] = true;
+                            const std::size_t index = static_cast<std::size_t>(id);
+                            domain::SpecialtyDefinition& definition = (*specialty_definitions)[index];
+
+                            named[index] = true;
+                            definition.name = item["name"].get<std::string>();
+                            if (item.contains("description") && item["description"].is_string()) {
+                                definition.description = item["description"].get<std::string>();
+                            }
                         }
                     }
                 }
             }
+            state.overlay.bridge.publish_specialty_definitions(std::move(specialty_definitions));
             state.overlay.bridge.publish_named_specialties(named, std::random_device{}());
             state.config_saved.store(services::run_config_service(state.overlay.bridge, path,
                 skill_baseline ? std::move(*skill_baseline) : std::nullopt, stop));

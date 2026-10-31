@@ -20,16 +20,41 @@ own::shared_owner<const RangeImages> UiBridge::range_images_view() {
 
 void UiBridge::publish_officer_names(domain::OfficerNames names) {
     own::shared_owner<const domain::OfficerNames> view = own::make_shared<domain::OfficerNames>(std::move(names));
+    own::shared_owner<const domain::OfficerNames> overrides = view;
 
     {
-        std::lock_guard lock(mutex);
+        const std::lock_guard<std::mutex> lock(mutex);
+
         current_officer_names.swap(view);
+        current_officer_name_overrides.swap(overrides);
     }
+    config_wake.signal();
 }
 
 own::shared_owner<const domain::OfficerNames> UiBridge::officer_names_view() {
     std::lock_guard lock(mutex);
     return current_officer_names;
+}
+
+own::shared_owner<const domain::OfficerNames> UiBridge::officer_name_overrides_view() {
+    const std::lock_guard<std::mutex> lock(mutex);
+
+    return current_officer_name_overrides;
+}
+
+bool UiBridge::publish_resolved_officer_names(domain::OfficerNames names,
+    const own::shared_owner<const domain::OfficerNames>& expected_overrides) {
+    own::shared_owner<const domain::OfficerNames> view = own::make_shared<domain::OfficerNames>(std::move(names));
+
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+
+        if (own::identity(current_officer_name_overrides) != own::identity(expected_overrides)) {
+            return false;
+        }
+        current_officer_names.swap(view);
+    }
+    return true;
 }
 
 void UiBridge::publish_trait_effects(domain::TraitEffectDefinitions definitions) {

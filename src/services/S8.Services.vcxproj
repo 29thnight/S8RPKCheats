@@ -52,5 +52,12 @@
     <ClInclude Include="corps_bridge.h" />
     <ClCompile Include="corps_bridge.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="native_officer_name_bridge.h" />
+    <ClCompile Include="native_officer_name_bridge.cpp" />
+    <ClInclude Include="native_officer_name_service.h" />
+    <ClCompile Include="native_officer_name_service.cpp" />
+    <ClCompile Include="ui_bridge_specialty.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

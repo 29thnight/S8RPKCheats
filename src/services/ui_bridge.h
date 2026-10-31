@@ -13,8 +13,12 @@
 #include "config_json.h"
 #include "service_wake.h"
 #include "file_log.h"
+#include "officer_tools_bridge.h"
 #include "debug_bridge.h"
 #include "city_bridge.h"
+#include "corps_bridge.h"
+#include "specialty_bridge.h"
+#include "native_officer_name_bridge.h"
 
 #include <mutex>
 #include <array>
@@ -83,8 +87,15 @@ public:
     CommandMailbox commands;
     ServiceWake config_wake;
     FileLogChannel file_log{config_wake};
+    NativeOfficerNameBridge native_officer_names{config_wake};
     DebugBridge debug_tools;
     CityBridge city_management;
+    CorpsBridge corps_deployment;
+    SpecialtyBridge specialties;
+    void publish_specialty_definitions(own::shared_owner<const domain::SpecialtyDefinitions> definitions);
+    own::shared_owner<const domain::SpecialtyDefinitions> specialty_definitions_view();
+    OfficerToolsBridge officer_tools;
+    OfficerNoticesBridge officer_notices;
     std::atomic<bool> external_trait_runtime{false};
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
@@ -99,6 +110,9 @@ public:
     own::shared_owner<const OfficerRosterSnapshot> officer_roster_view();
     void publish_officer_names(domain::OfficerNames names);
     own::shared_owner<const domain::OfficerNames> officer_names_view();
+    own::shared_owner<const domain::OfficerNames> officer_name_overrides_view();
+    bool publish_resolved_officer_names(domain::OfficerNames names,
+        const own::shared_owner<const domain::OfficerNames>& expected_overrides);
     void publish_trait_effects(domain::TraitEffectDefinitions definitions);
     own::shared_owner<const domain::TraitEffectDefinitions> trait_effects_view();
     void publish_custom_traits(domain::CustomTraits traits);
@@ -150,12 +164,14 @@ public:
 
 private:
     std::mutex mutex;
+    own::shared_owner<const domain::SpecialtyDefinitions> current_specialty_definitions;
     std::optional<UiSnapshot> current;
     std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> named_specialties;
     std::optional<domain::SkillCounts> skill_counts;
     own::shared_owner<const domain::SkillCounts> current_skill_counts;
     own::shared_owner<const OfficerRosterSnapshot> current_officer_roster;
     own::shared_owner<const domain::OfficerNames> current_officer_names;
+    own::shared_owner<const domain::OfficerNames> current_officer_name_overrides;
     own::shared_owner<const domain::TraitEffectDefinitions> current_trait_effects;
     own::shared_owner<const domain::CustomTraits> current_custom_traits;
     own::shared_owner<const domain::TraitRuntimeCatalog> pending_trait_catalog;
