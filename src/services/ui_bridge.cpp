@@ -5,49 +5,61 @@
 namespace s8::services {
 
 void UiBridge::publish_range_images(RangeImages images) {
-    std::shared_ptr<const RangeImages> view = std::make_shared<RangeImages>(std::move(images));
+    own::shared_owner<const RangeImages> view = own::make_shared<RangeImages>(std::move(images));
+
     {
         std::lock_guard lock(mutex);
         current_range_images.swap(view);
     }
 }
 
-std::shared_ptr<const RangeImages> UiBridge::range_images_view() {
+own::shared_owner<const RangeImages> UiBridge::range_images_view() {
     std::lock_guard lock(mutex);
     return current_range_images;
 }
 
 void UiBridge::publish_officer_names(domain::OfficerNames names) {
-    std::shared_ptr<const domain::OfficerNames> view = std::make_shared<domain::OfficerNames>(std::move(names));
+    own::shared_owner<const domain::OfficerNames> view = own::make_shared<domain::OfficerNames>(std::move(names));
+
     {
         std::lock_guard lock(mutex);
         current_officer_names.swap(view);
     }
 }
 
-std::shared_ptr<const domain::OfficerNames> UiBridge::officer_names_view() {
+own::shared_owner<const domain::OfficerNames> UiBridge::officer_names_view() {
     std::lock_guard lock(mutex);
     return current_officer_names;
 }
 
 void UiBridge::publish_trait_effects(domain::TraitEffectDefinitions definitions) {
-    auto view = std::make_shared<const domain::TraitEffectDefinitions>(std::move(definitions));
-    std::lock_guard lock(mutex);
-    current_trait_effects = std::move(view);
+    own::shared_owner<const domain::TraitEffectDefinitions> view =
+        own::make_shared<domain::TraitEffectDefinitions>(std::move(definitions));
+
+    {
+        std::lock_guard lock(mutex);
+
+        current_trait_effects.swap(view);
+    }
 }
 
-std::shared_ptr<const domain::TraitEffectDefinitions> UiBridge::trait_effects_view() {
+own::shared_owner<const domain::TraitEffectDefinitions> UiBridge::trait_effects_view() {
     std::lock_guard lock(mutex);
     return current_trait_effects;
 }
 
 void UiBridge::publish_custom_traits(domain::CustomTraits traits) {
-    auto view = std::make_shared<const domain::CustomTraits>(std::move(traits));
-    std::lock_guard lock(mutex);
-    current_custom_traits = std::move(view);
+    own::shared_owner<const domain::CustomTraits> view =
+        own::make_shared<domain::CustomTraits>(std::move(traits));
+
+    {
+        std::lock_guard lock(mutex);
+
+        current_custom_traits.swap(view);
+    }
 }
 
-std::shared_ptr<const domain::CustomTraits> UiBridge::custom_traits_view() {
+own::shared_owner<const domain::CustomTraits> UiBridge::custom_traits_view() {
     std::lock_guard lock(mutex);
     return current_custom_traits;
 }
@@ -68,7 +80,8 @@ void UiBridge::close_officer_name_requests() {
 
 std::optional<OfficerNameEdit> UiBridge::take_officer_name() {
     std::lock_guard lock(mutex);
-    auto result = std::move(pending_officer_name);
+    std::optional<OfficerNameEdit> result = std::move(pending_officer_name);
+
     pending_officer_name.reset();
     return result;
 }
@@ -80,20 +93,22 @@ void UiBridge::publish_officer_name_result(ConfigSaveStatus status) {
 
 std::optional<ConfigSaveStatus> UiBridge::take_officer_name_result() {
     std::lock_guard lock(mutex);
-    auto result = officer_name_result;
+    const std::optional<ConfigSaveStatus> result = officer_name_result;
+
     officer_name_result.reset();
     return result;
 }
 
 void UiBridge::publish_officer_roster(OfficerRosterSnapshot snapshot) {
-    std::shared_ptr<const OfficerRosterSnapshot> view = std::make_shared<OfficerRosterSnapshot>(std::move(snapshot));
+    own::shared_owner<const OfficerRosterSnapshot> view = own::make_shared<OfficerRosterSnapshot>(std::move(snapshot));
+
     {
         std::lock_guard lock(mutex);
         current_officer_roster.swap(view);
     }
 }
 
-std::shared_ptr<const OfficerRosterSnapshot> UiBridge::officer_roster_view() {
+own::shared_owner<const OfficerRosterSnapshot> UiBridge::officer_roster_view() {
     std::lock_guard lock(mutex);
     return current_officer_roster;
 }
@@ -105,20 +120,22 @@ void UiBridge::publish_skill_counts(domain::SkillCounts counts) {
 
 std::optional<domain::SkillCounts> UiBridge::take_skill_counts() {
     std::lock_guard lock(mutex);
-    auto result = std::move(skill_counts);
+    std::optional<domain::SkillCounts> result = std::move(skill_counts);
+
     skill_counts.reset();
     return result;
 }
 
 void UiBridge::publish_skill_counts_view(const domain::SkillCounts& counts) {
-    std::shared_ptr<const domain::SkillCounts> view = std::make_shared<const domain::SkillCounts>(counts);
+    own::shared_owner<const domain::SkillCounts> view = own::make_shared<domain::SkillCounts>(counts);
+
     {
         std::lock_guard lock(mutex);
         current_skill_counts.swap(view);
     }
 }
 
-std::shared_ptr<const domain::SkillCounts> UiBridge::skill_counts_view() {
+own::shared_owner<const domain::SkillCounts> UiBridge::skill_counts_view() {
     std::lock_guard lock(mutex);
     return current_skill_counts;
 }
@@ -130,37 +147,60 @@ void UiBridge::request_skill_counts_save(domain::SkillCounts counts) {
 
 std::optional<domain::SkillCounts> UiBridge::take_skill_counts_save() {
     std::lock_guard lock(mutex);
-    auto result = std::move(pending_skill_counts_save);
+    std::optional<domain::SkillCounts> result = std::move(pending_skill_counts_save);
+
     pending_skill_counts_save.reset();
     return result;
 }
 
 void UiBridge::publish_notice(std::string message) {
-    std::lock_guard lock(mutex);
-    if (!notices.empty() && notices.back().message == message && notices.back().repeat != UINT32_MAX) {
-        ++notices.back().repeat;
-        return;
+    PendingNotice incoming{std::move(message), 1};
+
+    {
+        std::lock_guard lock(mutex);
+
+        if (notice_count != 0) {
+            PendingNotice& previous = notices[(notice_head + notice_count - 1) % notice_capacity];
+
+            if (previous.message == incoming.message && previous.repeat != UINT32_MAX) {
+                ++previous.repeat;
+                return;
+            }
+        }
+
+        if (notice_count == notice_capacity) {
+            std::swap(notices[notice_head], incoming);
+            notice_head = (notice_head + 1) % notice_capacity;
+            ++dropped_notices;
+        } else {
+            std::swap(notices[(notice_head + notice_count) % notice_capacity], incoming);
+            ++notice_count;
+        }
     }
-    if (notices.size() == 128) {
-        notices.pop_front();
-        ++dropped_notices;
-    }
-    notices.push_back({std::move(message), 1});
+
+    // The overwritten string is released after leaving the producer lock.
 }
 
 std::optional<PendingNotice> UiBridge::take_notice() {
-    std::lock_guard lock(mutex);
-    if (dropped_notices) {
-        auto message = "알림 " + std::to_string(dropped_notices) + "개가 대기 한도를 초과해 생략되었습니다.";
-        dropped_notices = 0;
-        return PendingNotice{std::move(message), 1};
+    std::uint64_t dropped = 0;
+    std::optional<PendingNotice> result;
+
+    {
+        std::lock_guard lock(mutex);
+
+        dropped = std::exchange(dropped_notices, 0);
+        if (dropped == 0 && notice_count != 0) {
+            result.emplace(std::move(notices[notice_head]));
+            notice_head = (notice_head + 1) % notice_capacity;
+            --notice_count;
+        }
     }
-    if (notices.empty()) {
-        return std::nullopt;
+
+    if (dropped != 0) {
+        result.emplace("알림 " + std::to_string(dropped) + "개가 대기 한도를 초과해 생략되었습니다.", 1);
     }
-    auto notice = std::move(notices.front());
-    notices.pop_front();
-    return notice;
+
+    return result;
 }
 
 void UiBridge::publish_named_specialties(domain::NamedSpecialties named, std::uint32_t random_seed) {
@@ -170,7 +210,8 @@ void UiBridge::publish_named_specialties(domain::NamedSpecialties named, std::ui
 
 std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> UiBridge::take_named_specialties() {
     std::lock_guard lock(mutex);
-    auto result = std::move(named_specialties);
+    std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> result = std::move(named_specialties);
+
     named_specialties.reset();
     return result;
 }
@@ -192,7 +233,8 @@ void UiBridge::request_config_save(domain::ConfigSnapshot snapshot) {
 
 std::optional<domain::ConfigSnapshot> UiBridge::take_config_save() {
     std::lock_guard lock(mutex);
-    auto snapshot = std::move(pending_save);
+    std::optional<domain::ConfigSnapshot> snapshot = std::move(pending_save);
+
     pending_save.reset();
     return snapshot;
 }
@@ -214,14 +256,16 @@ void UiBridge::publish_config_load(ConfigLoad config) {
 
 std::optional<ConfigLoad> UiBridge::take_config_load() {
     std::lock_guard lock(mutex);
-    auto result = std::move(pending_load);
+    std::optional<ConfigLoad> result = std::move(pending_load);
+
     pending_load.reset();
     return result;
 }
 
 std::optional<ConfigBaseline> UiBridge::take_config_baseline() {
     std::lock_guard lock(mutex);
-    auto baseline = std::move(pending_baseline);
+    std::optional<ConfigBaseline> baseline = std::move(pending_baseline);
+
     pending_baseline.reset();
     return baseline;
 }

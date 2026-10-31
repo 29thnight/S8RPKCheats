@@ -1080,7 +1080,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 menu.officer_filtered_source = menu.officer_roster;
             };
             const bool filter_changed = menu.officer_cached_filter != menu.officer_filter ||
-                                        menu.officer_filtered_source != menu.officer_roster;
+                                        own::identity(menu.officer_filtered_source) != own::identity(menu.officer_roster);
             if (filter_changed) {
                 rebuild_filter();
                 menu.officer_reselect_pending = true;

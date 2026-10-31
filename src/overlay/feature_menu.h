@@ -17,9 +17,9 @@ struct FeatureMenu {
     std::array<void*, 11> range_textures{};
     float dpi_scale = 1.0f;
     domain::ConfigSnapshot snapshot;
-    std::shared_ptr<const domain::SkillCounts> skill_counts;
-    std::shared_ptr<const services::OfficerRosterSnapshot> officer_roster;
-    std::shared_ptr<const domain::OfficerNames> officer_names;
+    own::shared_owner<const domain::SkillCounts> skill_counts;
+    own::shared_owner<const services::OfficerRosterSnapshot> officer_roster;
+    own::shared_owner<const domain::OfficerNames> officer_names;
     domain::GameEpoch epoch{0};
     std::uint64_t next_request = 0;
     std::optional<domain::RequestId> pending;
@@ -54,7 +54,7 @@ struct FeatureMenu {
     int officer_cached_filter = -2;
     bool officer_reselect_pending = false;
     std::optional<std::uint16_t> officer_next_selection;
-    std::shared_ptr<const services::OfficerRosterSnapshot> officer_filtered_source;
+    own::shared_owner<const services::OfficerRosterSnapshot> officer_filtered_source;
     std::vector<std::size_t> officer_filtered_indices;
     std::array<bool, 5103> selected_officer_ids{};
     domain::GameEpoch selection_epoch{0};
@@ -72,8 +72,8 @@ struct FeatureMenu {
     bool officer_name_focus = false;
     bool officer_name_edit_protagonist = false;
     bool officer_name_edit_list = false;
-    std::shared_ptr<const domain::TraitEffectDefinitions> trait_effects;
-    std::shared_ptr<const domain::CustomTraits> custom_traits;
+    own::shared_owner<const domain::TraitEffectDefinitions> trait_effects;
+    own::shared_owner<const domain::CustomTraits> custom_traits;
     std::array<int, domain::officer_basic_fields.size()> selected_basic_draft{};
     std::array<bool, domain::officer_basic_fields.size()> selected_basic_editing{};
     std::array<int, 11> selected_aptitude_draft{};
