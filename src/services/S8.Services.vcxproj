@@ -40,5 +40,9 @@
     <ClInclude Include="city_bridge.h" />
     <ClCompile Include="city_bridge.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="officer_tools_bridge.h" />
+    <ClCompile Include="officer_tools_bridge.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

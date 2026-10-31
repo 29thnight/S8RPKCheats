@@ -212,5 +212,14 @@
     <ClInclude Include="signature_patterns.h" />
     <ClInclude Include="bytecode_buffer.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="officer_tool_context.h" />
+    <ClInclude Include="officer_tools.h" />
+    <ClCompile Include="officer_tools.cpp" />
+    <ClInclude Include="family_tools.h" />
+    <ClCompile Include="family_tools.cpp" />
+    <ClInclude Include="officer_notifications.h" />
+    <ClCompile Include="officer_notifications.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -85,5 +85,9 @@
     <ClCompile Include="debug_tools.cpp" />
     <ClInclude Include="debug_tools.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="officer_tools.h" />
+    <ClInclude Include="officer_notifications.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
