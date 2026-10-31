@@ -557,13 +557,13 @@ bool prepare_code(Code& state, std::uintptr_t module_base,
 
     // All caves are allocated before either all-or-rollback patch transaction.
     // No executable page is allocated or patched from a native UI callback.
-    constexpr std::array<std::uintptr_t, 8> NEAR{
+    constexpr std::array<std::uintptr_t, 8> ALLOCATION_HINT_OFFSETS{
         LAYOUT_INIT + 0xb20, LAYOUT_INIT + 0xcf1, DIALOG_INIT + 0x1c4,
         RESET_BUTTONS + 0x1f2, DIALOG_INIT + 0x203, GET_BUTTON, DIALOG_OPEN, 0x01000000
     };
 
     for (std::size_t index = 0; index < state.caves.size(); ++index) {
-        state.caves[index] = platform::windows::allocate_code_near(module_base + NEAR[index], CAVE_SIZE);
+        state.caves[index] = platform::windows::allocate_code_near(module_base + ALLOCATION_HINT_OFFSETS[index], CAVE_SIZE);
         if (!state.caves[index]) {
             discard_unpublished_code(state);
             return false;

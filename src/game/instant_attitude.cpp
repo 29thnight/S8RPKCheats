@@ -30,7 +30,7 @@ bool set_instant_attitude(InstantAttitude& state, std::uintptr_t module_base,
         state.address = module_base + *found;
     }
     std::array<std::byte, ORIGINAL.size()> current{};
-    const std::array& target = enabled ? PATCHED : ORIGINAL;
+    const std::array<std::byte, ORIGINAL.size()>& target = enabled ? PATCHED : ORIGINAL;
 
     if (!platform::windows::read_memory(state.address, current) ||
         (current != ORIGINAL && current != PATCHED)) {

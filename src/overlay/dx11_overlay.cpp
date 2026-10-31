@@ -19,7 +19,7 @@ bool load_font(const std::filesystem::path& path, float size_pixels) {
     }
     const std::ifstream::pos_type size = file.tellg();
 
-    if (size <= 0 || size > std::numeric_limits<int>::max()) {
+    if (size <= 0 || size > (std::numeric_limits<int>::max)()) {
         return false;
     }
     const int length = static_cast<int>(size);
