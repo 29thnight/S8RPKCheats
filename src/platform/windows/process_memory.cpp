@@ -58,8 +58,9 @@ bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes)
     const bool written = WriteProcessMemory(GetCurrentProcess(), target, bytes.data(), bytes.size(), &count) &&
                          count == bytes.size();
     DWORD ignored = 0;
-    VirtualProtect(target, bytes.size(), old_protection, &ignored);
-    return written;
+    const bool protection_restored = VirtualProtect(target, bytes.size(), old_protection, &ignored) != FALSE;
+
+    return written && protection_restored;
 }
 
 bool write_code_memory(std::uintptr_t address, std::span<const std::byte> bytes) {

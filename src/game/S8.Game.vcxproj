@@ -245,5 +245,11 @@
     <ClInclude Include="stratagem5_native_code.h" />
     <ClCompile Include="stratagem5_native_code.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="player_resources.h" />
+    <ClCompile Include="player_resources.cpp" />
+    <ClInclude Include="ruler_transfer_proposal.h" />
+    <ClCompile Include="ruler_transfer_proposal.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

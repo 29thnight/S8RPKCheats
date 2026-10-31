@@ -98,5 +98,8 @@
   <ItemGroup>
     <ClInclude Include="corps_deployment.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="player_resources.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
