@@ -12,8 +12,8 @@ namespace s8::platform::windows {
 std::expected<void, int> configure_speed_clock(domain::SpeedHackSettings settings,
                                                std::uint32_t excluded_thread = 0);
 
-// Disables entry patches but retains trampolines until process termination.
-// The DLL must remain resident while any callback/trampoline can still execute.
+// Stops acceleration. Entry patches remain at 1x with the accumulated offset,
+// preserving monotonic game time. The DLL and trampolines remain resident.
 int stop_speed_clock();
 bool speed_clock_has_retained_hooks();
 

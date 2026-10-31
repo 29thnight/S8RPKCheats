@@ -53,6 +53,8 @@
 #include "../game/battle_state.h"
 #include "../game/start_setting.h"
 #include "../game/tengi.h"
+#include "../game/ai_officer_growth.h"
+#include "../game/special_ability_assignment.h"
 #include "stratagem5_lifecycle.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
@@ -80,6 +82,17 @@ struct PendingTraitChange {
 };
 
 struct Runtime {
+    game::AiGrowthState ai_growth;
+    domain::AiGrowthSettings ai_growth_settings;
+    std::optional<domain::AiGrowthReport> ai_growth_last_report;
+    std::optional<domain::AiGrowthPreview> ai_growth_preview;
+    std::uint64_t ai_growth_preview_ms = 0;
+    std::uint16_t pending_annual_assignment = 0;
+    game::SpecialAbilityAssignment special_assignment;
+    own::shared_owner<const std::vector<domain::SpecialAssignmentResult>> special_assignment_results;
+    own::shared_owner<const std::vector<domain::SpecialAssignmentResult>> special_assignment_notices;
+    std::size_t special_assignment_notice_cursor = 0;
+    std::uint64_t special_assignment_generation = 0;
     game::StartSettingState start_setting;
     game::TengiState tengi;
     domain::TengiSettings tengi_settings;

@@ -27,9 +27,9 @@ using QueryTick64 = ULONGLONG(WINAPI*)();
 
 struct ClockSample {
     SRWLOCK lock = SRWLOCK_INIT;
-    std::uint64_t generation = 0;
     std::uint64_t real = 0;
     std::uint64_t scaled = 0;
+    bool initialized = false;
 };
 
 struct ClockHook {
@@ -56,8 +56,8 @@ struct SpeedClockState {
 SpeedClockState clock_state;
 thread_local std::uint32_t real_clock_depth = 0;
 
-bool should_scale(const void* return_address, std::uint64_t settings) {
-    if ((settings & ENABLED_BIT) == 0 || real_clock_depth != 0) {
+bool should_virtualize(const void* return_address) {
+    if (real_clock_depth != 0) {
         return false;
     }
 
@@ -72,27 +72,20 @@ bool should_scale(const void* return_address, std::uint64_t settings) {
     return excluded == 0 || excluded != GetCurrentThreadId();
 }
 
-std::uint64_t scaled_tick(std::size_t index, std::uint64_t real, std::uint64_t settings,
-                          bool wraps_32, bool counter) {
+std::uint64_t scaled_tick(std::size_t index, std::uint64_t real, bool wraps_32, bool counter) {
     ClockSample& sample = clock_state.samples[index];
 
     AcquireSRWLockExclusive(&sample.lock);
 
-    // A callback can wait here across a configuration change. Read the current
-    // generation under the sample lock so an older callback cannot roll it back.
-    settings = clock_state.settings.load(std::memory_order_acquire);
+    // Keep the accumulated offset across multiplier changes and OFF. Returning
+    // the raw clock after accelerated time would move the game clock backwards.
+    const std::uint64_t settings = clock_state.settings.load(std::memory_order_acquire);
+    const bool enabled = (settings & ENABLED_BIT) != 0;
 
-    if ((settings & ENABLED_BIT) == 0) {
-        ReleaseSRWLockExclusive(&sample.lock);
-        return real;
-    }
-
-    const std::uint64_t generation = settings / GENERATION_STEP;
-
-    if (sample.generation != generation) {
-        sample.generation = generation;
+    if (!sample.initialized) {
         sample.real = real;
         sample.scaled = real;
+        sample.initialized = true;
         ReleaseSRWLockExclusive(&sample.lock);
         return real;
     }
@@ -123,13 +116,13 @@ std::uint64_t scaled_tick(std::size_t index, std::uint64_t real, std::uint64_t s
 
     const std::uint64_t stall = counter ? clock_state.counter_stall : 50;
 
-    if (delta <= stall) {
+    if (enabled && delta <= stall) {
         const std::uint64_t numerator = 2 + (settings & MULTIPLIER_MASK);
 
         delta = delta * numerator / 2;
     }
 
-    if (counter) {
+    if (enabled && counter) {
         delta = std::min(delta, clock_state.counter_cap);
     }
 
@@ -149,11 +142,10 @@ std::uint64_t scaled_tick(std::size_t index, std::uint64_t real, std::uint64_t s
 BOOL WINAPI scaled_counter(LARGE_INTEGER* output) {
     const QueryCounter original = reinterpret_cast<QueryCounter>(clock_state.hooks[0].original);
     const BOOL success = original(output);
-    const std::uint64_t settings = clock_state.settings.load(std::memory_order_acquire);
 
-    if (success && should_scale(_ReturnAddress(), settings)) {
+    if (success && should_virtualize(_ReturnAddress())) {
         output->QuadPart = static_cast<LONGLONG>(scaled_tick(
-            0, static_cast<std::uint64_t>(output->QuadPart), settings, false, true));
+            0, static_cast<std::uint64_t>(output->QuadPart), false, true));
     }
 
     return success;
@@ -162,28 +154,25 @@ BOOL WINAPI scaled_counter(LARGE_INTEGER* output) {
 DWORD WINAPI scaled_tick32() {
     const QueryTick32 original = reinterpret_cast<QueryTick32>(clock_state.hooks[1].original);
     const DWORD real = original();
-    const std::uint64_t settings = clock_state.settings.load(std::memory_order_acquire);
 
-    return should_scale(_ReturnAddress(), settings)
-        ? static_cast<DWORD>(scaled_tick(1, real, settings, true, false)) : real;
+    return should_virtualize(_ReturnAddress())
+        ? static_cast<DWORD>(scaled_tick(1, real, true, false)) : real;
 }
 
 ULONGLONG WINAPI scaled_tick64() {
     const QueryTick64 original = reinterpret_cast<QueryTick64>(clock_state.hooks[2].original);
     const ULONGLONG real = original();
-    const std::uint64_t settings = clock_state.settings.load(std::memory_order_acquire);
 
-    return should_scale(_ReturnAddress(), settings)
-        ? scaled_tick(2, real, settings, false, false) : real;
+    return should_virtualize(_ReturnAddress())
+        ? scaled_tick(2, real, false, false) : real;
 }
 
 DWORD WINAPI scaled_multimedia_tick() {
     const QueryTick32 original = reinterpret_cast<QueryTick32>(clock_state.hooks[3].original);
     const DWORD real = original();
-    const std::uint64_t settings = clock_state.settings.load(std::memory_order_acquire);
 
-    return should_scale(_ReturnAddress(), settings)
-        ? static_cast<DWORD>(scaled_tick(3, real, settings, true, false)) : real;
+    return should_virtualize(_ReturnAddress())
+        ? static_cast<DWORD>(scaled_tick(3, real, true, false)) : real;
 }
 
 std::expected<void, int> prepare_clock_state() {
@@ -276,8 +265,15 @@ std::expected<void, int> install_clock_hooks() {
         const MH_STATUS enabled = MH_EnableHook(hook.target);
 
         if (enabled != MH_OK && enabled != MH_ERROR_ENABLED) {
-            // All original pointers remain valid even if disabling an entry fails.
-            stop_speed_clock();
+            // No acceleration has been published during a failed first install.
+            // Keep every trampoline, but roll back any newly enabled entries.
+            for (const ClockHook& created : clock_state.hooks) {
+
+                if (created.original) {
+                    MH_DisableHook(created.target);
+                }
+            }
+
             return std::unexpected(static_cast<int>(enabled));
         }
     }
@@ -317,23 +313,9 @@ std::expected<void, int> configure_speed_clock(domain::SpeedHackSettings setting
 
 int stop_speed_clock() {
     clock_state.settings.fetch_and(~ENABLED_BIT, std::memory_order_release);
-
-    int failure = static_cast<int>(MH_OK);
-
-    for (const ClockHook& hook : clock_state.hooks) {
-        if (!hook.original) {
-            continue;
-        }
-
-        const MH_STATUS status = MH_DisableHook(hook.target);
-
-        if (status != MH_OK && status != MH_ERROR_DISABLED && failure == MH_OK) {
-            failure = static_cast<int>(status);
-        }
-    }
-
-    clock_state.hooks_enabled = false;
-    return failure;
+    // Native callers continue at 1x with their accumulated offset. Removing the
+    // detours would expose raw time and violate monotonicity after acceleration.
+    return static_cast<int>(MH_OK);
 }
 
 bool speed_clock_has_retained_hooks() {

@@ -55,6 +55,15 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.tengi.snapshot_ready,
         runtime.tengi.momentum,
         runtime.tengi.filter_error,
+        runtime.ai_growth_settings,
+        runtime.ai_growth.running,
+        runtime.ai_growth.cursor,
+        runtime.ai_growth.game_setting_failed,
+        runtime.ai_growth_last_report,
+        runtime.ai_growth_preview,
+        runtime.special_assignment.summary,
+        runtime.special_assignment_results,
+        runtime.special_assignment_generation,
     };
 }
 
@@ -91,6 +100,9 @@ void change_game_session(Runtime& runtime) {
     runtime.pending_trait_change.reset();
     runtime.auto_affinity = {};
     runtime.selected_officer.reset();
+    runtime.ai_growth_preview.reset();
+    runtime.ai_growth_last_report.reset();
+    runtime.pending_annual_assignment = 0;
     runtime.protagonist_traits.reset();
     runtime.protagonist_id.reset();
     runtime.protagonist_tactic_levels.reset();
@@ -448,6 +460,19 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
     const auto& features = config.features;
     const auto& def_building = config.def_building;
     const auto& scalars = config.scalars;
+    if (scalars.ai_growth_enabled) {
+        runtime.ai_growth_settings.enabled = *scalars.ai_growth_enabled;
+    }
+    if (scalars.ai_growth_speed) {
+        runtime.ai_growth_settings.speed = *scalars.ai_growth_speed;
+    }
+    if (scalars.ai_growth_restore_none) {
+        runtime.ai_growth_settings.restore_none = *scalars.ai_growth_restore_none;
+    }
+    if (scalars.annual_special_abilities) {
+        runtime.ai_growth_settings.annual_special_abilities = *scalars.annual_special_abilities;
+    }
+    runtime.ai_growth_settings = domain::normalize_ai_growth_settings(runtime.ai_growth_settings);
     if (scalars.speed_multiplier) {
         runtime.speed_multiplier = domain::normalize_speed_multiplier(*scalars.speed_multiplier);
     }
@@ -662,6 +687,11 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
                           now_ms, runtime.tengi_settings);
     }
     game::update_officer_roster(runtime.officer_roster, game_module);
+    if (runtime.config_loaded) {
+        game::update_ai_officer_growth(runtime.ai_growth, game_module,
+            runtime.loop_game_base_ready ? game_base : 0, runtime.loop_player_ready ? player : 0,
+            runtime.epoch, now_ms, runtime.ai_growth_settings);
+    }
     game::tick_auto_affinity(runtime.auto_affinity, game_module, game_base, player, now_ms,
                              runtime.features.get(domain::FeatureId::AutoAffinityGrowth));
     game::tick_tech_zero(runtime.tech_zero, game_module, now_ms);

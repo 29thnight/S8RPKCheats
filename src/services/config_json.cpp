@@ -186,6 +186,10 @@ domain::Result<std::string> config_lines_for_load(std::string_view source, Secon
         };
         scalars->notification_speed = read_float("g_notificationSpeed");
         scalars->speed_multiplier = read_float("g_speedMultiplier");
+        scalars->ai_growth_enabled = read_bool("bAIOfficerAutoGrowth");
+        scalars->ai_growth_speed = read_int("iAIOfficerGrowthSpeed");
+        scalars->ai_growth_restore_none = read_bool("bAIOfficerGrowthRestoreNone");
+        scalars->annual_special_abilities = read_bool("bAnnualSpecialAbilityAutoAssign");
         for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
             const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
 

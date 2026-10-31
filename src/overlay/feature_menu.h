@@ -93,6 +93,8 @@ struct FeatureMenu {
     domain::TerrainBonus terrain_bonus_draft;
     domain::TengiSettings tengi_draft;
     bool tengi_editing = false;
+    bool special_assignment_results_open = false;
+    std::uint64_t special_assignment_generation_seen = 0;
 };
 
 // Snapshot and completions are delivered by the owner of the Present context.

@@ -26,6 +26,10 @@ struct SecondaryJewelConfig {
 using TerrainBonusChanges = std::array<std::array<std::optional<std::int16_t>, 18>, 13>;
 using DefBuildingChanges = std::array<std::optional<int>, domain::DEF_BUILDING_KEYS.size()>;
 struct ScalarConfigChanges {
+    std::optional<bool> ai_growth_enabled;
+    std::optional<int> ai_growth_speed;
+    std::optional<bool> ai_growth_restore_none;
+    std::optional<bool> annual_special_abilities;
     std::optional<float> speed_multiplier;
     std::array<std::optional<bool>, domain::TENGI_EVENT_COUNT> tengi_allowed;
     std::array<std::optional<int>, domain::TENGI_EVENT_COUNT> tengi_duration;

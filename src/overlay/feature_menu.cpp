@@ -10,6 +10,118 @@
 #include <cstdio>
 
 namespace s8::overlay {
+namespace {
+
+const char* special_assignment_phase_name(domain::SpecialAssignmentPhase phase) {
+
+    switch (phase) {
+    case domain::SpecialAssignmentPhase::Scanning: return "조건 판정 중";
+    case domain::SpecialAssignmentPhase::Committing: return "판정 결과 적용 중";
+    case domain::SpecialAssignmentPhase::Completed: return "완료";
+    case domain::SpecialAssignmentPhase::Cancelled: return "취소됨 · 변경 없음";
+    case domain::SpecialAssignmentPhase::SessionChanged: return "게임 변경으로 중단";
+    default: return "대기";
+    }
+}
+
+void draw_special_assignment_results(FeatureMenu& menu) {
+
+    if (!menu.special_assignment_results_open) {
+        return;
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(700, 480), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("특수능력 자동 부여 결과###AutoSpecialResults", &menu.special_assignment_results_open)) {
+
+        const domain::SpecialAssignmentSummary& summary = menu.snapshot.special_assignment;
+
+        ImGui::Text("%s · %s", summary.annual ? "연간 자동 부여" : "수동 일괄 부여",
+                    special_assignment_phase_name(summary.phase));
+        ImGui::Text("판정 %u / 5102명 · 조건 충족 %u명 · 기존 능력 제외 %u명",
+                    summary.scanned, summary.matched_officers, summary.excluded_existing);
+        ImGui::Text("신규 부여 %u건 / %u명", summary.assigned, summary.assigned_officers);
+        ImGui::Separator();
+
+        if (menu.snapshot.special_assignment_results &&
+            ImGui::BeginChild("##auto_special_results", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
+
+            const std::vector<domain::SpecialAssignmentResult>& results = *menu.snapshot.special_assignment_results;
+            ImGuiListClipper clipper;
+
+            clipper.Begin(static_cast<int>(results.size()), ImGui::GetTextLineHeightWithSpacing() * 2.0f);
+
+            while (clipper.Step()) {
+
+                for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+
+                    const domain::SpecialAssignmentResult& result = results[static_cast<std::size_t>(row)];
+                    const domain::OfficerNames::const_iterator found = menu.officer_names
+                        ? menu.officer_names->find(result.officer_id) : domain::OfficerNames::const_iterator{};
+                    const char* name = menu.officer_names && found != menu.officer_names->end()
+                        ? found->second.c_str() : "무장";
+                    std::array<char, 1024> abilities{};
+                    std::size_t used = 0;
+
+                    for (std::size_t index = 0; index < domain::SPECIAL_ABILITY_COUNT; ++index) {
+
+                        if ((result.abilities & (1u << index)) == 0) {
+                            continue;
+                        }
+
+                        const std::string_view ability = domain::SPECIAL_ABILITY_NAMES[index];
+                        const int written = std::snprintf(abilities.data() + used, abilities.size() - used,
+                            "%s%.*s", used == 0 ? "" : ", ", static_cast<int>(ability.size()), ability.data());
+
+                        if (written > 0) {
+                            used += std::min(static_cast<std::size_t>(written), abilities.size() - used - 1);
+                        }
+                    }
+
+                    ImGui::Text("%s (ID %u)", name, static_cast<unsigned>(result.officer_id));
+                    ImGui::TextUnformatted(abilities.data());
+                }
+            }
+        }
+
+        if (menu.snapshot.special_assignment_results) {
+            ImGui::EndChild();
+        }
+    }
+
+    ImGui::End();
+}
+
+void draw_ai_growth_preview(const domain::AiGrowthPreview& preview) {
+
+    if (!ImGui::CollapsingHeader("AI 자동성장 예상")) {
+        return;
+    }
+
+    if (!preview.eligible) {
+        ImGui::TextUnformatted("주인공, 무소속 무장, ID 1801 이상은 AI 성장 대상에서 제외됩니다.");
+        return;
+    }
+
+    constexpr std::array<const char*, 5> STATS{"통솔", "무력", "지력", "정치", "매력"};
+
+    for (std::size_t index = 0; index < domain::AI_GROWTH_CATEGORY_COUNT; ++index) {
+        ImGui::Text("%s: %u + %d → %u / 전법 +%dLv", domain::AI_GROWTH_CATEGORY_NAMES[index].data(),
+            static_cast<unsigned>(preview.aptitude_before[index]), preview.aptitude_gain[index],
+            static_cast<unsigned>(preview.aptitude_after[index]), preview.tactic_level_ups[index]);
+    }
+
+    for (std::size_t index = 0; index < STATS.size(); ++index) {
+        ImGui::Text("%s 누적 EXP %u · 현재 EXP %u → %u", STATS[index],
+            static_cast<unsigned>(preview.cumulative_exp_before[index]),
+            static_cast<unsigned>(preview.current_exp_before[index]),
+            static_cast<unsigned>(preview.current_exp_after[index]));
+    }
+
+    ImGui::TextUnformatted("12월 예상치는 다음 해 1월 성장과 같은 선택 순서로 계산합니다.");
+}
+
+} // namespace
 
 void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
     menu.skill_counts = bridge.skill_counts_view();
@@ -65,6 +177,13 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.siege_heal_rate_draft = snapshot->config.siege_heal_rate;
         }
         menu.snapshot = snapshot->config;
+        if (menu.special_assignment_generation_seen != menu.snapshot.special_assignment_generation) {
+            menu.special_assignment_generation_seen = menu.snapshot.special_assignment_generation;
+
+            if (menu.snapshot.special_assignment.annual && menu.snapshot.special_assignment.assigned != 0) {
+                menu.special_assignment_results_open = true;
+            }
+        }
         menu.epoch = snapshot->epoch;
         menu.ready = snapshot->config.config_loaded;
         if (menu.selection_epoch != menu.epoch) {
@@ -130,6 +249,8 @@ void on_feature_menu_completion(FeatureMenu& menu, const services::CommandComple
 }
 
 void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
+    draw_special_assignment_results(menu);
+
     if (!menu.open) {
         return;
     }
@@ -297,6 +418,87 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
                               "이미 진행 중인 달에는 소급 적용하지 않습니다.");
         }
     }
+    ImGui::Separator();
+
+    bool growth_enabled = menu.snapshot.ai_growth_settings.enabled;
+
+    if (ImGui::Checkbox("AI 무장 자동성장", &growth_enabled)) {
+        submit(domain::SetAiGrowthEnabled{growth_enabled});
+    }
+
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("12월에서 1월로 넘어간 뒤 평정에서 누적 EXP로 소양과 전법을 성장시킵니다.\n"
+                         "게임의 능력 성장 속도도 함께 적용하며, 원래 양쪽 모두 '없음'이었다면 끌 때 복귀합니다.");
+    }
+
+    ImGui::BeginDisabled(!growth_enabled);
+
+    constexpr std::array<const char*, 3> GROWTH_SPEEDS{"느림", "보통", "빠름"};
+    int growth_speed = domain::normalize_ai_growth_speed(menu.snapshot.ai_growth_settings.speed) - 1;
+
+    if (ImGui::Combo("AI 성장 속도", &growth_speed, GROWTH_SPEEDS.data(), static_cast<int>(GROWTH_SPEEDS.size()))) {
+        submit(domain::SetAiGrowthSpeed{growth_speed + 1});
+    }
+
+    bool annual_special = menu.snapshot.ai_growth_settings.annual_special_abilities;
+
+    if (ImGui::Checkbox("성장 후 특수능력 자동 부여", &annual_special)) {
+        submit(domain::SetAnnualSpecialAbilities{annual_special});
+    }
+
+    ImGui::EndDisabled();
+
+    if (menu.snapshot.ai_growth_setting_failed) {
+        ImGui::TextUnformatted("게임 능력 성장 속도를 적용하지 못했습니다. 다시 확인하는 중입니다.");
+    }
+
+    if (menu.snapshot.ai_growth_running) {
+        ImGui::ProgressBar(static_cast<float>(menu.snapshot.ai_growth_cursor) /
+            static_cast<float>(domain::AI_GROWTH_OFFICER_LIMIT), ImVec2(-1, 0), "AI 무장 성장 적용 중");
+    }
+
+    if (menu.snapshot.ai_growth_report) {
+
+        const domain::AiGrowthReport& report = *menu.snapshot.ai_growth_report;
+
+        ImGui::Text("%u년: 성장 %u명 · 누적 EXP 소비 %u명 · 적용 실패 %u명",
+                    static_cast<unsigned>(report.year), report.changed, report.consumed, report.failed);
+    }
+
+    const domain::SpecialAssignmentSummary& assignment = menu.snapshot.special_assignment;
+    const bool assignment_running = assignment.phase == domain::SpecialAssignmentPhase::Scanning ||
+        assignment.phase == domain::SpecialAssignmentPhase::Committing;
+
+    ImGui::BeginDisabled(!menu.skill_counts || assignment_running);
+
+    if (ImGui::Button("모든 무장 특수능력 자동 판정")) {
+
+        if (submit(domain::StartSpecialAbilityAssignment{})) {
+            menu.special_assignment_results_open = true;
+        }
+    }
+
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(assignment.phase != domain::SpecialAssignmentPhase::Scanning);
+
+    if (ImGui::Button("판정 취소")) {
+        submit(domain::CancelSpecialAbilityAssignment{});
+    }
+
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+
+    if (ImGui::Button("부여 결과 보기")) {
+        menu.special_assignment_results_open = true;
+    }
+
+    if (assignment_running) {
+        ImGui::Text("%s · 판정 %u / 5102명 · 신규 %u건",
+            special_assignment_phase_name(assignment.phase), assignment.scanned, assignment.assigned);
+    }
+
+    ImGui::TextDisabled("기존 수동 능력은 유지합니다. 등갑군은 자동 부여에서 제외합니다.");
     float notification_speed = menu.snapshot.notification_speed;
     if (ImGui::SliderFloat("알림 속도", &notification_speed, 20.0f, 500.0f, "%.0f px/s")) {
         submit(domain::SetNotificationSpeed{notification_speed});
@@ -1454,6 +1656,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     ImGui::Text("물욕: 알 수 없음 (%u)", static_cast<unsigned>(officer.greed));
                 }
                 draw_officer_traits(menu, mailbox, officer.id, officer.traits, false);
+                if (menu.snapshot.ai_growth_preview && menu.snapshot.ai_growth_preview->officer_id == officer.id) {
+                    draw_ai_growth_preview(*menu.snapshot.ai_growth_preview);
+                }
                 constexpr std::array labels{"통솔", "무력", "지력", "정치", "매력", "문명", "무명", "악명",
                                             "공적", "봉록", "충성", "전략포인트", "행동력",
                                             "얼굴 번호", "모델 번호", "모델 색상", "등장년도", "생년", "몰년(수명)"};

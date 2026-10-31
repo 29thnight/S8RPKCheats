@@ -15,6 +15,9 @@
 #include "officer_basic.h"
 #include "officer_roster.h"
 #include "tengi.h"
+#include "ai_officer_growth.h"
+#include "special_ability_assignment.h"
+#include "ownership.h"
 
 #include <cstdint>
 #include <optional>
@@ -62,6 +65,15 @@ struct ConfigSnapshot {
     bool tengi_ready = false;
     std::uint8_t tengi_momentum = 0;
     int tengi_error = 0;
+    AiGrowthSettings ai_growth_settings;
+    bool ai_growth_running = false;
+    std::size_t ai_growth_cursor = 0;
+    bool ai_growth_setting_failed = false;
+    std::optional<AiGrowthReport> ai_growth_report;
+    std::optional<AiGrowthPreview> ai_growth_preview;
+    SpecialAssignmentSummary special_assignment;
+    own::shared_owner<const std::vector<SpecialAssignmentResult>> special_assignment_results;
+    std::uint64_t special_assignment_generation = 0;
 };
 
 } // namespace s8::domain

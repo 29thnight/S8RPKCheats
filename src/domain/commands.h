@@ -15,6 +15,7 @@
 #include "domestic_reward.h"
 #include "officer_roster.h"
 #include "tengi.h"
+#include "ai_officer_growth.h"
 
 #include <cstdint>
 #include <optional>
@@ -112,8 +113,16 @@ struct SetRosterOfficerTraining { std::uint16_t officer_id; OfficerTrainingKind 
 
 struct SetSpeedMultiplier { float multiplier; };
 struct SetTengiSettings { TengiSettings settings; };
+struct SetAiGrowthEnabled { bool enabled; };
+struct SetAiGrowthSpeed { int speed; };
+struct SetAnnualSpecialAbilities { bool enabled; };
+struct StartSpecialAbilityAssignment {};
+struct CancelSpecialAbilityAssignment {};
 
-using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSettings, SetShortBattleCooldown, SetTroopCountCombat,
+using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSettings,
+                                    SetAiGrowthEnabled, SetAiGrowthSpeed, SetAnnualSpecialAbilities,
+                                    StartSpecialAbilityAssignment, CancelSpecialAbilityAssignment,
+                                    SetShortBattleCooldown, SetTroopCountCombat,
                                     SetReinforcementArrival, SetTechCityVisibility,
                                     SetStratagem5Enabled, SetStratagem5Settings, SetSelfHealSettings,
                                     SetDongtoSettings, SetCelestialSettings, SetCatapultSettings,

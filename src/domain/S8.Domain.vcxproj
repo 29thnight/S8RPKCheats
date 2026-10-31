@@ -70,6 +70,10 @@
     <ClInclude Include="ownership.h" />
     <ClInclude Include="speed_hack.h" />
     <ClInclude Include="tengi.h" />
+    <ClInclude Include="ai_officer_growth.h" />
+    <ClInclude Include="special_ability_assignment.h" />
+    <ClCompile Include="ai_officer_growth.cpp" />
+    <ClCompile Include="special_ability_assignment.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

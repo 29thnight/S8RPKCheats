@@ -4,6 +4,7 @@
 #include "../game/game_base.h"
 
 #include <type_traits>
+#include <algorithm>
 #include <utility>
 #include <variant>
 
@@ -249,6 +250,71 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                 } else if constexpr (std::is_same_v<T, domain::SetTengiSettings>) {
                     runtime.tengi_settings = domain::normalize_tengi_settings(command.settings);
                     runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetAiGrowthEnabled>) {
+                    if (!game::set_ai_growth_enabled(game_module, runtime.ai_growth_settings, command.enabled)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+
+                    runtime.ai_growth.applied_game_speed = command.enabled ? runtime.ai_growth_settings.speed : 0;
+                    runtime.ai_growth.game_setting_failed = false;
+
+                    if (!command.enabled) {
+                        runtime.pending_annual_assignment = 0;
+
+                        if (runtime.special_assignment.summary.annual) {
+                            game::cancel_special_ability_assignment(runtime.special_assignment);
+                        }
+                    }
+
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetAiGrowthSpeed>) {
+                    if (!runtime.ai_growth_settings.enabled || command.speed < 1 || command.speed > 3) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+
+                    if (!game::set_ai_growth_speed(game_module, command.speed)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+
+                    runtime.ai_growth_settings.speed = command.speed;
+                    runtime.ai_growth.applied_game_speed = command.speed;
+                    runtime.ai_growth.game_setting_failed = false;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetAnnualSpecialAbilities>) {
+                    if (command.enabled && !runtime.ai_growth_settings.enabled) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+
+                    runtime.ai_growth_settings.annual_special_abilities = command.enabled;
+
+                    if (!command.enabled) {
+                        runtime.pending_annual_assignment = 0;
+
+                        if (runtime.special_assignment.summary.annual) {
+                            game::cancel_special_ability_assignment(runtime.special_assignment);
+                        }
+                    }
+
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::StartSpecialAbilityAssignment>) {
+                    save_config = false;
+
+                    if (!ui || !runtime.skill_counts || !game::start_special_ability_assignment(
+                            runtime.special_assignment, game_module, runtime.loop_game_base, runtime.loop_player,
+                            runtime.epoch, ui->skill_counts_view(), false)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+
+                    runtime.special_assignment_results.reset();
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::CancelSpecialAbilityAssignment>) {
+                    save_config = false;
+
+                    if (!game::cancel_special_ability_assignment(runtime.special_assignment)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetShortBattleCooldown>) {
                     if ((command.enabled || runtime.short_battle_cooldown.applied) &&
@@ -665,9 +731,129 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
     return processed;
 }
 
+namespace {
+
+std::string special_assignment_line(const domain::SpecialAssignmentResult& result,
+                                    const domain::OfficerNames* names) {
+
+    std::string line;
+
+    if (names) {
+
+        const domain::OfficerNames::const_iterator found = names->find(result.officer_id);
+
+        if (found != names->end()) {
+            line = found->second;
+        }
+    }
+
+    line += " (ID " + std::to_string(result.officer_id) + ") : ";
+
+    bool first = true;
+
+    for (std::size_t index = 0; index < domain::SPECIAL_ABILITY_COUNT; ++index) {
+
+        if ((result.abilities & (1u << index)) == 0) {
+            continue;
+        }
+
+        if (!first) {
+            line += ", ";
+        }
+
+        line += domain::SPECIAL_ABILITY_NAMES[index];
+        first = false;
+    }
+
+    return line;
+}
+
+void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
+
+    if (runtime.ai_growth.report) {
+
+        const domain::AiGrowthReport report = *runtime.ai_growth.report;
+
+        runtime.ai_growth_last_report = report;
+        runtime.ai_growth.report.reset();
+        ui.publish_notice(std::to_string(report.year) + "년 AI 성장 " +
+            (report.outcome == domain::AiGrowthOutcome::Completed ? "완료: " : "중단: ") +
+            std::to_string(report.consumed) + "명 누적 EXP 소비, " + std::to_string(report.changed) +
+            "명 성장, " + std::to_string(report.failed) + "명 적용 실패");
+
+        if (report.outcome == domain::AiGrowthOutcome::Completed && runtime.ai_growth_settings.enabled &&
+            runtime.ai_growth_settings.annual_special_abilities) {
+            runtime.pending_annual_assignment = report.year;
+        }
+    }
+
+    if (runtime.pending_annual_assignment != 0 &&
+        (!runtime.ai_growth_settings.enabled || !runtime.ai_growth_settings.annual_special_abilities ||
+         runtime.ai_growth.completed_year != runtime.pending_annual_assignment)) {
+        runtime.pending_annual_assignment = 0;
+    }
+
+    if (runtime.pending_annual_assignment != 0 && runtime.skill_counts &&
+        game::start_special_ability_assignment(runtime.special_assignment, game_module,
+            runtime.loop_game_base, runtime.loop_player, runtime.epoch, ui.skill_counts_view(), true)) {
+        runtime.pending_annual_assignment = 0;
+        runtime.special_assignment_results.reset();
+    }
+
+    if (runtime.skill_counts && game::update_special_ability_assignment(runtime.special_assignment,
+            game_module, runtime.loop_game_base, runtime.loop_player, runtime.epoch, *runtime.skill_counts)) {
+
+        const domain::SpecialAssignmentSummary& summary = runtime.special_assignment.summary;
+        const std::span<const domain::SpecialAssignmentResult> results =
+            game::special_ability_assignment_results(runtime.special_assignment);
+
+        runtime.special_assignment_results = own::make_shared<std::vector<domain::SpecialAssignmentResult>>(
+            results.begin(), results.end());
+        ++runtime.special_assignment_generation;
+
+        if (summary.assigned != 0) {
+            ui.publish_skill_counts_view(*runtime.skill_counts);
+            ui.request_skill_counts_save(*runtime.skill_counts);
+            runtime.ship_weaponization.last_active_unit = 0;
+        }
+
+        ui.publish_notice(std::string(summary.annual ? "연간 특수능력 " : "특수능력 자동 부여 ") +
+            (summary.phase == domain::SpecialAssignmentPhase::Completed ? "완료: " : "중단: ") +
+            std::to_string(summary.assigned_officers) + "명 / 신규 " + std::to_string(summary.assigned) + "건");
+
+        if (summary.annual && summary.assigned != 0) {
+            runtime.special_assignment_notices = runtime.special_assignment_results;
+            runtime.special_assignment_notice_cursor = results.size() > 200 ? results.size() - 200 : 0;
+        }
+    }
+
+    if (runtime.special_assignment_notices) {
+
+        const own::shared_owner<const domain::OfficerNames> names = ui.officer_names_view();
+        const std::size_t end = std::min(runtime.special_assignment_notices->size(),
+                                        runtime.special_assignment_notice_cursor + 8);
+
+        while (runtime.special_assignment_notice_cursor < end) {
+
+            const domain::SpecialAssignmentResult& result =
+                (*runtime.special_assignment_notices)[runtime.special_assignment_notice_cursor++];
+
+            ui.publish_notice("[연간 특수능력] " + special_assignment_line(result, names ? &*names : nullptr));
+        }
+
+        if (runtime.special_assignment_notice_cursor == runtime.special_assignment_notices->size()) {
+            runtime.special_assignment_notices.reset();
+        }
+    }
+}
+
+} // namespace
+
 std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
                                std::uintptr_t game_module, std::size_t max_commands,
                                std::chrono::steady_clock::duration time_budget) {
+    const platform::windows::RealClockScope real_clock;
+
     if (runtime.pending_trait_change) {
         auto& pending = *runtime.pending_trait_change;
         const auto player = pending.protagonist ? game::read_player(pending.game_base) : 0;
@@ -803,6 +989,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         ui.publish_skill_counts_view(*runtime.skill_counts);
         runtime.ship_weaponization.last_active_unit = 0;
     }
+    service_ai_jobs(runtime, ui, game_module);
     if (ui.ui_rendered.exchange(false)) {
         game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
                                  runtime.features.get(domain::FeatureId::ZeroInfamy));
@@ -811,10 +998,33 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         ui.publish_config_baseline({runtime.config_baseline});
         runtime.config_baseline_published = true;
     }
-    if (ui.officer_detail_visible.exchange(false) && runtime.selected_officer &&
+    const bool officer_detail_visible = ui.officer_detail_visible.exchange(false);
+
+    if (officer_detail_visible && runtime.selected_officer &&
         game::roster_traits_changed(runtime.officer_roster, game_module, *runtime.selected_officer)) {
         if (auto detail = game::read_roster_officer(runtime.officer_roster, game_module, runtime.selected_officer->id)) {
             runtime.selected_officer = std::move(*detail);
+        }
+    }
+    if (officer_detail_visible && runtime.selected_officer) {
+
+        const std::uint64_t now_ms = GetTickCount64();
+
+        if (!runtime.ai_growth_preview || runtime.ai_growth_preview->officer_id != runtime.selected_officer->id ||
+            now_ms - runtime.ai_growth_preview_ms >= 250) {
+
+            const std::uintptr_t officer = game::resolve_trait_target(runtime.officer_roster, game_module,
+                runtime.selected_officer->id, 0);
+            domain::AiGrowthPreview preview{};
+
+            runtime.ai_growth_preview_ms = now_ms;
+
+            if (officer && game::read_current_ai_growth_preview(game_module, officer, runtime.loop_player,
+                    runtime.ai_growth_settings.speed, preview)) {
+                runtime.ai_growth_preview = preview;
+            } else {
+                runtime.ai_growth_preview.reset();
+            }
         }
     }
     ui.publish({runtime.epoch, config_snapshot(runtime)});

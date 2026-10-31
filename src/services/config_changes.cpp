@@ -85,6 +85,10 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
     changes.push_back({"fDomesticsForce", snapshot.domestics.force});
     changes.push_back({"g_notificationSpeed", snapshot.notification_speed});
     changes.push_back({"g_speedMultiplier", snapshot.speed_multiplier});
+    changes.push_back({"bAIOfficerAutoGrowth", snapshot.ai_growth_settings.enabled});
+    changes.push_back({"iAIOfficerGrowthSpeed", snapshot.ai_growth_settings.speed});
+    changes.push_back({"bAIOfficerGrowthRestoreNone", snapshot.ai_growth_settings.restore_none});
+    changes.push_back({"bAnnualSpecialAbilityAutoAssign", snapshot.ai_growth_settings.annual_special_abilities});
     for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
         const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
         const domain::TengiEventSettings& event = snapshot.tengi_settings.events[index];
