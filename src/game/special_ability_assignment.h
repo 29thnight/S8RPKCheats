@@ -4,6 +4,7 @@
 #include "../domain/ownership.h"
 #include "../domain/skill_counts.h"
 #include "../domain/special_ability_assignment.h"
+#include "../domain/work_budget.h"
 
 #include <array>
 #include <bitset>
@@ -43,7 +44,8 @@ bool cancel_special_ability_assignment(SpecialAbilityAssignment& state);
 // terminal report: publish/save counts once if summary.assigned is nonzero.
 bool update_special_ability_assignment(SpecialAbilityAssignment& state, std::uintptr_t module_base,
                                         std::uintptr_t game_base, std::uintptr_t player,
-                                        domain::GameEpoch epoch, domain::SkillCounts& counts);
+                                        domain::GameEpoch epoch, domain::SkillCounts& counts,
+                                        const domain::WorkBudget& work_budget = {});
 
 std::span<const domain::SpecialAssignmentResult> special_ability_assignment_results(
     const SpecialAbilityAssignment& state);

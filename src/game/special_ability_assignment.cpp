@@ -56,12 +56,12 @@ domain::SpecialAbilityProfile read_profile(const std::array<std::byte, OFFICER_S
     return profile;
 }
 
-void scan_next_officers(SpecialAbilityAssignment& state) {
+void scan_next_officers(SpecialAbilityAssignment& state, const domain::WorkBudget& work_budget) {
 
     const std::size_t end = std::min(domain::SPECIAL_ASSIGNMENT_OFFICER_LIMIT,
                                     static_cast<std::size_t>(state.summary.scanned) + SCAN_BUDGET);
 
-    while (state.summary.scanned < end) {
+    while (state.summary.scanned < end && !work_budget.exhausted()) {
 
         const std::uintptr_t address = state.roster + state.summary.scanned * OFFICER_STRIDE;
 
@@ -109,11 +109,12 @@ void scan_next_officers(SpecialAbilityAssignment& state) {
     }
 }
 
-void commit_next_assignments(SpecialAbilityAssignment& state, domain::SkillCounts& counts) {
+void commit_next_assignments(SpecialAbilityAssignment& state, domain::SkillCounts& counts,
+    const domain::WorkBudget& work_budget) {
 
     const std::size_t end = std::min(state.pending_count, state.commit_cursor + COMMIT_BUDGET);
 
-    while (state.commit_cursor < end) {
+    while (state.commit_cursor < end && !work_budget.exhausted()) {
 
         const domain::SpecialAssignmentResult pending = state.pending[state.commit_cursor++];
         std::unordered_map<std::uintptr_t, int>& skills = counts[pending.officer_id];
@@ -201,9 +202,10 @@ bool cancel_special_ability_assignment(SpecialAbilityAssignment& state) {
 
 bool update_special_ability_assignment(SpecialAbilityAssignment& state, std::uintptr_t module_base,
                                         std::uintptr_t game_base, std::uintptr_t player,
-                                        domain::GameEpoch epoch, domain::SkillCounts& counts) {
+                                        domain::GameEpoch epoch, domain::SkillCounts& counts,
+                                        const domain::WorkBudget& work_budget) {
 
-    if (!running(state)) {
+    if (!running(state) || work_budget.exhausted()) {
         return false;
     }
 
@@ -225,11 +227,11 @@ bool update_special_ability_assignment(SpecialAbilityAssignment& state, std::uin
     }
 
     if (state.summary.phase == domain::SpecialAssignmentPhase::Scanning) {
-        scan_next_officers(state);
+        scan_next_officers(state, work_budget);
         return false;
     }
 
-    commit_next_assignments(state, counts);
+    commit_next_assignments(state, counts, work_budget);
     return state.summary.phase == domain::SpecialAssignmentPhase::Completed;
 }
 

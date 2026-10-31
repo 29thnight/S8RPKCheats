@@ -65,6 +65,7 @@
 #include "trait_control.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
+#include "../domain/work_budget.h"
 
 #include <cstdint>
 #include <string_view>
@@ -95,6 +96,8 @@ struct Runtime {
     std::uint64_t completed_stop_steps = 0;
     std::uint64_t failed_stop_steps = 0;
     std::size_t next_stop_step = 0;
+    std::size_t next_game_job = 0;
+    std::size_t next_ui_job = 0;
     std::optional<domain::ConfigSnapshot> stop_snapshot;
     NativeFeatureControl native_features;
     LegacyFeatureControl legacy_features;
@@ -213,6 +216,10 @@ struct Runtime {
     domain::TerrainBonus terrain_bonus;
     int skip_days = 0;
     bool battle_mods_refreshed = false;
+    std::uint8_t battle_refresh_done = 0;
+    std::size_t next_battle_refresh = 0;
+    std::size_t next_battle_job = 0;
+    bool stratagem_refresh_next = true;
     game::BattleReadiness battle_readiness;
     game::BattleState battle_state;
     bool battle_seen = false;
@@ -238,6 +245,7 @@ struct Runtime {
     std::uint64_t loop_probe_ms = 0;
     bool loop_game_base_ready = false;
     bool loop_player_ready = false;
+    bool loop_context_observed = false;
     std::uintptr_t session_player = 0;
     std::uintptr_t session_game_base = 0;
     bool config_loaded = false;
@@ -265,13 +273,16 @@ struct Stratagem5UiActions {
 bool on_stratagem5_lifecycle(Runtime& runtime, std::uintptr_t module_base, bool battle_active,
                              bool safe_non_battle, const Stratagem5UiActions& ui);
 void on_battle_end(Runtime& runtime);
-void on_battle_ready(Runtime& runtime, std::uintptr_t module_base, int day, int unit_count);
+void on_battle_ready(Runtime& runtime, std::uintptr_t module_base, int day, int unit_count,
+    const domain::WorkBudget& work_budget = {});
 void on_active_battle_observed(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t game_base,
-                               const game::BattleObservation& observation, std::uint64_t now_ms);
+                               const game::BattleObservation& observation, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget = {});
 void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t game_base,
-                    std::uint64_t now_ms, const Stratagem5UiActions& ui);
+                    std::uint64_t now_ms, const Stratagem5UiActions& ui,
+    const domain::WorkBudget& work_budget = {});
 void on_battle_update(Runtime& runtime, std::uintptr_t module_base, int unit_count,
-                      std::uintptr_t unit_list, bool skip_stratagem5);
+                      std::uintptr_t unit_list, bool skip_stratagem5, const domain::WorkBudget& work_budget = {});
 bool on_stratagem_metadata(Runtime& runtime, std::uintptr_t metadata_table);
 bool on_stratagem5_context(Runtime& runtime, std::uintptr_t metadata_table, std::uintptr_t dialog,
                             std::uintptr_t attack_owner, std::uintptr_t defense_owner);
@@ -296,6 +307,9 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
 void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,
                              std::uintptr_t game_base, bool game_base_ready,
                              std::uintptr_t player, bool player_ready);
-void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms);
+void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget = {});
+void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget = {});
 
 } // namespace s8::runtime

@@ -77,8 +77,8 @@ bool applied(const Runtime& runtime, Group group) {
     case Group::Domestics: return runtime.domestics_patch.applied;
     case Group::Resonance: return runtime.instant_resonance.select_applied || runtime.instant_resonance.getter_applied;
     case Group::FactionLordBonus:
-        return runtime.faction_lord_bonus.enabled || runtime.faction_lord_bonus.names_applied ||
-            !runtime.faction_lord_bonus.assigned.empty();
+        return runtime.faction_lord_bonus.enabled ||
+            game::faction_lord_bonus_pending(runtime.faction_lord_bonus);
     case Group::Attitude: return runtime.instant_attitude_config_applied;
     case Group::Relationship: return runtime.fast_relationship.applied;
     case Group::Gift: return runtime.infinite_gift.applied;

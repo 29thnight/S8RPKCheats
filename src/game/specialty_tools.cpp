@@ -495,7 +495,11 @@ bool request_specialty_tools(SpecialtyTools& state, const SpecialtyContext& cont
     return true;
 }
 
-void update_specialty_tools(SpecialtyTools& state, const SpecialtyContext& context, std::mt19937& random) {
+void update_specialty_tools(SpecialtyTools& state, const SpecialtyContext& context, std::mt19937& random,
+    const domain::WorkBudget& work_budget) {
+    if (work_budget.exhausted()) {
+        return;
+    }
     if (state.snapshot.epoch != context.epoch) {
         state.snapshot.epoch = context.epoch;
         state.snapshot.available = false;
@@ -510,7 +514,7 @@ void update_specialty_tools(SpecialtyTools& state, const SpecialtyContext& conte
         finish(state, Status::SessionChanged);
         return;
     }
-    const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + UPDATE_BUDGET;
+    const std::chrono::steady_clock::time_point deadline = std::min(work_budget.deadline, std::chrono::steady_clock::now() + UPDATE_BUDGET);
 
     for (std::size_t step = 0; step < READS_PER_UPDATE && state.phase != SpecialtyPhase::Idle; ++step) {
         if (state.phase == SpecialtyPhase::Slots) {

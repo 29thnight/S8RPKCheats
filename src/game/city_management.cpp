@@ -735,8 +735,9 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
 }
 
 void tick_city_management(CityManagement& state, std::uintptr_t module_base, std::uintptr_t game_root,
-    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items) {
-    if (state.stopping || !bind_city_session(state, module_base, game_root, player, epoch)) {
+    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items,
+    const domain::WorkBudget& work_budget) {
+    if (state.stopping || work_budget.exhausted() || !bind_city_session(state, module_base, game_root, player, epoch)) {
         return;
     }
     if (state.recovery_count != 0 && !restore_bound_data(state)) {
@@ -757,7 +758,7 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
         end_work(state, domain::CityWorkStatus::SessionChanged);
         return;
     }
-    for (std::size_t step = 0; step < max_items && state.work != CityWork::Idle; ++step) {
+    for (std::size_t step = 0; step < max_items && state.work != CityWork::Idle && !work_budget.exhausted(); ++step) {
         domain::CityWorkStatus result = domain::CityWorkStatus::Complete;
 
         if (state.work == CityWork::Routes || state.work == CityWork::Support) {

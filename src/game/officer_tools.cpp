@@ -156,12 +156,13 @@ void finish_training_officer(OfficerTools& state) {
     ++state.cursor;
 }
 
-void tick_training(OfficerTools& state) {
+void tick_training(OfficerTools& state, const domain::WorkBudget& work_budget) {
     std::size_t slots_read = 0;
     std::size_t writes = 0;
 
     state.view.progress.status = domain::OfficerToolStatus::Applying;
-    while (state.cursor < domain::OFFICER_TOOL_LIMIT && slots_read < 32 && writes < TRAINING_WRITE_BUDGET) {
+    while (state.cursor < domain::OFFICER_TOOL_LIMIT && slots_read < 32 && writes < TRAINING_WRITE_BUDGET &&
+        !work_budget.exhausted()) {
         const std::uintptr_t officer = state.job_roster + state.cursor * ROSTER_STRIDE;
 
         if (state.active_officer == 0) {
@@ -184,7 +185,7 @@ void tick_training(OfficerTools& state) {
             finish_training_officer(state);
             continue;
         }
-        for (; state.field_cursor < 59 && writes < TRAINING_WRITE_BUDGET; ++state.field_cursor) {
+        for (; state.field_cursor < 59 && writes < TRAINING_WRITE_BUDGET && !work_budget.exhausted(); ++state.field_cursor) {
             const bool skill = state.field_cursor < state.training.skills.size();
             const std::size_t index = skill ? state.field_cursor : state.field_cursor - state.training.skills.size();
             const domain::TrainingChoice& choice = skill ? state.training.skills[index] : state.training.tactics[index];
@@ -231,11 +232,11 @@ void add_requested_trait(OfficerTools& state, std::uint16_t id) {
     state.view.progress.trait_candidates = static_cast<std::uint32_t>(state.pool_count);
 }
 
-void build_random_pool(OfficerTools& state) {
+void build_random_pool(OfficerTools& state, const domain::WorkBudget& work_budget) {
     std::size_t visited = 0;
 
     if (state.custom_traits) {
-        for (; state.custom_cursor != state.custom_traits->end() && visited < ROSTER_BUDGET;
+        for (; state.custom_cursor != state.custom_traits->end() && visited < ROSTER_BUDGET && !work_budget.exhausted();
             ++state.custom_cursor, ++visited) {
             const std::uint16_t id = state.custom_cursor->first;
             const domain::CustomTrait& trait = state.custom_cursor->second;
@@ -257,10 +258,10 @@ void build_random_pool(OfficerTools& state) {
     state.cursor = 0;
 }
 
-void collect_random_roster(OfficerTools& state) {
+void collect_random_roster(OfficerTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.cursor + ROSTER_BUDGET, domain::OFFICER_TOOL_LIMIT);
 
-    for (; state.cursor < end; ++state.cursor) {
+    for (; state.cursor < end && !work_budget.exhausted(); ++state.cursor) {
         const std::uintptr_t officer = state.job_roster + state.cursor * ROSTER_STRIDE;
         std::uint16_t id = 0;
         std::uint8_t status = 0;
@@ -301,10 +302,10 @@ bool read_trait_identity(std::uintptr_t trait, std::uintptr_t& vtable, std::uint
     return vtable > 0x10000 && id != 0;
 }
 
-void find_random_vtable(OfficerTools& state) {
+void find_random_vtable(OfficerTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.cursor + 32, state.roster_slots.size());
 
-    for (; state.cursor < end && state.trait_vtable == 0; ++state.cursor) {
+    for (; state.cursor < end && state.trait_vtable == 0 && !work_budget.exhausted(); ++state.cursor) {
         const std::uint16_t slot = state.roster_slots[state.cursor];
         std::array<std::uintptr_t, 3> traits{};
 
@@ -330,10 +331,10 @@ void find_random_vtable(OfficerTools& state) {
     }
 }
 
-void seed_random_objects(OfficerTools& state) {
+void seed_random_objects(OfficerTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.pool_cursor + ROSTER_BUDGET, state.pool_count);
 
-    for (; state.pool_cursor < end; ++state.pool_cursor) {
+    for (; state.pool_cursor < end && !work_budget.exhausted(); ++state.pool_cursor) {
         const std::uint16_t requested = state.pool[state.pool_cursor];
         std::uintptr_t trait = 0;
         std::uintptr_t vtable = 0;
@@ -353,7 +354,7 @@ void seed_random_objects(OfficerTools& state) {
     }
 }
 
-void scan_random_objects(OfficerTools& state) {
+void scan_random_objects(OfficerTools& state, const domain::WorkBudget& work_budget) {
     SYSTEM_INFO system{};
     std::size_t scanned = 0;
     std::size_t regions = 0;
@@ -367,7 +368,8 @@ void scan_random_objects(OfficerTools& state) {
 
     state.trait_scan_address = std::max(state.trait_scan_address, minimum);
     while (state.trait_scan_address < maximum && scanned < TRAIT_SCAN_BYTE_BUDGET &&
-        regions < TRAIT_SCAN_REGION_BUDGET && state.view.progress.trait_objects < state.pool_count) {
+        regions < TRAIT_SCAN_REGION_BUDGET && state.view.progress.trait_objects < state.pool_count &&
+        !work_budget.exhausted()) {
         MEMORY_BASIC_INFORMATION region{};
 
         if (!VirtualQuery(reinterpret_cast<const void*>(state.trait_scan_address), &region, sizeof(region))) {
@@ -405,29 +407,33 @@ void scan_random_objects(OfficerTools& state) {
         if (candidates == 0) {
             break;
         }
+        std::size_t processed = 0;
+
         if (platform::windows::read_memory(state.trait_scan_address,
             std::span(state.scan_buffer).first(candidates * 8 + 2))) {
-            for (std::size_t i = 0; i < candidates; ++i) {
-                const std::uintptr_t address = state.trait_scan_address + i * 8;
+            for (; processed < candidates && !work_budget.exhausted(); ++processed) {
+                const std::uintptr_t address = state.trait_scan_address + processed * 8;
                 std::uintptr_t vtable = 0;
                 std::uint16_t id = 0;
 
                 if (address >= own_begin && address < own_end) {
                     continue;
                 }
-                std::memcpy(&vtable, state.scan_buffer.data() + i * 8, sizeof(vtable));
+                std::memcpy(&vtable, state.scan_buffer.data() + processed * 8, sizeof(vtable));
                 if (vtable != state.trait_vtable) {
                     continue;
                 }
-                std::memcpy(&id, state.scan_buffer.data() + i * 8 + 8, sizeof(id));
+                std::memcpy(&id, state.scan_buffer.data() + processed * 8 + 8, sizeof(id));
                 if (state.requested_traits.test(id) && state.trait_objects[id] == 0) {
                     state.trait_objects[id] = address;
                     ++state.view.progress.trait_objects;
                 }
             }
+        } else {
+            processed = candidates;
         }
-        state.trait_scan_address += candidates * 8;
-        scanned += candidates * 8;
+        state.trait_scan_address += processed * 8;
+        scanned += processed * 8;
     }
     if (state.trait_scan_address >= maximum || state.view.progress.trait_objects == state.pool_count) {
         state.random_stage = RandomTraitStage::Compact;
@@ -436,10 +442,10 @@ void scan_random_objects(OfficerTools& state) {
     }
 }
 
-void compact_random_pool(OfficerTools& state) {
+void compact_random_pool(OfficerTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.pool_cursor + ROSTER_BUDGET, state.pool_count);
 
-    for (; state.pool_cursor < end; ++state.pool_cursor) {
+    for (; state.pool_cursor < end && !work_budget.exhausted(); ++state.pool_cursor) {
         const std::uint16_t id = state.pool[state.pool_cursor];
 
         if (state.trait_objects[id] != 0) {
@@ -492,12 +498,12 @@ void finish_random_officer(OfficerTools& state, bool full) {
     ++state.cursor;
 }
 
-void apply_random_traits(OfficerTools& state) {
+void apply_random_traits(OfficerTools& state, const domain::WorkBudget& work_budget) {
     std::size_t visited = 0;
     std::size_t attempts = 0;
 
     while (state.cursor < state.roster_slots.size() && visited < ROSTER_BUDGET &&
-        attempts < RANDOM_WRITE_BUDGET) {
+        attempts < RANDOM_WRITE_BUDGET && !work_budget.exhausted()) {
         const std::uint16_t slot = state.roster_slots[state.cursor];
 
         if (slot == 0) {
@@ -794,7 +800,11 @@ bool submit_officer_tool(OfficerTools& state, const OfficerToolContext& context,
     return result == domain::OfficerToolStatus::Preparing || result == domain::OfficerToolStatus::Completed;
 }
 
-bool tick_officer_tools(OfficerTools& state, const OfficerToolContext& context) {
+bool tick_officer_tools(OfficerTools& state, const OfficerToolContext& context,
+    const domain::WorkBudget& work_budget) {
+    if (work_budget.exhausted()) {
+        return false;
+    }
     const std::uint64_t revision = state.view.revision;
     bool changed = state.changed_pending;
 
@@ -822,25 +832,32 @@ bool tick_officer_tools(OfficerTools& state, const OfficerToolContext& context) 
         state.view.month = month;
         state.last_date_ms = context.now_ms;
     }
-    if (state.running) {
+    const bool family_first = state.family_first;
+
+    state.family_first = !state.family_first;
+    if (family_first && tick_family_tools(state.family, context, work_budget)) {
+        state.view.family = state.family.view;
+        changed = true;
+    }
+    if (state.running && !work_budget.exhausted()) {
         changed = true;
         if (!job_identity(state, context)) {
             finish_job(state, domain::OfficerToolStatus::SessionChanged);
         } else if (state.view.progress.job == domain::OfficerToolJob::Training) {
-            tick_training(state);
+            tick_training(state, work_budget);
         } else {
             switch (state.random_stage) {
-            case RandomTraitStage::Pool: build_random_pool(state); break;
-            case RandomTraitStage::Roster: collect_random_roster(state); break;
-            case RandomTraitStage::Vtable: find_random_vtable(state); break;
-            case RandomTraitStage::Seed: seed_random_objects(state); break;
-            case RandomTraitStage::Search: scan_random_objects(state); break;
-            case RandomTraitStage::Compact: compact_random_pool(state); break;
-            case RandomTraitStage::Apply: apply_random_traits(state); break;
+            case RandomTraitStage::Pool: build_random_pool(state, work_budget); break;
+            case RandomTraitStage::Roster: collect_random_roster(state, work_budget); break;
+            case RandomTraitStage::Vtable: find_random_vtable(state, work_budget); break;
+            case RandomTraitStage::Seed: seed_random_objects(state, work_budget); break;
+            case RandomTraitStage::Search: scan_random_objects(state, work_budget); break;
+            case RandomTraitStage::Compact: compact_random_pool(state, work_budget); break;
+            case RandomTraitStage::Apply: apply_random_traits(state, work_budget); break;
             }
         }
     }
-    if (tick_family_tools(state.family, context)) {
+    if (!family_first && tick_family_tools(state.family, context, work_budget)) {
         state.view.family = state.family.view;
         changed = true;
     }

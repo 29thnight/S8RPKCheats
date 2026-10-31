@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/officer_notifications.h"
+#include "../domain/work_budget.h"
 
 #include <span>
 
@@ -41,6 +42,7 @@ struct OfficerNotifications {
     bool notify_changes = false;
     std::size_t next_slot = 0;
     std::array<bool, OFFICER_NOTICE_SLOT_COUNT + 1> was_ronin{};
+    std::array<bool, OFFICER_NOTICE_SLOT_COUNT + 1> staging_ronins{};
     std::array<OfficerNoticeBaseline, OFFICER_NOTICE_SLOT_COUNT + 1> baseline{};
     std::array<OfficerNoticeBaseline, OFFICER_NOTICE_SLOT_COUNT + 1> staging{};
     domain::OfficerNotificationView view{};
@@ -55,7 +57,8 @@ void reset_officer_notifications(OfficerNotifications& state, domain::GameEpoch 
 // baseline; no historical changes are announced when a checkbox is enabled.
 void tick_officer_notifications(OfficerNotifications& state, std::uintptr_t module_base,
     domain::GameEpoch epoch, std::uintptr_t hero, std::uint8_t phase, bool in_battle,
-    bool monitor_ronins, bool monitor_changes, std::size_t slot_budget = 128);
+    bool monitor_ronins, bool monitor_changes, std::size_t slot_budget = 128,
+    const domain::WorkBudget& work_budget = {});
 void update_ronin_notice_baseline(OfficerNotifications& state, std::uint16_t officer, std::uint8_t status);
 std::size_t copy_officer_notice_history(const OfficerNotifications& state,
     std::span<domain::OfficerNotice> destination);

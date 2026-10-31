@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/city_management.h"
+#include "../domain/work_budget.h"
 
 #include <array>
 #include <cstddef>
@@ -54,7 +55,8 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
 // At most max_items city records or one route are processed per dispatch. This
 // function performs no heap allocation and retains no UI or game object owners.
 void tick_city_management(CityManagement& state, std::uintptr_t module_base, std::uintptr_t game_root,
-    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items = 4);
+    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items = 4,
+    const domain::WorkBudget& work_budget = {});
 bool stop_city_management(CityManagement& state, std::uintptr_t module_base, domain::GameEpoch epoch);
 
 // Shared read-only binding helpers used by the independent corps planner.

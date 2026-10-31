@@ -706,8 +706,9 @@ domain::CorpsStatus request_corps_deployment(CorpsDeployment& state, std::uintpt
 }
 
 void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, std::uintptr_t game_root,
-    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units) {
-    if (state.stopping || !bind(state, module_base, game_root, player, epoch)) { return; }
+    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units,
+    const domain::WorkBudget& work_budget) {
+    if (state.stopping || work_budget.exhausted() || !bind(state, module_base, game_root, player, epoch)) { return; }
     observe_calendar(state, real_milliseconds);
     if (state.stage == CorpsStage::Idle) { next_auto_target(state); }
     if (state.stage != CorpsStage::Idle && state.stage != CorpsStage::Rollback) {
@@ -723,7 +724,7 @@ void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, s
     const std::uint64_t write_sequence = state.write_sequence;
     const std::size_t budget = std::min<std::size_t>(max_units, restoring ? 32 : 256);
 
-    for (std::size_t unit = 0; unit < budget && state.stage != CorpsStage::Idle; ++unit) {
+    for (std::size_t unit = 0; unit < budget && state.stage != CorpsStage::Idle && !work_budget.exhausted(); ++unit) {
         if (state.stage >= CorpsStage::Cities && state.stage <= CorpsStage::Roster) {
             step_read(state);
         } else if (state.stage == CorpsStage::Sort) {

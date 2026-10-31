@@ -30,8 +30,9 @@ domain::Result<void> submit_city_request(Runtime& runtime, std::uintptr_t module
     return std::unexpected(domain::Error{code, static_cast<std::uint32_t>(status)});
 }
 
-void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module) {
-    if (runtime.stopping) { return; }
+void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module,
+    const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || work_budget.exhausted()) { return; }
     own::shared_owner<const domain::CitySupportRoutes> routes = ui.take_city_support_routes();
 
     if (routes) {
@@ -39,7 +40,7 @@ void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uint
     }
     const std::uintptr_t root = game::read_game_base(runtime.game_base_pointer);
 
-    game::tick_city_management(runtime.city_management, module, root, game::read_player(root), runtime.epoch, GetTickCount64(), 4);
+    game::tick_city_management(runtime.city_management, module, root, game::read_player(root), runtime.epoch, GetTickCount64(), 4, work_budget);
     if (runtime.city_published_revision != runtime.city_management.snapshot.revision) {
         ui.city_management.publish(runtime.city_management.snapshot);
         runtime.city_published_revision = runtime.city_management.snapshot.revision;

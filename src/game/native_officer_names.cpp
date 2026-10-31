@@ -162,7 +162,11 @@ void append_name(NativeOfficerNames& state, std::uint16_t slot, std::uint16_t id
 
 } // namespace
 
-void update_native_officer_names(NativeOfficerNames& state, const NativeOfficerNameContext& context) {
+void update_native_officer_names(NativeOfficerNames& state, const NativeOfficerNameContext& context,
+    const domain::WorkBudget& work_budget) {
+    if (work_budget.exhausted()) {
+        return;
+    }
     std::uintptr_t roster = 0;
     std::uintptr_t scenario = 0;
     const bool roots_ready = current_roots(context, roster, scenario);
@@ -191,7 +195,7 @@ void update_native_officer_names(NativeOfficerNames& state, const NativeOfficerN
     state.output.reset = false;
     state.output.publish = false;
     std::size_t read = 0;
-    const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + READ_BUDGET;
+    const std::chrono::steady_clock::time_point deadline = std::min(work_budget.deadline, std::chrono::steady_clock::now() + READ_BUDGET);
 
     if (!state.scanning && (state.last_full_ms == 0 || context.now_ms - state.last_full_ms >= FULL_PERIOD_MS)) {
         state.scanning = true;

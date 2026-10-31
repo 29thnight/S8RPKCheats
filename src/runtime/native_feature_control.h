@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "../domain/error.h"
 #include "../domain/native_features.h"
 #include "../game/ai_war_policy.h"
@@ -56,7 +58,8 @@ bool request_native_feature(Runtime& runtime, domain::FeatureId feature, bool en
 // the desired setting and yield to other groups until their next retry deadline.
 bool reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms);
 void change_native_feature_epoch(Runtime& runtime);
-void update_native_feature_candidates(Runtime& runtime, std::uintptr_t module_base);
+void update_native_feature_candidates(Runtime& runtime, std::uintptr_t module_base,
+    const domain::WorkBudget& work_budget = {});
 // Restore at most one active group per call. QueueFull means another boundary is
 // needed; desired configuration is preserved for the final settings snapshot.
 domain::Result<void> stop_native_features(Runtime& runtime, std::uintptr_t module_base);

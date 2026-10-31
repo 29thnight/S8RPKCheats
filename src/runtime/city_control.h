@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "../domain/city_management.h"
 #include "../domain/error.h"
 
@@ -12,6 +14,7 @@ namespace s8::runtime {
 struct Runtime;
 
 domain::Result<void> submit_city_request(Runtime& runtime, std::uintptr_t module, const domain::CityRequest& request);
-void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module);
+void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module,
+    const domain::WorkBudget& work_budget = {});
 
 } // namespace s8::runtime

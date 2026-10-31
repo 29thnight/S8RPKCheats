@@ -111,9 +111,11 @@ void change_game_session(Runtime& runtime) {
     runtime.battle_skill_counts = {};
     runtime.terrain_bonus_state = {};
     runtime.officer_stats = {};
+    runtime.tech_zero = {};
+    game::set_tech_zero(runtime.tech_zero, runtime.features.get(domain::FeatureId::TechZero));
     game::reset_officer_roster(runtime.officer_roster);
     runtime.pending_trait_change.reset();
-    runtime.auto_affinity = {};
+    game::reset_auto_affinity(runtime.auto_affinity);
     runtime.selected_officer.reset();
     runtime.ai_growth_preview.reset();
     runtime.ai_growth_last_report.reset();
@@ -132,11 +134,13 @@ void change_game_session(Runtime& runtime) {
     runtime.specialty_last_council = false;
     runtime.specialty_assignment_requested = false;
     game::reset_secondary_jewel_cache();
-    runtime.battle_map_shuffle = {};
+    game::reset_battle_map_shuffle(runtime.battle_map_shuffle, domain::GameEpoch{runtime.epoch.value + 1});
     runtime.faction_lord_bonus = {};
     runtime.undiscovered_ronin = {};
     runtime.last_relevant_phase = 0;
     runtime.battle_mods_refreshed = false;
+    runtime.battle_refresh_done = 0;
+    runtime.next_battle_refresh = 0;
     runtime.battle_readiness = {};
     runtime.battle_state = {};
     runtime.battle_seen = false;
@@ -227,8 +231,12 @@ void on_battle_end(Runtime& runtime) {
     runtime.ship_weaponization = {};
     runtime.battle_skill_counts = {};
     runtime.terrain_bonus_state = {};
-    runtime.siege = {};
+    for (game::Siege& siege : runtime.siege) {
+        game::reset_siege_battle(siege);
+    }
     runtime.battle_mods_refreshed = false;
+    runtime.battle_refresh_done = 0;
+    runtime.next_battle_refresh = 0;
     runtime.battle_readiness = {};
     reset_stratagem5_battle(runtime.stratagem5_lifecycle);
     game::end_stratagem5_battle(runtime.stratagem5);
@@ -240,59 +248,102 @@ void on_battle_end(Runtime& runtime) {
 }
 
 void on_active_battle_observed(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t game_base,
-                               const game::BattleObservation& observation, std::uint64_t now_ms) {
+    const game::BattleObservation& observation, std::uint64_t now_ms, const domain::WorkBudget& work_budget) {
+    enum class Job : std::size_t { Ship, Skills, Calendar, Terrain, Siege, WideSiege, Tactics, Stratagem, Count };
+    constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
     const bool records_ready = game::battle_records_ready(game_base, observation);
     const bool identity_changed = runtime.battle_readiness.unit_list != observation.unit_list ||
                                   runtime.battle_readiness.day_base != observation.day_base;
+
     if (identity_changed) {
-        runtime.siege = {};
+        for (game::Siege& siege : runtime.siege) {
+            game::reset_siege_battle(siege);
+        }
         runtime.battle_date.last_observed_day = 0;
         runtime.battle_skill_counts = {};
     }
     if (!records_ready || identity_changed) {
         runtime.battle_mods_refreshed = false;
+        runtime.battle_refresh_done = 0;
+        runtime.next_battle_refresh = 0;
     }
-    if (game::update_battle_readiness(runtime.battle_readiness, observation, records_ready, now_ms)) {
-        if (runtime.skill_counts) {
-            game::update_ship_weaponization(runtime.ship_weaponization, module_base,
-                                            *runtime.skill_counts, now_ms);
-            game::update_battle_skill_counts(runtime.battle_skill_counts, observation, *runtime.skill_counts);
-        }
-        const bool day_changed = observation.day != runtime.battle_date.last_observed_day;
-        game::update_battle_date(runtime.battle_date, observation, now_ms,
-            runtime.features.get(domain::FeatureId::DateAlways15),
-            runtime.features.get(domain::FeatureId::DateDynamic),
-            runtime.features.get(domain::FeatureId::SkipDaysEnabled), runtime.skip_days, day_changed);
-        game::update_battle_weather(runtime.battle_weather, module_base, now_ms,
-            runtime.features.get(domain::FeatureId::WeatherSkillSimple),
-            runtime.features.get(domain::FeatureId::WeatherSkillComplex), day_changed,
-            runtime.features.get(domain::FeatureId::TerrainIgnore));
-        if (day_changed) {
-            std::uint8_t final_day = 0;
-            if (platform::windows::read_memory(observation.day_base + 0x2c,
-                    std::as_writable_bytes(std::span(&final_day, 1)))) {
-                runtime.pending_battle_days_remaining = final_day >= observation.day
-                    ? final_day - observation.day : 0;
-                runtime.battle_date.last_observed_day = observation.day;
+    if (!game::update_battle_readiness(runtime.battle_readiness, observation, records_ready, now_ms)) {
+        return;
+    }
+    for (std::size_t attempted = 0; attempted < JOB_COUNT && !work_budget.exhausted(); ++attempted) {
+        const Job job = static_cast<Job>(runtime.next_battle_job);
+
+        runtime.next_battle_job = (runtime.next_battle_job + 1) % JOB_COUNT;
+        switch (job) {
+        case Job::Ship:
+            if (runtime.skill_counts) {
+                game::update_ship_weaponization(runtime.ship_weaponization, module_base, *runtime.skill_counts, now_ms);
             }
+            break;
+        case Job::Skills:
+            if (runtime.skill_counts) {
+                game::update_battle_skill_counts(runtime.battle_skill_counts, observation,
+                    *runtime.skill_counts, work_budget);
+            }
+            break;
+        case Job::Calendar: {
+            const bool day_changed = observation.day != runtime.battle_date.last_observed_day;
+
+            game::update_battle_date(runtime.battle_date, observation, now_ms,
+                runtime.features.get(domain::FeatureId::DateAlways15),
+                runtime.features.get(domain::FeatureId::DateDynamic),
+                runtime.features.get(domain::FeatureId::SkipDaysEnabled), runtime.skip_days, day_changed);
+            game::update_battle_weather(runtime.battle_weather, module_base, now_ms,
+                runtime.features.get(domain::FeatureId::WeatherSkillSimple),
+                runtime.features.get(domain::FeatureId::WeatherSkillComplex), day_changed,
+                runtime.features.get(domain::FeatureId::TerrainIgnore));
+            if (day_changed) {
+                std::uint8_t final_day = 0;
+
+                if (platform::windows::read_memory(observation.day_base + 0x2c,
+                        std::as_writable_bytes(std::span(&final_day, 1)))) {
+                    runtime.pending_battle_days_remaining = final_day >= observation.day
+                        ? final_day - observation.day : 0;
+                    runtime.battle_date.last_observed_day = observation.day;
+                }
+            }
+            break;
         }
-        game::update_terrain_bonus(runtime.terrain_bonus_state, observation, runtime.terrain_bonus, now_ms,
-            runtime.features.get(domain::FeatureId::TerrainAbilityAtkDef),
-            runtime.features.get(domain::FeatureId::TerrainAbilityAll));
-        if (runtime.features.get(domain::FeatureId::SiegeWarfare)) {
-            game::update_siege(runtime.siege[0], module_base, observation, now_ms, false, runtime.siege_heal_rate);
+        case Job::Terrain:
+            game::update_terrain_bonus(runtime.terrain_bonus_state, observation, runtime.terrain_bonus, now_ms,
+                runtime.features.get(domain::FeatureId::TerrainAbilityAtkDef),
+                runtime.features.get(domain::FeatureId::TerrainAbilityAll), work_budget);
+            break;
+        case Job::Siege:
+            if (runtime.features.get(domain::FeatureId::SiegeWarfare) &&
+                !runtime.siege[1].move_applied && !runtime.siege[1].move_restore_pending) {
+                game::update_siege(runtime.siege[0], module_base, observation, now_ms, false,
+                    runtime.siege_heal_rate, work_budget);
+            }
+            break;
+        case Job::WideSiege:
+            if (runtime.features.get(domain::FeatureId::SiegeWarfare2) &&
+                !runtime.siege[0].move_applied && !runtime.siege[0].move_restore_pending) {
+                game::update_siege(runtime.siege[1], module_base, observation, now_ms, true,
+                    runtime.siege_heal_rate, work_budget);
+            }
+            break;
+        case Job::Tactics:
+            on_battle_ready(runtime, module_base, observation.day, observation.unit_count, work_budget);
+            break;
+        case Job::Stratagem:
+            on_battle_update(runtime, module_base, observation.unit_count, observation.unit_list, false, work_budget);
+            break;
+        case Job::Count:
+            break;
         }
-        if (runtime.features.get(domain::FeatureId::SiegeWarfare2)) {
-            game::update_siege(runtime.siege[1], module_base, observation, now_ms, true, runtime.siege_heal_rate);
-        }
-        on_battle_ready(runtime, module_base, observation.day, observation.unit_count);
-        on_battle_update(runtime, module_base, observation.unit_count, observation.unit_list, false);
     }
 }
 
 void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t game_base,
-                    std::uint64_t now_ms, const Stratagem5UiActions& ui) {
-    const auto mode = game::sample_battle_state(runtime.battle_state, module_base, game_base, now_ms);
+                    std::uint64_t now_ms, const Stratagem5UiActions& ui,
+                    const domain::WorkBudget& work_budget) {
+    const game::BattleMode mode = game::sample_battle_state(runtime.battle_state, module_base, game_base, now_ms);
     if (runtime.battle_state.game_state == 5 || runtime.battle_state.game_state == 7) {
         runtime.last_relevant_phase = static_cast<std::uint8_t>(runtime.battle_state.game_state);
         const bool council = runtime.battle_state.game_state == 5;
@@ -304,19 +355,16 @@ void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t
             runtime.specialty_last_council = council;
         }
     }
-    if (runtime.last_relevant_phase) {
-        game::update_battle_map_shuffle(runtime.battle_map_shuffle, module_base, now_ms,
-            runtime.features.get(domain::FeatureId::BattleMapShuffle), runtime.last_relevant_phase == 5,
-            runtime.specialty_random);
-    }
     if (mode == game::BattleMode::Battle) {
         runtime.battle_seen = true;
         on_stratagem5_lifecycle(runtime, module_base, true, false, ui);
-        if (const auto observation = game::read_battle_observation(module_base)) {
-            on_active_battle_observed(runtime, module_base, game_base, *observation, now_ms);
+        if (const std::optional<game::BattleObservation> observation = game::read_battle_observation(module_base)) {
+            on_active_battle_observed(runtime, module_base, game_base, *observation, now_ms, work_budget);
         } else {
             runtime.battle_readiness = {};
             runtime.battle_mods_refreshed = false;
+            runtime.battle_refresh_done = 0;
+            runtime.next_battle_refresh = 0;
         }
     } else if (mode == game::BattleMode::NonBattle) {
         if (runtime.battle_seen) {
@@ -333,37 +381,73 @@ void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t
     }
 }
 
-void on_battle_ready(Runtime& runtime, std::uintptr_t module_base, int day, int unit_count) {
+void on_battle_ready(Runtime& runtime, std::uintptr_t module_base, int day, int unit_count,
+    const domain::WorkBudget& work_budget) {
+    constexpr std::size_t TACTIC_COUNT = 6;
+    constexpr std::uint8_t ALL_TACTICS = (1u << TACTIC_COUNT) - 1;
+
     if (runtime.battle_mods_refreshed || unit_count <= 0 || day < 1 || day > 30) {
         return;
     }
-    if (runtime.features.get(domain::FeatureId::SelfHeal)) {
-        game::set_self_heal(module_base, true, runtime.self_heal_settings);
+    for (std::size_t attempted = 0; attempted < TACTIC_COUNT && !work_budget.exhausted(); ++attempted) {
+        const std::size_t index = runtime.next_battle_refresh;
+        const std::uint8_t bit = static_cast<std::uint8_t>(1u << index);
+        bool applied = false;
+
+        runtime.next_battle_refresh = (index + 1) % TACTIC_COUNT;
+        if ((runtime.battle_refresh_done & bit) != 0) {
+            continue;
+        }
+        switch (index) {
+        case 0:
+            applied = !runtime.features.get(domain::FeatureId::SelfHeal) ||
+                game::set_self_heal(module_base, true, runtime.self_heal_settings);
+            break;
+        case 1:
+            applied = !runtime.features.get(domain::FeatureId::Dongto) ||
+                game::set_dongto(module_base, true, runtime.dongto_settings);
+            break;
+        case 2:
+            applied = !runtime.features.get(domain::FeatureId::Celestial) ||
+                game::set_celestial(module_base, true, runtime.celestial_settings);
+            break;
+        case 3:
+            applied = !runtime.features.get(domain::FeatureId::Catapult) ||
+                game::set_catapult(module_base, true, runtime.catapult_settings);
+            break;
+        case 4:
+            applied = !runtime.features.get(domain::FeatureId::TerrainIgnore) ||
+                game::set_terrain_tactics(module_base, true, runtime.terrain_tactics_settings);
+            break;
+        case 5:
+            applied = !runtime.features.get(domain::FeatureId::DefBuilding) ||
+                game::set_def_building(module_base, true, runtime.def_building_settings);
+            break;
+        }
+        if (applied) {
+            runtime.battle_refresh_done |= bit;
+        }
     }
-    if (runtime.features.get(domain::FeatureId::Dongto)) {
-        game::set_dongto(module_base, true, runtime.dongto_settings);
-    }
-    if (runtime.features.get(domain::FeatureId::Celestial)) {
-        game::set_celestial(module_base, true, runtime.celestial_settings);
-    }
-    if (runtime.features.get(domain::FeatureId::Catapult)) {
-        game::set_catapult(module_base, true, runtime.catapult_settings);
-    }
-    if (runtime.features.get(domain::FeatureId::TerrainIgnore)) {
-        game::set_terrain_tactics(module_base, true, runtime.terrain_tactics_settings);
-    }
-    if (runtime.features.get(domain::FeatureId::DefBuilding)) {
-        game::set_def_building(module_base, true, runtime.def_building_settings);
-    }
-    runtime.battle_mods_refreshed = true;
+    runtime.battle_mods_refreshed = runtime.battle_refresh_done == ALL_TACTICS;
 }
 
 void on_battle_update(Runtime& runtime, std::uintptr_t module_base, int unit_count,
-                      std::uintptr_t unit_list, bool skip_stratagem5) {
-    if (skip_stratagem5 || should_skip_stratagem5(runtime.stratagem5_lifecycle))
+    std::uintptr_t unit_list, bool skip_stratagem5, const domain::WorkBudget& work_budget) {
+    if (skip_stratagem5 || should_skip_stratagem5(runtime.stratagem5_lifecycle)) {
         return;
-    game::update_stratagem5_healing(runtime.stratagem5, unit_count, unit_list);
-    game::refresh_stratagem5(runtime.stratagem5, runtime.epoch, module_base);
+    }
+    constexpr std::size_t JOB_COUNT = 2;
+
+    for (std::size_t attempted = 0; attempted < JOB_COUNT && !work_budget.exhausted(); ++attempted) {
+        const bool refresh = runtime.stratagem_refresh_next;
+
+        runtime.stratagem_refresh_next = !refresh;
+        if (refresh) {
+            game::refresh_stratagem5(runtime.stratagem5, runtime.epoch, module_base);
+        } else {
+            game::update_stratagem5_healing(runtime.stratagem5, unit_count, unit_list, work_budget);
+        }
+    }
 }
 
 bool on_stratagem_metadata(Runtime& runtime, std::uintptr_t metadata_table) {
@@ -730,25 +814,32 @@ void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,
                                   player, player_ready);
 }
 
-void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms) {
+void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget) {
     const platform::windows::RealClockScope real_clock;
 
     if (runtime.stopping) {
         return;
     }
 
-    game::update_start_setting(runtime.start_setting, game_module, now_ms,
-        runtime.features.get(domain::FeatureId::StartSetting));
+    const bool previously_observed = runtime.loop_context_observed;
+    std::uintptr_t game_base = 0;
+    std::uintptr_t player = 0;
 
-    auto game_base = game::read_game_base(runtime.game_base_pointer);
-    if (!(game_base && game_base == runtime.cached_game_base && now_ms - runtime.game_base_probe_ms < 300)) {
-        runtime.game_base_probe_ms = now_ms;
-        if (!game_base || !platform::windows::is_committed_memory(game_base, sizeof(std::uintptr_t)))
-            game_base = 0;
-        runtime.cached_game_base = game_base;
+    runtime.loop_context_observed = false;
+    if (!runtime.game_base_pointer || !platform::windows::read_memory(runtime.game_base_pointer,
+            std::as_writable_bytes(std::span(&game_base, 1))) ||
+        (game_base && (game_base <= 0x10000 || !platform::windows::read_memory(game_base + 0xe0,
+            std::as_writable_bytes(std::span(&player, 1)))))) {
+        // An unreadable slot does not prove that a game object was destroyed.
+        // Keep its epoch and recovery journals, and admit no jobs this message.
+        runtime.loop_game_base_ready = false;
+        runtime.loop_player_ready = false;
+        return;
     }
-    const auto player = game::read_player(game_base);
-    if (game_base != runtime.loop_game_base || player != runtime.loop_player ||
+    runtime.cached_game_base = game_base;
+    runtime.game_base_probe_ms = now_ms;
+    if (!previously_observed || game_base != runtime.loop_game_base || player != runtime.loop_player ||
         now_ms - runtime.loop_probe_ms >= 200) {
         runtime.loop_probe_ms = now_ms;
         runtime.loop_game_base = game_base;
@@ -757,8 +848,10 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         runtime.loop_game_base_ready = game_base > 0x10000 && platform::windows::is_committed_memory(game_base, 0x6000);
     }
 
-    if (runtime.session_player &&
-        (player != runtime.session_player || game_base != runtime.session_game_base || !runtime.loop_player_ready)) {
+    if (runtime.session_game_base && (game_base != runtime.session_game_base ||
+        (runtime.session_player && player != runtime.session_player))) {
+        // Both values above were read successfully. A confirmed null or new
+        // identity may retire object-bound state; a failed read may not.
         change_game_session(runtime);
         runtime.session_player = runtime.loop_player_ready ? player : 0;
         runtime.session_game_base = game_base;
@@ -766,49 +859,132 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         runtime.session_player = player;
         runtime.session_game_base = game_base;
     }
+    runtime.loop_context_observed = (!game_base || runtime.loop_game_base_ready) &&
+        (!player || runtime.loop_player_ready);
+    if (!runtime.loop_context_observed) {
+        return;
+    }
 
-    tick_recurring_features(runtime, game_module, game_base, runtime.loop_game_base_ready,
-                            player, runtime.loop_player_ready);
-    if (now_ms >= runtime.player_resources_next_ms) {
-        runtime.player_resources_next_ms = now_ms + 250;
-        runtime.player_resources = game::read_player_resources(runtime.game_base_pointer, game_base, player);
-    }
-    runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
-    if (runtime.config_loaded) {
-        game::update_tengi(runtime.tengi, game_module, runtime.loop_player_ready ? player : 0,
-                          now_ms, runtime.tengi_settings);
-    }
-    game::update_officer_roster(runtime.officer_roster, game_module);
-    update_native_feature_candidates(runtime, game_module);
-    if (runtime.config_loaded) {
-        game::update_ai_officer_growth(runtime.ai_growth, game_module,
-            runtime.loop_game_base_ready ? game_base : 0, runtime.loop_player_ready ? player : 0,
-            runtime.epoch, now_ms, runtime.ai_growth_settings);
-    }
-    game::tick_auto_affinity(runtime.auto_affinity, game_module, game_base, player, now_ms,
-                             runtime.features.get(domain::FeatureId::AutoAffinityGrowth));
-    game::tick_tech_zero(runtime.tech_zero, game_module, now_ms);
-    game::update_officer_stats(runtime.officer_stats, game_module, game_base,
-                               runtime.features.get(domain::FeatureId::AutoStatUp99));
-    game::update_all_aggressive(runtime.all_aggressive, game_module, player, now_ms,
-                                runtime.features.get(domain::FeatureId::AllAggressive));
-    game::update_tavern_requests(runtime.tavern_requests, game_module, game_base, now_ms,
-                                 runtime.features.get(domain::FeatureId::InfiniteTavernRequests));
-    game::update_undiscovered_ronin(runtime.undiscovered_ronin, game_module, game_base, player, now_ms,
-                                    runtime.features.get(domain::FeatureId::UndiscoveredToRonin));
-    game::update_jewel_open(runtime.jewel_open, game_base, now_ms);
     observe_legacy_player(runtime, now_ms);
-    game::update_faction_lord_bonus(runtime.faction_lord_bonus, game_module, now_ms);
-    constexpr std::array ROAD_FEATURES{domain::FeatureId::RoadBlock, domain::FeatureId::RoadBlock2};
+    if (!work_budget.exhausted()) {
+        // These fixed-size scalar updates are the frequent game controls. Large
+        // scans and periodic work below share the same dispatch deadline.
+        tick_recurring_features(runtime, game_module, game_base, runtime.loop_game_base_ready,
+            player, runtime.loop_player_ready);
+    }
+}
 
-    for (std::size_t index = 0; index < runtime.road_blocks.size(); ++index) {
+void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget) {
+    enum class Job : std::size_t {
+        StartSetting, PlayerResources, Tengi, Roster, NativeCandidates, AiGrowth,
+        Affinity, TechZero, OfficerStats, Aggressive, Tavern, Ronin, Jewels,
+        LordBonus, FirstRoad, SecondRoad, MapShuffle, SiegeRestore, Count
+    };
+    constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
+    const platform::windows::RealClockScope real_clock;
+    const std::uintptr_t game_base = runtime.loop_game_base;
+    const std::uintptr_t player = runtime.loop_player;
 
-        game::RoadBlock& road = runtime.road_blocks[index];
+    if (runtime.stopping) {
+        return;
+    }
+    for (std::size_t attempted = 0; attempted < JOB_COUNT && !work_budget.exhausted(); ++attempted) {
+        const Job job = static_cast<Job>(runtime.next_game_job);
 
-        // Routine zero maintenance is data-only. New-session capture and OFF
-        // restoration belong to the one-group configuration scheduler.
-        if (road.epoch == runtime.epoch && road.requested && runtime.features.get(ROAD_FEATURES[index])) {
-            game::tick_road_block(road, game_module, index == 1, now_ms, runtime.epoch);
+        // Advance before entering a resumable job so a long scan cannot keep
+        // every later job behind it on subsequent dispatches.
+        runtime.next_game_job = (runtime.next_game_job + 1) % JOB_COUNT;
+        switch (job) {
+        case Job::StartSetting:
+            game::update_start_setting(runtime.start_setting, game_module, now_ms,
+                runtime.features.get(domain::FeatureId::StartSetting));
+            break;
+        case Job::PlayerResources:
+            if (now_ms >= runtime.player_resources_next_ms) {
+                runtime.player_resources_next_ms = now_ms + 250;
+                runtime.player_resources = game::read_player_resources(runtime.game_base_pointer, game_base, player);
+            }
+            break;
+        case Job::Tengi:
+            runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
+            if (runtime.config_loaded) {
+                game::update_tengi(runtime.tengi, game_module, runtime.loop_player_ready ? player : 0,
+                    now_ms, runtime.tengi_settings);
+            }
+            break;
+        case Job::Roster:
+            game::update_officer_roster(runtime.officer_roster, game_module, work_budget);
+            break;
+        case Job::NativeCandidates:
+            update_native_feature_candidates(runtime, game_module, work_budget);
+            break;
+        case Job::AiGrowth:
+            if (runtime.config_loaded) {
+                game::update_ai_officer_growth(runtime.ai_growth, game_module,
+                    runtime.loop_game_base_ready ? game_base : 0, runtime.loop_player_ready ? player : 0,
+                    runtime.epoch, now_ms, runtime.ai_growth_settings, work_budget);
+            }
+            break;
+        case Job::Affinity:
+            game::tick_auto_affinity(runtime.auto_affinity, game_module, game_base, player, now_ms,
+                runtime.features.get(domain::FeatureId::AutoAffinityGrowth), work_budget);
+            break;
+        case Job::TechZero:
+            game::tick_tech_zero(runtime.tech_zero, game_module, now_ms, work_budget);
+            break;
+        case Job::OfficerStats:
+            game::update_officer_stats(runtime.officer_stats, game_module, game_base,
+                runtime.features.get(domain::FeatureId::AutoStatUp99), work_budget);
+            break;
+        case Job::Aggressive:
+            game::update_all_aggressive(runtime.all_aggressive, game_module, player, now_ms,
+                runtime.features.get(domain::FeatureId::AllAggressive), work_budget);
+            break;
+        case Job::Tavern:
+            game::update_tavern_requests(runtime.tavern_requests, game_module, game_base, now_ms,
+                runtime.features.get(domain::FeatureId::InfiniteTavernRequests), work_budget);
+            break;
+        case Job::Ronin:
+            game::update_undiscovered_ronin(runtime.undiscovered_ronin, game_module, game_base, player, now_ms,
+                runtime.features.get(domain::FeatureId::UndiscoveredToRonin), work_budget);
+            break;
+        case Job::Jewels:
+            game::update_jewel_open(runtime.jewel_open, game_base, now_ms);
+            break;
+        case Job::LordBonus:
+            game::update_faction_lord_bonus(runtime.faction_lord_bonus, game_module, now_ms, work_budget);
+            break;
+        case Job::FirstRoad:
+        case Job::SecondRoad: {
+            const std::size_t index = job == Job::FirstRoad ? 0 : 1;
+            const domain::FeatureId feature = index == 0 ? domain::FeatureId::RoadBlock : domain::FeatureId::RoadBlock2;
+            game::RoadBlock& road = runtime.road_blocks[index];
+
+            if (road.epoch == runtime.epoch && road.requested && runtime.features.get(feature)) {
+                game::tick_road_block(road, game_module, index == 1, now_ms, runtime.epoch);
+            }
+            break;
+        }
+        case Job::MapShuffle:
+            if (runtime.last_relevant_phase) {
+                game::update_battle_map_shuffle(runtime.battle_map_shuffle, game_module, now_ms,
+                    runtime.features.get(domain::FeatureId::BattleMapShuffle), runtime.last_relevant_phase == 5,
+                    runtime.specialty_random, work_budget);
+            }
+            break;
+        case Job::SiegeRestore:
+            for (std::size_t index = 0; index < runtime.siege.size() && !work_budget.exhausted(); ++index) {
+                const domain::FeatureId feature = index == 0
+                    ? domain::FeatureId::SiegeWarfare : domain::FeatureId::SiegeWarfare2;
+
+                if (!runtime.features.get(feature)) {
+                    game::disable_siege(runtime.siege[index], game_module);
+                }
+            }
+            break;
+        case Job::Count:
+            break;
         }
     }
 }

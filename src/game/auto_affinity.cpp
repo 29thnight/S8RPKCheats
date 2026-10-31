@@ -12,6 +12,32 @@
 namespace s8::game {
 namespace {
 
+constexpr std::size_t AFFINITY_CANDIDATE_CAPACITY = 5102;
+constexpr std::size_t AFFINITY_PAIR_CAPACITY = 3000 * 10 + 5000;
+
+void reset_candidates(AffinityCandidateScan& scan) {
+    scan.roster_base = 0;
+    scan.protagonist_id = 0;
+    scan.cursor = 0;
+    scan.seen.fill(false);
+    scan.candidates.clear();
+}
+
+void reset_relations(AffinityRelationScan& scan) {
+    scan.roster_base = 0;
+    scan.direct_base = 0;
+    scan.synergetic_base = 0;
+    scan.direct_cursor = 0;
+    scan.synergetic_cursor = 0;
+    scan.direct_done = false;
+    scan.synergetic_done = false;
+    scan.complete = false;
+    scan.sort = {};
+    scan.unique_cursor = 0;
+    scan.unique_count = 0;
+    scan.excluded_pairs.clear();
+}
+
 std::uint16_t officer_id(std::uintptr_t pointer, std::uintptr_t roster_base) {
     if (pointer < roster_base) {
         return 0;
@@ -28,111 +54,255 @@ std::uint16_t officer_id(std::uintptr_t pointer, std::uintptr_t roster_base) {
     return id;
 }
 
-int score_affinity_table(std::uintptr_t base, std::uintptr_t roster_base, bool synergetic) {
-    const auto valid_roster_pointer = [&](std::uintptr_t pointer) {
-        return pointer >= roster_base && pointer - roster_base < 5102 * 0x3d0 &&
-               (pointer - roster_base) % 0x3d0 == 0;
-    };
-    int valid = 0;
-    int invalid = 0;
-    const int limit = synergetic ? 600 : 128;
-    for (int i = 0; i < limit; ++i) {
-        const auto slot = base + static_cast<std::uintptr_t>(i) * (synergetic ? 0x20 : 0x40);
+bool valid_roster_pointer(std::uintptr_t pointer, std::uintptr_t roster_base) {
+    return pointer >= roster_base && pointer - roster_base < 5102 * 0x3d0 &&
+        (pointer - roster_base) % 0x3d0 == 0;
+}
+
+void validate_affinity_table(AffinityTableValidation& validation, const domain::WorkBudget& work_budget) {
+    const std::size_t limit = validation.synergetic ? 600 : 128;
+
+    while (!validation.complete && validation.cursor < limit && !work_budget.exhausted()) {
+        const std::uintptr_t slot = validation.base + validation.cursor * (validation.synergetic ? 0x20 : 0x40);
         std::uint8_t type = 0;
-        if (!platform::windows::read_memory(slot + (synergetic ? 0x18 : 8),
-                                             std::as_writable_bytes(std::span(&type, 1)))) {
-            return -1;
+
+        ++validation.cursor;
+        if (!platform::windows::read_memory(slot + (validation.synergetic ? 0x18 : 8),
+                std::as_writable_bytes(std::span(&type, 1)))) {
+            validation.complete = true;
+            return;
         }
         if (type == 0) {
             continue;
         }
-        if (type > (synergetic ? 2 : 4)) {
-            if (++invalid > 3) {
-                return -1;
+        if (type > (validation.synergetic ? 2 : 4)) {
+            if (++validation.invalid > 3) {
+                validation.complete = true;
+                return;
             }
             continue;
         }
         std::array<std::uintptr_t, 2> pointers{};
-        if (!platform::windows::read_memory(slot + (synergetic ? 8 : 0x10),
-                                             std::as_writable_bytes(std::span(pointers))) ||
-            !valid_roster_pointer(pointers[0]) || !valid_roster_pointer(pointers[1])) {
-            if (++invalid > 3) {
-                return -1;
+
+        if (!platform::windows::read_memory(slot + (validation.synergetic ? 8 : 0x10),
+                std::as_writable_bytes(std::span(pointers))) ||
+            !valid_roster_pointer(pointers[0], validation.roster_base) ||
+            !valid_roster_pointer(pointers[1], validation.roster_base)) {
+            if (++validation.invalid > 3) {
+                validation.complete = true;
+                return;
             }
             continue;
         }
-        ++valid;
+        ++validation.valid;
     }
-    return valid;
+    if (validation.cursor == limit) {
+        validation.complete = true;
+        validation.accepted = validation.valid != 0;
+    }
+}
+
+void resolve_affinity_relations(AffinityRelationResolve& resolve, std::uintptr_t game_base,
+    std::uintptr_t roster_base, const domain::WorkBudget& work_budget) {
+    constexpr std::array<std::uintptr_t, 2> SYNERGY_OFFSETS{0x547330, 0x433210};
+    constexpr std::array<std::uintptr_t, 2> DIRECT_OFFSETS{0x57ae38, 0x462ba8};
+    constexpr std::array<std::uintptr_t, 2> BIASES{0x80, 0xc0};
+
+    while (!resolve.complete && !work_budget.exhausted()) {
+        if (resolve.candidate == 6) {
+            resolve.complete = true;
+            return;
+        }
+        if (resolve.validation.base == 0) {
+            std::uintptr_t pointer = 0;
+            const bool synergetic = resolve.candidate < 2;
+            const std::size_t direct = synergetic ? 0 : resolve.candidate - 2;
+            const std::uintptr_t offset = synergetic ? SYNERGY_OFFSETS[resolve.candidate] : DIRECT_OFFSETS[direct / 2];
+
+            if (!platform::windows::read_memory(game_base + offset, std::as_writable_bytes(std::span(&pointer, 1))) ||
+                pointer <= (synergetic ? 0x10000u : 0x10080u)) {
+                ++resolve.candidate;
+                continue;
+            }
+            resolve.validation.base = synergetic ? pointer + 0xa0 : pointer - BIASES[direct % 2];
+            resolve.validation.roster_base = roster_base;
+            resolve.validation.synergetic = synergetic;
+        }
+        validate_affinity_table(resolve.validation, work_budget);
+        if (!resolve.validation.complete) {
+            return;
+        }
+        if (resolve.validation.accepted) {
+            if (resolve.candidate < 2) {
+                resolve.bases.synergetic = resolve.validation.base;
+                resolve.candidate = 2;
+            } else {
+                resolve.bases.direct = resolve.validation.base;
+                resolve.complete = true;
+            }
+        } else {
+            ++resolve.candidate;
+        }
+        resolve.validation = {};
+    }
+}
+
+bool candidate_less(const AffinityCandidate& left, const AffinityCandidate& right) {
+    if (left.force != right.force) {
+        return left.force < right.force;
+    }
+    if (left.city != right.city) {
+        return left.city < right.city;
+    }
+    return left.id < right.id;
+}
+
+bool pair_less(std::uint32_t left, std::uint32_t right) {
+    return left < right;
+}
+
+template<typename T, typename Compare>
+bool sort_affinity_values(std::vector<T>& values, AffinitySortState& sort,
+    const domain::WorkBudget& work_budget, Compare less) {
+    if (!sort.initialized) {
+        sort.heap_end = values.size();
+        sort.build_cursor = values.size() / 2;
+        sort.stage = AffinitySortStage::Build;
+        sort.initialized = true;
+    }
+    while (sort.stage != AffinitySortStage::Complete && !work_budget.exhausted()) {
+        if (sort.stage == AffinitySortStage::Build) {
+            if (sort.build_cursor == 0) {
+                sort.stage = AffinitySortStage::Extract;
+            } else {
+                sort.sift_root = --sort.build_cursor;
+                sort.stage = AffinitySortStage::SiftBuild;
+            }
+        } else if (sort.stage == AffinitySortStage::Extract) {
+            if (sort.heap_end <= 1) {
+                sort.stage = AffinitySortStage::Complete;
+                break;
+            }
+            std::swap(values[0], values[--sort.heap_end]);
+            sort.sift_root = 0;
+            sort.stage = AffinitySortStage::SiftExtract;
+        } else {
+            std::size_t child = sort.sift_root * 2 + 1;
+            const AffinitySortStage next = sort.stage == AffinitySortStage::SiftBuild
+                ? AffinitySortStage::Build : AffinitySortStage::Extract;
+
+            if (child >= sort.heap_end) {
+                sort.stage = next;
+                continue;
+            }
+            if (child + 1 < sort.heap_end && less(values[child], values[child + 1])) {
+                ++child;
+            }
+            if (!less(values[sort.sift_root], values[child])) {
+                sort.stage = next;
+            } else {
+                std::swap(values[sort.sift_root], values[child]);
+                sort.sift_root = child;
+            }
+        }
+    }
+    return sort.stage == AffinitySortStage::Complete;
 }
 
 } // namespace
 
-AffinityRelationBases resolve_affinity_relation_candidates(std::uintptr_t game_base, std::uintptr_t roster_base) {
-    AffinityRelationBases result;
-    for (const auto offset : std::array<std::uintptr_t, 2>{0x547330, 0x433210}) {
-        std::uintptr_t pointer = 0;
-        if (platform::windows::read_memory(game_base + offset, std::as_writable_bytes(std::span(&pointer, 1))) &&
-            pointer > 0x10000 && score_affinity_table(pointer + 0xa0, roster_base, true) >= 1) {
-            result.synergetic = pointer + 0xa0;
-            break;
-        }
-    }
-    for (const auto offset : std::array<std::uintptr_t, 2>{0x57ae38, 0x462ba8}) {
-        std::uintptr_t pointer = 0;
-        if (!platform::windows::read_memory(game_base + offset, std::as_writable_bytes(std::span(&pointer, 1))) ||
-            pointer <= 0x10080) {
-            continue;
-        }
-        for (const auto bias : std::array<std::uintptr_t, 2>{0x80, 0xc0}) {
-            if (score_affinity_table(pointer - bias, roster_base, false) >= 1) {
-                result.direct = pointer - bias;
-                return result;
-            }
-        }
-    }
-    return result;
+AutoAffinity::AutoAffinity() {
+    candidates.candidates.reserve(AFFINITY_CANDIDATE_CAPACITY);
+    relations.excluded_pairs.reserve(AFFINITY_PAIR_CAPACITY);
 }
 
-void search_affinity_synergetic_table(AffinityRelationSearch& search, std::size_t max_addresses) {
+void reset_auto_affinity(AutoAffinity& state) {
+    state.calendar = {};
+    state.last_poll_ms = 0;
+    state.data_center = 0;
+    state.player = 0;
+    state.game_base = 0;
+    state.roster_base = 0;
+    state.job_year = 0;
+    state.job_month = 0;
+    state.phase = AutoAffinityPhase::Idle;
+    reset_candidates(state.candidates);
+    state.candidate_sort = {};
+    state.resolve = {};
+    state.search = {};
+    reset_relations(state.relations);
+    state.pair_cursor = {};
+    state.applied = 0;
+    state.stale = 0;
+    state.failed = 0;
+    state.report.reset();
+}
+
+AffinityRelationBases resolve_affinity_relation_candidates(std::uintptr_t game_base, std::uintptr_t roster_base) {
+    AffinityRelationResolve resolve;
+
+    resolve_affinity_relations(resolve, game_base, roster_base, {});
+    return resolve.bases;
+}
+
+void search_affinity_synergetic_table(AffinityRelationSearch& search, std::size_t max_addresses,
+    const domain::WorkBudget& work_budget) {
     if (search.complete) {
         return;
     }
-    const auto end = search.game_base + 0x800000;
+    const std::uintptr_t end = search.game_base + 0x800000;
+    std::size_t checked = 0;
+
     if (search.cursor == 0) {
         search.cursor = (search.game_base + 7) & ~std::uintptr_t{7};
     }
-    std::size_t checked = 0;
-    while (search.cursor < end && checked < max_addresses) {
+    while ((search.validation.base != 0 || search.cursor < end) && checked < max_addresses && !work_budget.exhausted()) {
+        if (search.validation.base != 0) {
+            validate_affinity_table(search.validation, work_budget);
+            if (!search.validation.complete) {
+                return;
+            }
+            if (search.validation.accepted) {
+                search.result = search.validation.base;
+                search.complete = true;
+                return;
+            }
+            search.validation = {};
+            continue;
+        }
         MEMORY_BASIC_INFORMATION memory{};
+
         if (VirtualQuery(reinterpret_cast<const void*>(search.cursor), &memory, sizeof(memory)) != sizeof(memory)) {
             search.complete = true;
             return;
         }
-        const auto region_start = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
-        const auto region_end = std::min(region_start + memory.RegionSize, end);
+        const std::uintptr_t region_start = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
+        const std::uintptr_t region_end = std::min(region_start + memory.RegionSize, end);
+
         if (memory.State != MEM_COMMIT || (memory.Protect & PAGE_GUARD) ||
             (memory.Protect & 0xff) == PAGE_NOACCESS) {
             search.cursor = (region_end + 7) & ~std::uintptr_t{7};
             continue;
         }
-        while (search.cursor + sizeof(std::uintptr_t) <= region_end && checked < max_addresses) {
+        while (search.cursor + sizeof(std::uintptr_t) <= region_end && checked < max_addresses && !work_budget.exhausted()) {
             std::uintptr_t pointer = 0;
-            const auto address = search.cursor;
+            const std::uintptr_t address = search.cursor;
+
             search.cursor += sizeof(std::uintptr_t);
             ++checked;
-            if (platform::windows::read_memory(address, std::as_writable_bytes(std::span(&pointer, 1))) &&
-                pointer > 0x10000 && score_affinity_table(pointer + 0xa0, search.roster_base, true) >= 1) {
-                search.result = pointer + 0xa0;
-                search.complete = true;
-                return;
+            if (platform::windows::read_memory(address, std::as_writable_bytes(std::span(&pointer, 1))) && pointer > 0x10000) {
+                search.validation = {};
+                search.validation.base = pointer + 0xa0;
+                search.validation.roster_base = search.roster_base;
+                search.validation.synergetic = true;
+                break;
             }
         }
         if (search.cursor + sizeof(std::uintptr_t) > region_end) {
             search.cursor = (region_end + 7) & ~std::uintptr_t{7};
         }
     }
-    search.complete = search.cursor >= end;
+    search.complete = search.cursor >= end && search.validation.base == 0;
 }
 
 void sort_affinity_candidates(std::vector<AffinityCandidate>& candidates) {
@@ -149,9 +319,10 @@ void sort_affinity_candidates(std::vector<AffinityCandidate>& candidates) {
 
 std::optional<AffinityPair> next_affinity_pair(const AffinityCandidateScan& candidates,
                                                 const AffinityRelationScan& relations,
-                                                AffinityPairCursor& cursor, std::size_t max_pairs) {
+                                                AffinityPairCursor& cursor, std::size_t max_pairs,
+                                                const domain::WorkBudget& work_budget) {
     std::size_t examined = 0;
-    while (cursor.left < candidates.candidates.size() && examined < max_pairs) {
+    while (cursor.left < candidates.candidates.size() && examined < max_pairs && !work_budget.exhausted()) {
         ++examined;
         if (cursor.right >= candidates.candidates.size() ||
             candidates.candidates[cursor.left].force != candidates.candidates[cursor.right].force ||
@@ -213,9 +384,10 @@ AffinityApplyResult apply_affinity_pair(std::uintptr_t data_center, const Affini
     return AffinityApplyResult::Applied;
 }
 
-void collect_affinity_candidates(AffinityCandidateScan& scan, std::size_t max_slots) {
+void collect_affinity_candidates(AffinityCandidateScan& scan, std::size_t max_slots,
+    const domain::WorkBudget& work_budget) {
     const auto end = std::min(scan.cursor + max_slots, std::size_t{5102});
-    for (; scan.cursor < end; ++scan.cursor) {
+    for (; scan.cursor < end && !work_budget.exhausted(); ++scan.cursor) {
         const auto base = scan.roster_base + scan.cursor * 0x3d0;
         std::uint16_t id = 0, face = 0, merit = 0, reputation = 0;
         std::uint32_t gold = 0;
@@ -250,7 +422,8 @@ void collect_affinity_candidates(AffinityCandidateScan& scan, std::size_t max_sl
     }
 }
 
-void collect_affinity_relations(AffinityRelationScan& scan, std::size_t max_slots) {
+void collect_affinity_relations(AffinityRelationScan& scan, std::size_t max_slots,
+    const domain::WorkBudget& work_budget) {
     const auto add_pair = [&](std::uint16_t a, std::uint16_t b) {
         if (a && b && a != b) {
             const auto low = std::min(a, b);
@@ -263,7 +436,7 @@ void collect_affinity_relations(AffinityRelationScan& scan, std::size_t max_slot
             scan.direct_done = true;
         } else {
             const auto end = std::min(scan.direct_cursor + max_slots, std::size_t{3000});
-            for (; scan.direct_cursor < end; ++scan.direct_cursor) {
+            for (; scan.direct_cursor < end && !work_budget.exhausted(); ++scan.direct_cursor) {
                 const auto slot = scan.direct_base + scan.direct_cursor * 0x40;
                 std::uint8_t relation = 0;
                 if (!platform::windows::read_memory(slot + 8, std::as_writable_bytes(std::span(&relation, 1)))) {
@@ -297,7 +470,7 @@ void collect_affinity_relations(AffinityRelationScan& scan, std::size_t max_slot
             scan.synergetic_done = true;
         } else {
             const auto end = std::min(scan.synergetic_cursor + max_slots, std::size_t{5000});
-            for (; scan.synergetic_cursor < end; ++scan.synergetic_cursor) {
+            for (; scan.synergetic_cursor < end && !work_budget.exhausted(); ++scan.synergetic_cursor) {
                 const auto slot = scan.synergetic_base + scan.synergetic_cursor * 0x20;
                 std::array<std::uintptr_t, 2> pointers{};
                 std::array<std::uint8_t, 2> type{};
@@ -312,18 +485,33 @@ void collect_affinity_relations(AffinityRelationScan& scan, std::size_t max_slot
             }
             scan.synergetic_done = scan.synergetic_done || scan.synergetic_cursor == 5000;
         }
-        if (scan.synergetic_done) {
-            std::sort(scan.excluded_pairs.begin(), scan.excluded_pairs.end());
-            scan.excluded_pairs.erase(std::unique(scan.excluded_pairs.begin(), scan.excluded_pairs.end()),
-                                      scan.excluded_pairs.end());
+    }
+    if (scan.synergetic_done && !scan.complete &&
+        sort_affinity_values(scan.excluded_pairs, scan.sort, work_budget, pair_less)) {
+        while (scan.unique_cursor < scan.excluded_pairs.size() && !work_budget.exhausted()) {
+            const std::uint32_t value = scan.excluded_pairs[scan.unique_cursor++];
+
+            if (scan.unique_count == 0 || scan.excluded_pairs[scan.unique_count - 1] != value) {
+                scan.excluded_pairs[scan.unique_count++] = value;
+            }
+        }
+        if (scan.unique_cursor == scan.excluded_pairs.size()) {
+            scan.excluded_pairs.resize(scan.unique_count);
+            scan.complete = true;
         }
     }
 }
 
 void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::uintptr_t game_base,
-                        std::uintptr_t player, std::uint64_t now_ms, bool enabled) {
+                        std::uintptr_t player, std::uint64_t now_ms, bool enabled,
+                        const domain::WorkBudget& work_budget) {
     if (!enabled) {
-        state = {};
+        if (state.phase != AutoAffinityPhase::Idle || state.data_center != 0) {
+            reset_auto_affinity(state);
+        }
+        return;
+    }
+    if (work_budget.exhausted()) {
         return;
     }
     std::uintptr_t data_center = 0;
@@ -336,7 +524,7 @@ void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::ui
         return;
     }
     if (state.data_center != data_center || state.player != player || state.game_base != game_base) {
-        state = {};
+        reset_auto_affinity(state);
         state.data_center = data_center;
         state.player = player;
         state.game_base = game_base;
@@ -363,11 +551,13 @@ void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::ui
             return;
         }
         state.roster_base = roster;
-        state.candidates = {};
+        reset_candidates(state.candidates);
         state.candidates.roster_base = roster;
         state.candidates.protagonist_id = player_id;
-        state.relations = {};
+        reset_relations(state.relations);
         state.search = {};
+        state.resolve = {};
+        state.candidate_sort = {};
         state.pair_cursor = {};
         state.applied = 0;
         state.stale = 0;
@@ -382,22 +572,33 @@ void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::ui
     }
     if (state.candidates.protagonist_id != player_id ||
         resolve_officer_roster_base(module_base) != state.roster_base) {
-        state = {};
+        reset_auto_affinity(state);
         return;
     }
     switch (state.phase) {
     case AutoAffinityPhase::Idle:
         break;
     case AutoAffinityPhase::Candidates:
-        collect_affinity_candidates(state.candidates, 64);
+        collect_affinity_candidates(state.candidates, 64, work_budget);
         if (state.candidates.cursor == 5102) {
             if (state.candidates.candidates.size() < 2) {
                 state.report = AutoAffinityReport{AutoAffinityOutcome::InsufficientCandidates, 0, 0, 0};
                 state.phase = AutoAffinityPhase::Idle;
                 break;
             }
-            sort_affinity_candidates(state.candidates.candidates);
-            const auto bases = resolve_affinity_relation_candidates(game_base, state.roster_base);
+            state.phase = AutoAffinityPhase::SortCandidates;
+        }
+        break;
+    case AutoAffinityPhase::SortCandidates:
+        if (sort_affinity_values(state.candidates.candidates, state.candidate_sort, work_budget, candidate_less)) {
+            state.phase = AutoAffinityPhase::ResolveRelations;
+        }
+        break;
+    case AutoAffinityPhase::ResolveRelations:
+        resolve_affinity_relations(state.resolve, game_base, state.roster_base, work_budget);
+        if (state.resolve.complete) {
+            const AffinityRelationBases bases = state.resolve.bases;
+
             state.relations.roster_base = state.roster_base;
             state.relations.direct_base = bases.direct;
             state.relations.synergetic_base = bases.synergetic;
@@ -411,7 +612,7 @@ void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::ui
         }
         break;
     case AutoAffinityPhase::SearchRelations:
-        search_affinity_synergetic_table(state.search, 128);
+        search_affinity_synergetic_table(state.search, 128, work_budget);
         if (state.search.complete) {
             state.relations.synergetic_base = state.search.result;
             if (state.relations.direct_base || state.relations.synergetic_base) {
@@ -423,14 +624,15 @@ void tick_auto_affinity(AutoAffinity& state, std::uintptr_t module_base, std::ui
         }
         break;
     case AutoAffinityPhase::ScanRelations:
-        collect_affinity_relations(state.relations, 128);
-        if (state.relations.direct_done && state.relations.synergetic_done) {
+        collect_affinity_relations(state.relations, 128, work_budget);
+        if (state.relations.complete) {
             state.phase = AutoAffinityPhase::Apply;
         }
         break;
     case AutoAffinityPhase::Apply:
-        for (std::size_t i = 0; i < 16; ++i) {
-            const auto pair = next_affinity_pair(state.candidates, state.relations, state.pair_cursor, 32);
+        for (std::size_t i = 0; i < 16 && !work_budget.exhausted(); ++i) {
+            const std::optional<AffinityPair> pair = next_affinity_pair(state.candidates, state.relations,
+                state.pair_cursor, 32, work_budget);
             if (!pair) {
                 if (state.pair_cursor.left >= state.candidates.candidates.size()) {
                     state.report = AutoAffinityReport{AutoAffinityOutcome::Completed,

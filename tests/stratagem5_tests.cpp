@@ -497,12 +497,17 @@ void siege_modes_and_battle_identity() {
     assert(state.features.get(domain::FeatureId::SiegeWarfare2));
     assert(runtime::config_snapshot(state).siege_heal_rate == 25);
     state.siege[1].move_applied = true;
+    state.siege[1].move_restore_pending = true;
+    state.siege[1].move_base = 0x9000;
+    state.siege[1].move_module_base = 0x10000;
     state.siege[1].terrain_applied = true;
     state.siege[1].previous_day = 4;
     state.battle_readiness.unit_list = 0x1000;
     state.battle_readiness.day_base = 0x2000;
     runtime::on_active_battle_observed(state, 0, 0, game::BattleObservation{0x3000, 0x4000, 1, 1}, 2000);
-    assert(!state.siege[1].move_applied && !state.siege[1].terrain_applied);
+    assert(state.siege[1].move_applied && state.siege[1].move_restore_pending);
+    assert(state.siege[1].move_base == 0x9000 && state.siege[1].move_module_base == 0x10000);
+    assert(!state.siege[1].terrain_applied);
     assert(state.siege[1].previous_day == -1);
     const auto changes = services::config_changes(runtime::config_snapshot(state));
     const auto json = services::update_config_json("{}", changes);
@@ -541,6 +546,11 @@ void tavern_phase_and_borrowing() {
     game::update_tavern_requests(state, exe, base, 3500, true);
     assert(state.waiting);
     game::update_tavern_requests(state, exe, base, 4000, true);
+    for (std::size_t slice = 0; slice < 64 &&
+        state.maintenance != game::TavernMaintenancePhase::Idle; ++slice) {
+        game::update_tavern_requests(state, exe, base, 4000, true);
+    }
+    assert(state.maintenance == game::TavernMaintenancePhase::Idle);
     assert(!state.waiting && state.backups[1][0].borrowed);
     assert(state.backups[1][0].source_city == 0 && state.injected[1][0] == native);
     game::TavernRequest borrowed{};
@@ -574,15 +584,20 @@ void specialty_slot_preserves_other_bytes() {
 
 void battle_map_session_change_discards_old_addresses() {
     runtime::Runtime state;
-    state.battle_map_shuffle.records.push_back({0x1234, 0x5678});
-    state.battle_map_shuffle.pool.push_back(0x5678);
+    state.battle_map_shuffle.records[0] = {0x1234, 0x5678, 0x9876, true, false};
+    state.battle_map_shuffle.record_count = 1;
+    state.battle_map_shuffle.pool[0] = 0x5678;
+    state.battle_map_shuffle.pool_count = 1;
+    state.battle_map_shuffle.pending_restore_count = 1;
     state.battle_map_shuffle.active = true;
     state.battle_map_shuffle.applied_this_council = true;
     state.battle_map_shuffle.last_council = true;
     state.last_relevant_phase = 5;
     runtime::change_game_session(state);
-    assert(state.battle_map_shuffle.records.empty());
-    assert(state.battle_map_shuffle.pool.empty());
+    assert(state.battle_map_shuffle.record_count == 0);
+    assert(state.battle_map_shuffle.pool_count == 0);
+    assert(state.battle_map_shuffle.retired_record_count == 1);
+    assert(state.battle_map_shuffle.result == game::BattleMapShuffleResult::SessionRetired);
     assert(!state.battle_map_shuffle.active && !state.battle_map_shuffle.applied_this_council);
     assert(!state.battle_map_shuffle.last_council && state.last_relevant_phase == 0);
 }
@@ -606,15 +621,22 @@ void battle_map_shuffle_and_restore() {
     game::BattleMapShuffle state;
     std::mt19937 random{42};
     const auto exe = reinterpret_cast<std::uintptr_t>(module.get());
-    game::update_battle_map_shuffle(state, exe, 3000, true, true, random);
+    for (std::size_t slice = 0; slice < 24 &&
+        state.phase != game::BattleMapShufflePhase::Applied; ++slice) {
+        game::update_battle_map_shuffle(state, exe, 3000, true, true, random);
+    }
+    assert(state.phase == game::BattleMapShufflePhase::Applied);
     assert(state.active && state.applied_this_council);
-    assert(state.records.size() == game::BATTLE_MAP_OFFSETS.size() && state.pool.size() == 3);
+    assert(state.record_count == game::BATTLE_MAP_OFFSETS.size() && state.pool_count == 3);
     for (const auto offset : game::BATTLE_MAP_OFFSETS) {
         std::uint64_t value = 0;
         std::memcpy(&value, map.data() + offset, sizeof(value));
         assert(value >= 100 && value <= 102);
     }
     game::update_battle_map_shuffle(state, exe, 3500, true, false, random);
+    for (std::size_t slice = 0; slice < 16 && state.active; ++slice) {
+        game::update_battle_map_shuffle(state, exe, 3500, true, false, random);
+    }
     assert(!state.active && !state.applied_this_council);
     for (std::size_t i = 0; i < game::BATTLE_MAP_OFFSETS.size(); ++i) {
         std::uint64_t value = 0;
@@ -624,38 +646,91 @@ void battle_map_shuffle_and_restore() {
 }
 
 void faction_lord_bonus_cleanup() {
-    auto module = std::make_unique<std::byte[]>(0x034c8630 + sizeof(std::uintptr_t));
-    auto root_data = std::make_unique<std::byte[]>(0x197a774 + 48);
+    constexpr std::size_t MODULE_SIZE = 0x034c8630 + sizeof(std::uintptr_t);
+    constexpr std::size_t ROOT_SIZE = 0x197a774 + 48;
+    constexpr std::uintptr_t ORIGINAL_BONUS = 0x87654321;
+    constexpr std::uintptr_t FOREIGN_BONUS = 0x12345678;
+    std::vector<std::byte> module(MODULE_SIZE);
+    std::vector<std::byte> root_data(ROOT_SIZE);
     std::array<std::byte, 0x20> p1{}, p2{}, p3{}, p4{};
-    const auto store = [](std::byte* target, std::uintptr_t value) {
+    std::array<std::byte, 0x338> own_lord{}, foreign_lord{};
+    using StorePointer = void (*)(std::byte*, std::uintptr_t);
+    const StorePointer store = [](std::byte* target, std::uintptr_t value) {
         std::memcpy(target, &value, sizeof(value));
     };
-    store(module.get() + 0x034c8630, reinterpret_cast<std::uintptr_t>(p1.data()));
+    const std::uintptr_t exe = reinterpret_cast<std::uintptr_t>(module.data());
+    const std::uintptr_t root = reinterpret_cast<std::uintptr_t>(root_data.data());
+    const std::uintptr_t own_bonus = root + 0x4ec6d8 + 24;
+
+    store(module.data() + 0x034c8630, reinterpret_cast<std::uintptr_t>(p1.data()));
     store(p1.data(), reinterpret_cast<std::uintptr_t>(p2.data()));
     store(p2.data() + 8, reinterpret_cast<std::uintptr_t>(p3.data()));
     store(p3.data() + 0x10, reinterpret_cast<std::uintptr_t>(p4.data()));
-    const auto root = reinterpret_cast<std::uintptr_t>(root_data.get());
     store(p4.data(), root);
-    std::uintptr_t own_bonus = root + 0x4ec6d8 + 24;
-    std::uintptr_t external_bonus = 0x12345678;
-    std::fill_n(root_data.get() + 0x197a774, 48, std::byte{0x33});
+    own_lord[8] = std::byte{1};
+    foreign_lord[8] = std::byte{2};
+    store(own_lord.data() + 0x330, own_bonus);
+    store(foreign_lord.data() + 0x330, FOREIGN_BONUS);
+    std::fill_n(root_data.data() + 0x197a774, 48, std::byte{0x33});
     for (std::size_t i = 0; i < 5; ++i) {
-        std::fill_n(root_data.get() + 0x4ec6d8 + i * 24 + 9, 15, std::byte{0x44});
+        std::fill_n(root_data.data() + 0x4ec6d8 + i * 24 + 9, 15, std::byte{0x44});
     }
     game::FactionLordBonus state;
-    state.enabled = true;
-    state.names_applied = true;
-    state.assigned = {reinterpret_cast<std::uintptr_t>(&own_bonus),
-                      reinterpret_cast<std::uintptr_t>(&external_bonus)};
-    game::set_faction_lord_bonus(state, reinterpret_cast<std::uintptr_t>(module.get()), false);
-    assert(!state.enabled && !state.names_applied && state.assigned.empty());
-    assert(own_bonus == 0 && external_bonus == 0x12345678);
+
+    assert(game::set_faction_lord_bonus(state, exe, true));
+    for (std::size_t slice = 0; slice < 32; ++slice) {
+        game::update_faction_lord_bonus(state, exe, 5000);
+        if (state.names_applied && state.phase == game::FactionLordBonusPhase::Idle) {
+            break;
+        }
+    }
+    assert(state.names_applied && state.data_count == 6);
+
+    // The two applied records exercise cleanup without fabricating a native
+    // faction pointer whose high byte doubles as the game's existence flag.
+    game::FactionLordAssignment& owned = state.assigned[0];
+    game::FactionLordAssignment& foreign = state.assigned[1];
+
+    owned.lord = reinterpret_cast<std::uintptr_t>(own_lord.data());
+    owned.original = ORIGINAL_BONUS;
+    owned.applied = own_bonus;
+    owned.officer_id = 1;
+    owned.occupied = true;
+    foreign.lord = reinterpret_cast<std::uintptr_t>(foreign_lord.data());
+    foreign.original = 0;
+    foreign.applied = own_bonus;
+    foreign.officer_id = 2;
+    foreign.occupied = true;
+    state.assigned_count = 2;
+    state.assigned_limit = 2;
+
+    assert(!game::set_faction_lord_bonus(state, exe, false));
+    for (std::size_t slice = 0; slice < 8; ++slice) {
+        game::update_faction_lord_bonus(state, exe, 6000);
+    }
+    std::uintptr_t own_current = 0;
+    std::uintptr_t foreign_current = 0;
+
+    std::memcpy(&own_current, own_lord.data() + 0x330, sizeof(own_current));
+    std::memcpy(&foreign_current, foreign_lord.data() + 0x330, sizeof(foreign_current));
+    assert(own_current == ORIGINAL_BONUS && foreign_current == FOREIGN_BONUS);
+    assert(state.assigned_count == 1 && game::faction_lord_bonus_pending(state));
+    assert(state.names_applied);
+
+    // A later verified original value resolves the outstanding record. The
+    // actual pre-feature data is restored, including nonzero names/bonuses.
+    store(foreign_lord.data() + 0x330, 0);
+    for (std::size_t slice = 0; slice < 16 && game::faction_lord_bonus_pending(state); ++slice) {
+        game::update_faction_lord_bonus(state, exe, 6000);
+    }
+    assert(game::set_faction_lord_bonus(state, exe, false));
+    assert(!state.enabled && !state.names_applied && !game::faction_lord_bonus_pending(state));
     for (std::size_t i = 0; i < 48; ++i) {
-        assert(root_data[0x197a774 + i] == std::byte{0});
+        assert(root_data[0x197a774 + i] == std::byte{0x33});
     }
     for (std::size_t i = 0; i < 5; ++i) {
         for (std::size_t j = 0; j < 15; ++j) {
-            assert(root_data[0x4ec6d8 + i * 24 + 9 + j] == std::byte{0});
+            assert(root_data[0x4ec6d8 + i * 24 + 9 + j] == std::byte{0x44});
         }
     }
 }

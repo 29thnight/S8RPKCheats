@@ -14,10 +14,10 @@ namespace s8::runtime {
 std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             std::uintptr_t game_module, std::size_t max_commands,
                             std::chrono::steady_clock::duration time_budget,
-                            services::UiBridge* ui = nullptr);
+                            services::UiBridge* ui = nullptr, const domain::WorkBudget& work_budget = {});
 std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
                                std::uintptr_t game_module, std::size_t max_commands,
-                               std::chrono::steady_clock::duration time_budget);
+                               std::chrono::steady_clock::duration time_budget, const domain::WorkBudget& work_budget = {});
 void publish_stopped_state(Runtime& runtime, services::UiBridge& ui);
 
 } // namespace s8::runtime

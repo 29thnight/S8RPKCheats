@@ -22,14 +22,15 @@ namespace s8::runtime {
 std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             std::uintptr_t game_module, std::size_t max_commands,
                             std::chrono::steady_clock::duration time_budget,
-                            services::UiBridge* ui) {
+                            services::UiBridge* ui, const domain::WorkBudget& work_budget) {
     const platform::windows::RealClockScope real_clock;
 
     if (runtime.stopping) {
         return 0;
     }
 
-    const auto deadline = std::chrono::steady_clock::now() + time_budget;
+    const std::chrono::steady_clock::time_point deadline =
+        std::min(work_budget.deadline, std::chrono::steady_clock::now() + time_budget);
     std::size_t processed = 0;
     std::array<services::CompletionToken, services::CommandMailbox::CAPACITY> ronin_completions{};
     std::size_t ronin_completion_count = 0;
@@ -95,7 +96,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         request_trait_viewer(runtime.traits, command.enabled);
                         break;
                     case domain::FeatureId::AutoAffinityGrowth:
-                        runtime.auto_affinity = {};
+                        game::reset_auto_affinity(runtime.auto_affinity);
                         break;
                     case domain::FeatureId::UndiscoveredToRonin:
                         if (!command.enabled) {
@@ -104,17 +105,19 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         break;
                     case domain::FeatureId::BattleMapShuffle:
                         if (!command.enabled) {
-                            game::disable_battle_map_shuffle(runtime.battle_map_shuffle);
+                            game::disable_battle_map_shuffle(runtime.battle_map_shuffle, domain::WorkBudget{deadline});
                         }
                         break;
                     case domain::FeatureId::SiegeWarfare:
                     case domain::FeatureId::SiegeWarfare2: {
                         const bool wide = command.feature == domain::FeatureId::SiegeWarfare2;
+                        const std::size_t restore_index = command.enabled ? !wide : wide;
+
                         if (command.enabled) {
-                            game::disable_siege(runtime.siege[!wide], game_module);
                             runtime.features.set(wide ? domain::FeatureId::SiegeWarfare : domain::FeatureId::SiegeWarfare2, false);
-                        } else {
-                            game::disable_siege(runtime.siege[wide], game_module);
+                        }
+                        if (!game::disable_siege(runtime.siege[restore_index], game_module) && ui) {
+                            ui->publish_notice("공성전 이동 비용 복원이 남아 있습니다. 기록을 보존하고 다음 갱신에서 이어서 복원합니다.");
                         }
                         break;
                     }
@@ -724,7 +727,11 @@ std::string special_assignment_line(const domain::SpecialAssignmentResult& resul
     return line;
 }
 
-void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
+void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module,
+    const domain::WorkBudget& work_budget) {
+    if (work_budget.exhausted()) {
+        return;
+    }
 
     if (runtime.ai_growth.report) {
 
@@ -757,7 +764,7 @@ void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t ga
     }
 
     if (runtime.skill_counts && game::update_special_ability_assignment(runtime.special_assignment,
-            game_module, runtime.loop_game_base, runtime.loop_player, runtime.epoch, *runtime.skill_counts)) {
+            game_module, runtime.loop_game_base, runtime.loop_player, runtime.epoch, *runtime.skill_counts, work_budget)) {
 
         const domain::SpecialAssignmentSummary& summary = runtime.special_assignment.summary;
         const std::span<const domain::SpecialAssignmentResult> results =
@@ -789,7 +796,7 @@ void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t ga
         const std::size_t end = std::min(runtime.special_assignment_notices->size(),
                                         runtime.special_assignment_notice_cursor + 8);
 
-        while (runtime.special_assignment_notice_cursor < end) {
+        while (runtime.special_assignment_notice_cursor < end && !work_budget.exhausted()) {
 
             const domain::SpecialAssignmentResult& result =
                 (*runtime.special_assignment_notices)[runtime.special_assignment_notice_cursor++];
@@ -805,26 +812,23 @@ void service_ai_jobs(Runtime& runtime, services::UiBridge& ui, std::uintptr_t ga
 
 } // namespace
 
-std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
-                               std::uintptr_t game_module, std::size_t max_commands,
-                               std::chrono::steady_clock::duration time_budget) {
-    const platform::windows::RealClockScope real_clock;
+namespace {
 
-    if (runtime.stopping) {
-        return 0;
-    }
-
+void service_pending_trait(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module,
+    const domain::WorkBudget& work_budget) {
     if (runtime.pending_trait_change) {
-        auto& pending = *runtime.pending_trait_change;
-        const auto player = pending.protagonist ? game::read_player(pending.game_base) : 0;
-        const auto target = pending.protagonist && !player ? 0 : game::resolve_trait_target(
+        PendingTraitChange& pending = *runtime.pending_trait_change;
+        const std::uintptr_t player = pending.protagonist ? game::read_player(pending.game_base) : 0;
+        const std::uintptr_t target = pending.protagonist && !player ? 0 : game::resolve_trait_target(
             runtime.officer_roster, game_module, pending.officer_id, player);
         if (game::read_game_base(runtime.game_base_pointer) != pending.game_base ||
             !target || target != pending.target) {
             runtime.pending_trait_change.reset();
             ui.publish_notice("게임 상태가 바뀌어 기재 검색을 중단했습니다.");
         } else {
-            game::scan_trait_object(pending.search, 2 * 1024 * 1024);
+            constexpr std::size_t SCAN_BYTES = 64 * 1024;
+
+            game::scan_trait_object(pending.search, SCAN_BYTES, work_budget);
             if (pending.search.complete) {
                 const bool applied = pending.search.result && game::set_officer_trait_object(
                     target, pending.slot, pending.search.trait_id, pending.search.result, pending.search.vtable);
@@ -839,41 +843,38 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             }
         }
     }
-    ui.officer_roster_scan_cursor.store((runtime.officer_roster.requested || runtime.officer_roster.completed)
-        ? static_cast<int>(runtime.officer_roster.cursor) : -1);
-    if (runtime.auto_affinity.report) {
-        const auto report = *runtime.auto_affinity.report;
-        switch (report.outcome) {
-        case game::AutoAffinityOutcome::Completed:
-            ui.publish_notice("AI 친밀도 자동 성장: " + std::to_string(report.applied) + "쌍 적용, " +
-                              std::to_string(report.stale) + "쌍 변경됨, " + std::to_string(report.failed) + "쌍 실패");
-            break;
-        case game::AutoAffinityOutcome::InsufficientCandidates:
-            ui.publish_notice("AI 친밀도 자동 성장: 대상 무장이 부족합니다.");
-            break;
-        case game::AutoAffinityOutcome::NoRelationTable:
-            ui.publish_notice("AI 친밀도 자동 성장: 관계 테이블을 찾지 못했습니다.");
-            break;
-        case game::AutoAffinityOutcome::DateChanged:
-            ui.publish_notice("AI 친밀도 자동 성장: 날짜가 바뀌어 중단했습니다. 적용 " +
-                              std::to_string(report.applied) + "쌍");
-            break;
-        }
-        runtime.auto_affinity.report.reset();
-    }
+}
+
+void consume_ui_configuration(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
     if (runtime.loop_game_base_ready && !runtime.config_loaded) {
-        if (auto config = ui.take_config_load()) {
+        if (std::optional<services::ConfigLoad> config = ui.take_config_load()) {
             apply_config(runtime, std::move(*config), game_module);
             runtime.config_loaded = true;
         }
     }
-    runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
-    const domain::OfficerRosterUpdate* const roster_update =
+    if (std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> definitions = ui.take_named_specialties()) {
+        runtime.named_specialties = std::move(definitions->first);
+        runtime.specialty_random.seed(definitions->second);
+    }
+    if (std::optional<domain::SkillCounts> counts = ui.take_skill_counts()) {
+        runtime.skill_counts = std::move(*counts);
+        ui.publish_skill_counts_view(*runtime.skill_counts);
+        runtime.ship_weaponization.last_active_unit = 0;
+    }
+    consume_trait_configuration(runtime.traits, ui);
+}
+
+void publish_roster_progress(Runtime& runtime, services::UiBridge& ui) {
+    const domain::OfficerRosterUpdate* const update =
         game::peek_officer_roster_update(runtime.officer_roster, runtime.epoch);
 
-    if (roster_update && ui.publish_officer_roster(*roster_update)) {
+    if (update && ui.publish_officer_roster(*update)) {
         game::acknowledge_officer_roster_update(runtime.officer_roster);
     }
+}
+
+void sample_protagonist(Runtime& runtime, std::uintptr_t game_module) {
+    runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
     std::uint16_t protagonist_id = 0;
     if (runtime.loop_player_ready && platform::windows::read_memory(runtime.loop_player + 8,
             std::as_writable_bytes(std::span(&protagonist_id, 1))) && protagonist_id) {
@@ -906,7 +907,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         domain::OfficerBasicValues basic{};
         bool basic_read = true;
         for (std::size_t i = 0; i < basic.size(); ++i) {
-            const auto field = domain::officer_basic_fields[i];
+            const domain::OfficerBasicField field = domain::officer_basic_fields[i];
             if (!platform::windows::read_memory(runtime.loop_player + field.offset,
                     std::as_writable_bytes(std::span(&basic[i], 1)).first(field.size))) {
                 basic_read = false;
@@ -927,6 +928,29 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         runtime.protagonist_aptitudes.reset();
         runtime.protagonist_basic.reset();
     }
+}
+
+void publish_runtime_notices(Runtime& runtime, services::UiBridge& ui) {
+    if (runtime.auto_affinity.report) {
+        const game::AutoAffinityReport report = *runtime.auto_affinity.report;
+        switch (report.outcome) {
+        case game::AutoAffinityOutcome::Completed:
+            ui.publish_notice("AI 친밀도 자동 성장: " + std::to_string(report.applied) + "쌍 적용, " +
+                              std::to_string(report.stale) + "쌍 변경됨, " + std::to_string(report.failed) + "쌍 실패");
+            break;
+        case game::AutoAffinityOutcome::InsufficientCandidates:
+            ui.publish_notice("AI 친밀도 자동 성장: 대상 무장이 부족합니다.");
+            break;
+        case game::AutoAffinityOutcome::NoRelationTable:
+            ui.publish_notice("AI 친밀도 자동 성장: 관계 테이블을 찾지 못했습니다.");
+            break;
+        case game::AutoAffinityOutcome::DateChanged:
+            ui.publish_notice("AI 친밀도 자동 성장: 날짜가 바뀌어 중단했습니다. 적용 " +
+                              std::to_string(report.applied) + "쌍");
+            break;
+        }
+        runtime.auto_affinity.report.reset();
+    }
     if (runtime.pending_battle_days_remaining) {
         ui.publish_notice("남은 전투 일자 : " + std::to_string(*runtime.pending_battle_days_remaining) + " 일");
         runtime.pending_battle_days_remaining.reset();
@@ -936,46 +960,6 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
                           "명의 미발견 무장이 재야로 변경되었습니다.");
         runtime.undiscovered_ronin.completed_modified.reset();
     }
-    if (auto definitions = ui.take_named_specialties()) {
-        runtime.named_specialties = std::move(definitions->first);
-        runtime.specialty_random.seed(definitions->second);
-    }
-    if (auto counts = ui.take_skill_counts()) {
-        runtime.skill_counts = std::move(*counts);
-        ui.publish_skill_counts_view(*runtime.skill_counts);
-        runtime.ship_weaponization.last_active_unit = 0;
-    }
-    service_ai_jobs(runtime, ui, game_module);
-    service_officer_tools(runtime, ui, game_module);
-    service_city_management(runtime, ui, game_module);
-    service_corps_deployment(runtime, ui, game_module);
-    consume_trait_configuration(runtime.traits, ui);
-
-    const std::uint64_t native_now_ms = GetTickCount64();
-    constexpr std::uint8_t PATCH_CONTROLLER_COUNT = 3;
-
-    // Each controller also rotates its own groups. A busy legacy group cannot
-    // monopolize the native/trait controllers, nor can their retries starve it.
-    for (std::uint8_t offset = 0; offset < PATCH_CONTROLLER_COUNT; ++offset) {
-
-        const std::uint8_t controller = static_cast<std::uint8_t>(
-            (runtime.legacy_features.next_controller + offset) % PATCH_CONTROLLER_COUNT);
-        bool attempted = false;
-
-        if (controller == 0) {
-            attempted = reconcile_legacy_features(runtime, game_module, native_now_ms);
-        } else if (controller == 1) {
-            attempted = reconcile_native_features(runtime, game_module, native_now_ms);
-        } else if (runtime.config_loaded) {
-            attempted = reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
-                runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
-        }
-        if (attempted) {
-            runtime.legacy_features.next_controller = static_cast<std::uint8_t>((controller + 1) % PATCH_CONTROLLER_COUNT);
-            break;
-        }
-    }
-
     if (runtime.legacy_features.notice) {
 
         const LegacyFeatureNotice notice = *runtime.legacy_features.notice;
@@ -1010,19 +994,42 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         ui.publish_notice(std::move(message));
         runtime.native_features.notice.reset();
     }
-    if (ui.ui_rendered.exchange(false)) {
-        game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
-                                 runtime.features.get(domain::FeatureId::ZeroInfamy));
+}
+
+void reconcile_feature_groups(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
+    const std::uint64_t native_now_ms = GetTickCount64();
+    constexpr std::uint8_t PATCH_CONTROLLER_COUNT = 3;
+
+    // Each controller also rotates its own groups. A busy legacy group cannot
+    // monopolize the native/trait controllers, nor can their retries starve it.
+    for (std::uint8_t offset = 0; offset < PATCH_CONTROLLER_COUNT; ++offset) {
+
+        const std::uint8_t controller = static_cast<std::uint8_t>(
+            (runtime.legacy_features.next_controller + offset) % PATCH_CONTROLLER_COUNT);
+        bool attempted = false;
+
+        if (controller == 0) {
+            attempted = reconcile_legacy_features(runtime, game_module, native_now_ms);
+        } else if (controller == 1) {
+            attempted = reconcile_native_features(runtime, game_module, native_now_ms);
+        } else if (runtime.config_loaded) {
+            attempted = reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
+                runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
+        }
+        if (attempted) {
+            runtime.legacy_features.next_controller = static_cast<std::uint8_t>((controller + 1) % PATCH_CONTROLLER_COUNT);
+            break;
+        }
     }
-    if (runtime.config_loaded && !runtime.config_baseline_published) {
-        ui.publish_config_baseline({runtime.config_baseline});
-        runtime.config_baseline_published = true;
-    }
+
+}
+
+void update_selected_officer(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
     const bool officer_detail_visible = ui.officer_detail_visible.exchange(false);
 
     if (officer_detail_visible && runtime.selected_officer &&
         game::roster_traits_changed(runtime.officer_roster, game_module, *runtime.selected_officer)) {
-        if (auto detail = game::read_roster_officer(runtime.officer_roster, game_module, runtime.selected_officer->id)) {
+        if (std::optional<domain::OfficerDetail> detail = game::read_roster_officer(runtime.officer_roster, game_module, runtime.selected_officer->id)) {
             runtime.selected_officer = std::move(*detail);
         }
     }
@@ -1047,8 +1054,92 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             }
         }
     }
+}
+
+void publish_runtime_view(Runtime& runtime, services::UiBridge& ui) {
+    if (ui.ui_rendered.exchange(false)) {
+        game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
+                                 runtime.features.get(domain::FeatureId::ZeroInfamy));
+    }
+    if (runtime.config_loaded && !runtime.config_baseline_published) {
+        ui.publish_config_baseline({runtime.config_baseline});
+        runtime.config_baseline_published = true;
+    }
+    ui.officer_roster_scan_cursor.store((runtime.officer_roster.requested || runtime.officer_roster.completed)
+        ? static_cast<int>(runtime.officer_roster.cursor) : -1);
     ui.publish({runtime.epoch, config_snapshot(runtime)});
-    return commit_commands(runtime, ui.commands, game_module, max_commands, time_budget, &ui);
+}
+
+} // namespace
+
+std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
+    std::uintptr_t game_module, std::size_t max_commands,
+    std::chrono::steady_clock::duration time_budget, const domain::WorkBudget& work_budget) {
+    enum class Job : std::size_t {
+        Configuration, Commands, PendingTrait, Roster, Protagonist, Ai,
+        OfficerTools, OfficerNotices, City, Corps, FeatureGroups, Notices,
+        SelectedOfficer, Publish, Count
+    };
+    constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
+    const platform::windows::RealClockScope real_clock;
+    std::size_t processed = 0;
+
+    if (runtime.stopping) {
+        return 0;
+    }
+    for (std::size_t attempted = 0; attempted < JOB_COUNT && !work_budget.exhausted(); ++attempted) {
+        const Job job = static_cast<Job>(runtime.next_ui_job);
+
+        runtime.next_ui_job = (runtime.next_ui_job + 1) % JOB_COUNT;
+        switch (job) {
+        case Job::Configuration:
+            consume_ui_configuration(runtime, ui, game_module);
+            break;
+        case Job::Commands:
+            processed += commit_commands(runtime, ui.commands, game_module, max_commands,
+                time_budget, &ui, work_budget);
+            break;
+        case Job::PendingTrait:
+            service_pending_trait(runtime, ui, game_module, work_budget);
+            break;
+        case Job::Roster:
+            publish_roster_progress(runtime, ui);
+            break;
+        case Job::Protagonist:
+            sample_protagonist(runtime, game_module);
+            break;
+        case Job::Ai:
+            service_ai_jobs(runtime, ui, game_module, work_budget);
+            break;
+        case Job::OfficerTools:
+            service_officer_tools(runtime, ui, game_module, work_budget);
+            break;
+        case Job::OfficerNotices:
+            service_officer_notices(runtime, ui, game_module, work_budget);
+            break;
+        case Job::City:
+            service_city_management(runtime, ui, game_module, work_budget);
+            break;
+        case Job::Corps:
+            service_corps_deployment(runtime, ui, game_module, work_budget);
+            break;
+        case Job::FeatureGroups:
+            reconcile_feature_groups(runtime, ui, game_module);
+            break;
+        case Job::Notices:
+            publish_runtime_notices(runtime, ui);
+            break;
+        case Job::SelectedOfficer:
+            update_selected_officer(runtime, ui, game_module);
+            break;
+        case Job::Publish:
+            publish_runtime_view(runtime, ui);
+            break;
+        case Job::Count:
+            break;
+        }
+    }
+    return processed;
 }
 
 void publish_stopped_state(Runtime& runtime, services::UiBridge& ui) {

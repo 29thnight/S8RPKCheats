@@ -4,6 +4,7 @@
 #include "officer_tool_context.h"
 #include "../domain/officer_tools.h"
 #include "../domain/ownership.h"
+#include "../domain/work_budget.h"
 #include "../domain/trait.h"
 
 #include <array>
@@ -54,6 +55,7 @@ struct OfficerTools {
     bool active_changed = false;
     bool active_failed = false;
     bool changed_pending = false;
+    bool family_first = false;
     RandomTraitStage random_stage = RandomTraitStage::Pool;
     std::mt19937 random;
     std::array<std::uint16_t, domain::OFFICER_TOOL_LIMIT + 1> roster_slots{};
@@ -74,6 +76,7 @@ bool submit_officer_tool(OfficerTools& state, const OfficerToolContext& context,
 
 // Call on the serialized game commit boundary. Uses fixed work budgets and
 // returns true only when the value-only view changed. No worker is created.
-bool tick_officer_tools(OfficerTools& state, const OfficerToolContext& context);
+bool tick_officer_tools(OfficerTools& state, const OfficerToolContext& context,
+    const domain::WorkBudget& work_budget = {});
 
 } // namespace s8::game

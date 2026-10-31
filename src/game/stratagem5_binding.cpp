@@ -9,6 +9,39 @@
 namespace s8::game {
 namespace {
 
+constexpr std::size_t HEAL_UNITS_PER_UPDATE = 8;
+
+void reset_healing(Stratagem5Binding& binding) {
+    binding.heal_history = {};
+    binding.heal_progress = {};
+}
+
+bool finish_healing_write(Stratagem5HealingProgress& progress) {
+    std::uint16_t current = 0;
+
+    if (!platform::windows::read_memory(progress.target_unit + 0x38,
+            std::as_writable_bytes(std::span(&current, 1)))) {
+        return false;
+    }
+    if (current == progress.troops_after || current != progress.troops_before) {
+        // Do not repeat an already visible heal or overwrite a later game write.
+        progress.write_pending = false;
+        return true;
+    }
+
+    platform::windows::write_memory(progress.target_unit + 0x38,
+        std::as_bytes(std::span(&progress.troops_after, 1)));
+
+    std::uint16_t verified = 0;
+
+    if (!platform::windows::read_memory(progress.target_unit + 0x38,
+            std::as_writable_bytes(std::span(&verified, 1))) || verified != progress.troops_after) {
+        return false;
+    }
+    progress.write_pending = false;
+    return true;
+}
+
 bool apply_table(Stratagem5Binding& binding, domain::GameEpoch epoch, std::uintptr_t table,
                  bool reset_before_reapply) {
     Stratagem5Memory memory{{epoch, static_cast<std::uint64_t>(table)}, table};
@@ -49,7 +82,7 @@ bool apply_table(Stratagem5Binding& binding, domain::GameEpoch epoch, std::uintp
         return false;
     }
     if (result == Stratagem5ApplyResult::applied) {
-        binding.heal_history = {};
+        reset_healing(binding);
     }
     return true;
 }
@@ -90,9 +123,12 @@ Stratagem5SettingsResult set_stratagem5_settings(Stratagem5Binding& binding, dom
     if (binding.memory && platform::windows::read_memory(
             binding.memory->payload_table + 4 * STRATAGEM_RECORD_STRIDE, payload)) {
         current = decode_stratagem(payload);
-        const auto result = set_stratagem5_settings(binding.runtime, settings, &current, write_stratagem5, &*binding.memory);
-        if (result == Stratagem5SettingsResult::updated)
-            binding.heal_history = {};
+        const Stratagem5SettingsResult result = set_stratagem5_settings(binding.runtime, settings, &current,
+            write_stratagem5, &*binding.memory);
+
+        if (result == Stratagem5SettingsResult::updated) {
+            reset_healing(binding);
+        }
         return result;
     }
     return set_stratagem5_settings(binding.runtime, settings, nullptr, write_stratagem5, nullptr);
@@ -110,6 +146,7 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     Stratagem5Session& session = binding.runtime.session;
 
     session.requested = false;
+    reset_healing(binding);
 
     if (!session.applied_table) {
         return session.last_restore != Stratagem5RestoreStatus::Failed;
@@ -118,7 +155,7 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     if (session.applied_table->epoch != epoch) {
         reset_stratagem5_session(session);
         binding.memory.reset();
-        binding.heal_history = {};
+        reset_healing(binding);
         return true;
     }
 
@@ -147,7 +184,7 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     if (!is_expected_stratagem_table(records) || !owned) {
         reset_stratagem5_session(session);
         binding.memory.reset();
-        binding.heal_history = {};
+        reset_healing(binding);
         return true;
     }
 
@@ -170,7 +207,7 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     session.attempted = {};
     session.uncertain = false;
     binding.memory.reset();
-    binding.heal_history = {};
+    reset_healing(binding);
     return true;
 }
 
@@ -179,55 +216,122 @@ void end_stratagem5_battle(Stratagem5Binding& binding) {
 
     disable_stratagem5(binding);
     binding.runtime.session.requested = requested;
-    binding.heal_history = {};
+    reset_healing(binding);
 }
 
 void change_stratagem5_session(Stratagem5Binding& binding) {
     reset_stratagem5_session(binding.runtime.session);
     binding.memory.reset();
-    binding.heal_history = {};
+    reset_healing(binding);
 }
 
-void update_stratagem5_healing(Stratagem5Binding& binding, int unit_count, std::uintptr_t unit_list) {
+void update_stratagem5_healing(Stratagem5Binding& binding, int unit_count, std::uintptr_t unit_list,
+                              const domain::WorkBudget& work_budget) {
     if (!binding.runtime.session.requested || binding.runtime.session.uncertain ||
         !binding.runtime.session.applied_table || unit_list <= 0x10000 || unit_count <= 0) {
         return;
     }
 
-    const auto count = static_cast<std::size_t>(std::min(unit_count, 60));
-    begin_stratagem5_healing(binding.heal_history, static_cast<std::uint64_t>(unit_list));
-    bool any_valid = false;
-    for (std::size_t i = 0; i < count; ++i) {
+    const StratagemTableId table = *binding.runtime.session.applied_table;
+    const std::size_t observed_count = static_cast<std::size_t>(std::min(unit_count, 60));
+    Stratagem5HealingProgress& progress = binding.heal_progress;
+
+    if (progress.unit_list != unit_list || progress.table != table) {
+        reset_healing(binding);
+        progress.unit_list = unit_list;
+        progress.table = table;
+    }
+    if (!progress.pending) {
+        progress.pending = true;
+        progress.any_valid = false;
+        progress.unit_count = observed_count;
+        progress.unit_cursor = 0;
+        progress.write_pending = false;
+        progress.history = binding.heal_history;
+        begin_stratagem5_healing(progress.history, static_cast<std::uint64_t>(unit_list));
+    }
+
+    const bool bounded = work_budget.deadline != (std::chrono::steady_clock::time_point::max)();
+    const std::size_t count = std::min(progress.unit_count, observed_count);
+    std::size_t processed = 0;
+
+    while (progress.unit_cursor < count) {
+        if (work_budget.exhausted() || (bounded && processed >= HEAL_UNITS_PER_UPDATE)) {
+            return;
+        }
+        ++processed;
+
+        const std::size_t index = progress.unit_cursor;
         std::uintptr_t unit = 0;
-        if (!platform::windows::read_memory(unit_list + 0x08 + i * 0x10,
-                                             std::as_writable_bytes(std::span(&unit, 1))) || !unit) {
-            observe_stratagem5_unit(binding.heal_history, i, std::nullopt, binding.runtime.settings);
+
+        if (!platform::windows::read_memory(unit_list + 0x08 + index * 0x10,
+                std::as_writable_bytes(std::span(&unit, 1)))) {
+            if (progress.write_pending) {
+                return;
+            }
+            observe_stratagem5_unit(progress.history, index, std::nullopt, binding.runtime.settings);
+            ++progress.unit_cursor;
+            continue;
+        }
+        if (progress.write_pending) {
+            if (unit == progress.target_unit) {
+                if (!finish_healing_write(progress)) {
+                    return;
+                }
+                ++progress.unit_cursor;
+                continue;
+            }
+            progress.write_pending = false;
+        }
+        if (!unit) {
+            observe_stratagem5_unit(progress.history, index, std::nullopt, binding.runtime.settings);
+            ++progress.unit_cursor;
             continue;
         }
 
         std::array<std::byte, 0x23c> data{};
+
         if (!platform::windows::read_memory(unit, data)) {
-            observe_stratagem5_unit(binding.heal_history, i, std::nullopt, binding.runtime.settings);
+            observe_stratagem5_unit(progress.history, index, std::nullopt, binding.runtime.settings);
+            ++progress.unit_cursor;
             continue;
         }
 
         std::uintptr_t max_troops_address = 0;
         std::uint16_t troops = 0;
+
         std::memcpy(&max_troops_address, data.data() + 0x18, sizeof(max_troops_address));
         std::memcpy(&troops, data.data() + 0x38, sizeof(troops));
+
         Stratagem5UnitSnapshot snapshot{static_cast<std::uint64_t>(unit),
                                          std::to_integer<std::uint8_t>(data[0x80]),
                                          troops, std::nullopt};
         std::uint16_t max_troops = 0;
+
         if (max_troops_address && platform::windows::read_memory(
-                max_troops_address, std::as_writable_bytes(std::span(&max_troops, 1))))
+                max_troops_address, std::as_writable_bytes(std::span(&max_troops, 1)))) {
             snapshot.max_troops = max_troops;
-        any_valid = true;
-        const auto change = observe_stratagem5_unit(binding.heal_history, i, snapshot, binding.runtime.settings);
-        if (change)
-            platform::windows::write_memory(unit + 0x38, std::as_bytes(std::span(&*change, 1)));
+        }
+        progress.any_valid = true;
+
+        const std::optional<std::uint16_t> change = observe_stratagem5_unit(
+            progress.history, index, snapshot, binding.runtime.settings);
+
+        if (change) {
+            progress.target_unit = unit;
+            progress.troops_before = troops;
+            progress.troops_after = *change;
+            progress.write_pending = true;
+            if (!finish_healing_write(progress)) {
+                return;
+            }
+        }
+        ++progress.unit_cursor;
     }
-    finish_stratagem5_healing(binding.heal_history, count, any_valid);
+    finish_stratagem5_healing(progress.history, count, progress.any_valid);
+    binding.heal_history = progress.history;
+    progress.write_pending = false;
+    progress.pending = false;
 }
 
 } // namespace s8::game

@@ -90,6 +90,7 @@ void start_scan(OfficerNotifications& state, std::uintptr_t base, std::uint8_t p
     state.city_base = resolve_cities(base);
     state.next_slot = 0;
     state.staging.fill({});
+    state.staging_ronins.fill(false);
     state.pending = {};
     state.pending_recruits.begin = 0;
     state.pending_recruits.count = 0;
@@ -142,9 +143,7 @@ void collect_changes(OfficerNotifications& state, std::uint16_t id, const Office
 
 void finish_scan(OfficerNotifications& state) {
     if (state.refresh_ronins) {
-        for (std::size_t id = 0; id < state.was_ronin.size(); ++id) {
-            state.was_ronin[id] = state.staging[id].valid && state.staging[id].status == RONIN;
-        }
+        state.was_ronin = state.staging_ronins;
         state.ronin_baseline_ready = true;
         if (state.notify_ronins && state.pending.total_ronins) {
             state.view.ronins = state.pending.ronins;
@@ -201,7 +200,8 @@ void reset_officer_notifications(OfficerNotifications& state, domain::GameEpoch 
 
 void tick_officer_notifications(OfficerNotifications& state, std::uintptr_t module_base,
     domain::GameEpoch epoch, std::uintptr_t hero, std::uint8_t phase, bool in_battle,
-    bool monitor_ronins, bool monitor_changes, std::size_t slot_budget) {
+    bool monitor_ronins, bool monitor_changes, std::size_t slot_budget,
+    const domain::WorkBudget& work_budget) {
     if (!monitor_ronins && !monitor_changes) {
         if (state.enabled_ronins || state.enabled_changes || state.scanning) {
             reset_officer_notifications(state, epoch);
@@ -211,7 +211,8 @@ void tick_officer_notifications(OfficerNotifications& state, std::uintptr_t modu
     if (state.epoch != epoch || (hero && state.hero && state.hero != hero)) {
         reset_officer_notifications(state, epoch);
     }
-    if (!module_base || !hero || in_battle || (phase != COUNCIL && phase != DOMESTIC) || !slot_budget) {
+    if (!module_base || !hero || in_battle || (phase != COUNCIL && phase != DOMESTIC) ||
+        !slot_budget || work_budget.exhausted()) {
         return;
     }
 
@@ -266,7 +267,7 @@ void tick_officer_notifications(OfficerNotifications& state, std::uintptr_t modu
     const std::size_t end = std::min(state.next_slot + std::min(slot_budget, MAX_SLOTS_PER_TICK),
         OFFICER_NOTICE_SLOT_COUNT);
 
-    for (; state.next_slot < end; ++state.next_slot) {
+    for (; state.next_slot < end && !work_budget.exhausted(); ++state.next_slot) {
         std::uint16_t id = 0;
         OfficerNoticeBaseline current{};
 
@@ -275,9 +276,10 @@ void tick_officer_notifications(OfficerNotifications& state, std::uintptr_t modu
             continue;
         }
         state.staging[id] = current;
+        state.staging_ronins[id] = current.status == RONIN;
         collect_changes(state, id, current);
     }
-    if (state.next_slot == OFFICER_NOTICE_SLOT_COUNT) {
+    if (state.next_slot == OFFICER_NOTICE_SLOT_COUNT && !work_budget.exhausted()) {
         finish_scan(state);
     }
 }

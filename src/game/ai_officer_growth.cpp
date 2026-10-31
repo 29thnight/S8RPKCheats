@@ -191,12 +191,12 @@ void clear_session(AiGrowthState& state) {
     state.date_initialized = false;
 }
 
-void apply_next_officers(AiGrowthState& state) {
+void apply_next_officers(AiGrowthState& state, const domain::WorkBudget& work_budget) {
 
     const std::size_t end = std::min<std::size_t>(domain::AI_GROWTH_OFFICER_LIMIT,
                                                   state.cursor + OFFICERS_PER_TICK);
 
-    while (state.cursor < end) {
+    while (state.cursor < end && !work_budget.exhausted()) {
 
         const std::uintptr_t officer = state.roster + state.cursor * OFFICER_STRIDE;
 
@@ -348,7 +348,11 @@ bool read_current_ai_growth_preview(std::uintptr_t module_base, std::uintptr_t o
 void update_ai_officer_growth(AiGrowthState& state, std::uintptr_t module_base,
                               std::uintptr_t game_base, std::uintptr_t player,
                               domain::GameEpoch epoch, std::uint64_t now_ms,
-                              const domain::AiGrowthSettings& settings) {
+                              const domain::AiGrowthSettings& settings, const domain::WorkBudget& work_budget) {
+
+    if (work_budget.exhausted()) {
+        return;
+    }
 
     if (state.module_base != module_base || state.epoch != epoch ||
         state.game_base != game_base || state.player != player) {
@@ -442,7 +446,7 @@ void update_ai_officer_growth(AiGrowthState& state, std::uintptr_t module_base,
         }
 
         if (phase == 5 || phase == 7) {
-            apply_next_officers(state);
+            apply_next_officers(state, work_budget);
         }
 
         return;
@@ -470,7 +474,7 @@ void update_ai_officer_growth(AiGrowthState& state, std::uintptr_t module_base,
     state.totals.year = state.active_year;
     state.report.reset();
     state.running = true;
-    apply_next_officers(state);
+    apply_next_officers(state, work_budget);
 }
 
 } // namespace s8::game

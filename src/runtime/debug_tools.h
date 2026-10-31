@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "../domain/debug_tools.h"
 #include "../domain/ownership.h"
 #include "../services/debug_bridge.h"
@@ -41,7 +43,8 @@ struct DebugTools {
 // Called by the window dispatcher. One request and at most one 64 KiB block
 // are handled per boundary, with a separate 500 us scan iteration deadline.
 void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain::GameEpoch epoch,
-    std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms);
+    std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget = {});
 void stop_debug_tools(DebugTools& state, services::DebugBridge& bridge);
 
 } // namespace s8::runtime

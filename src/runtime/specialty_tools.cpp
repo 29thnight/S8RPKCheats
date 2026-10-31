@@ -6,7 +6,10 @@
 namespace s8::runtime {
 
 void update_specialty_tools(game::SpecialtyTools& tools, Runtime& runtime,
-    services::UiBridge& bridge, std::uintptr_t module) {
+    services::UiBridge& bridge, std::uintptr_t module, const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || work_budget.exhausted()) {
+        return;
+    }
     constexpr domain::NamedSpecialties EMPTY{};
     const game::SpecialtyContext context{
         module, runtime.loop_game_base, runtime.loop_player, runtime.game_base_pointer, runtime.epoch};
@@ -14,7 +17,7 @@ void update_specialty_tools(game::SpecialtyTools& tools, Runtime& runtime,
     const std::uint64_t revision = tools.snapshot.revision;
 
     if (tools.snapshot.epoch != runtime.epoch) {
-        game::update_specialty_tools(tools, context, runtime.specialty_random);
+        game::update_specialty_tools(tools, context, runtime.specialty_random, work_budget);
     }
     const std::optional<domain::SpecialtyRequest> request = bridge.specialties.pop();
 
@@ -31,7 +34,7 @@ void update_specialty_tools(game::SpecialtyTools& tools, Runtime& runtime,
             runtime.specialty_assignment_requested = false;
         }
     }
-    game::update_specialty_tools(tools, context, runtime.specialty_random);
+    game::update_specialty_tools(tools, context, runtime.specialty_random, work_budget);
     if (tools.snapshot.revision != revision) {
         bridge.specialties.publish(tools.snapshot);
     }

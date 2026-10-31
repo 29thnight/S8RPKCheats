@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "../domain/native_officer_names.h"
 
 #include <array>
@@ -41,6 +43,7 @@ struct NativeOfficerNames {
 
 // Serialized game-owner only. No strings, file access or heap allocation.
 // Keep pending output until the service queue has accepted the value batch.
-void update_native_officer_names(NativeOfficerNames& state, const NativeOfficerNameContext& context);
+void update_native_officer_names(NativeOfficerNames& state, const NativeOfficerNameContext& context,
+    const domain::WorkBudget& work_budget = {});
 
 } // namespace s8::game

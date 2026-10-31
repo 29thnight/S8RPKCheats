@@ -3,6 +3,7 @@
 #include "../platform/windows/process_memory.h"
 
 #include <array>
+#include <algorithm>
 #include <span>
 
 namespace s8::game {
@@ -16,13 +17,26 @@ bool read_value(std::uintptr_t address, T& value) {
 } // namespace
 
 void update_officer_stats(OfficerStatsMonitor& state, std::uintptr_t module_base,
-                          std::uintptr_t game_base, bool enabled) {
+                          std::uintptr_t game_base, bool enabled, const domain::WorkBudget& work_budget) {
+    if (state.module_base != module_base || state.game_base != game_base) {
+        state = {};
+        state.module_base = module_base;
+        state.game_base = game_base;
+    }
+    if (!enabled) {
+        state.running = false;
+    }
+    if (work_budget.exhausted()) {
+        return;
+    }
     std::uint8_t game_state = 0;
+
     if (!game_base || !read_value(game_base + 0xd0, game_state)) {
         return;
     }
     if (game_state == 7) {
         state.last_council_month = 0xff;
+        state.running = false;
         return;
     }
     if (game_state != 5) {
@@ -36,11 +50,11 @@ void update_officer_stats(OfficerStatsMonitor& state, std::uintptr_t module_base
             month = std::to_integer<std::uint8_t>(date[2]);
         }
     }
-    if (state.last_council_month == month) {
+    if (!state.running && state.last_council_month == month) {
         return;
     }
-    state.last_council_month = month;
     if (!enabled) {
+        state.last_council_month = month;
         return;
     }
     std::uintptr_t array = 0;
@@ -56,8 +70,18 @@ void update_officer_stats(OfficerStatsMonitor& state, std::uintptr_t module_base
             return;
         }
     }
-    for (std::size_t i = 0; i < 5102; ++i) {
-        const auto officer = array + i * 0x3d0;
+    if (!state.running || state.roster != array || state.last_council_month != month) {
+        state.roster = array;
+        state.cursor = 0;
+        state.last_council_month = month;
+        state.running = true;
+    }
+    constexpr std::size_t OFFICERS_PER_TICK = 32;
+    const std::size_t end = std::min(state.cursor + OFFICERS_PER_TICK, std::size_t{5102});
+
+    for (; state.cursor < end && !work_budget.exhausted(); ++state.cursor) {
+        const std::uintptr_t officer = array + state.cursor * 0x3d0;
+
         if (!platform::windows::is_committed_memory(officer, 0x150)) {
             continue;
         }
@@ -80,6 +104,9 @@ void update_officer_stats(OfficerStatsMonitor& state, std::uintptr_t module_base
                     std::as_bytes(std::span(&UPGRADED, 1)));
             }
         }
+    }
+    if (state.cursor == 5102) {
+        state.running = false;
     }
 }
 

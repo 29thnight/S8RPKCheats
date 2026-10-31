@@ -142,68 +142,106 @@ bool read_pregnancy_table(std::uintptr_t table, std::array<domain::PregnancyTool
 }
 
 void rebuild_family_pages(FamilyTools& state) {
-    domain::FamilyToolsView& view = state.view;
-    std::size_t child_total = 0;
-
-    std::sort(state.children.begin(), state.children.begin() + state.child_count,
-        [&](std::uint16_t left, std::uint16_t right) {
-            const bool left_done = state.current_year != 0 && state.current_year >= state.officers[left].appearance;
-            const bool right_done = state.current_year != 0 && state.current_year >= state.officers[right].appearance;
-
-            return left_done != right_done ? left_done : left < right;
-        });
-    view.spouse_total = state.spouses.count();
-    for (std::size_t i = 0; i < state.child_count; ++i) {
-        const std::uint16_t id = state.children[i];
-
-        if (view.child_spouse == 0 || state.child_other_parent[id] == view.child_spouse) {
-            ++child_total;
-        }
+    if (state.page_stage != FamilyPageStage::Idle) {
+        state.pages_again = true;
+        return;
     }
-    view.child_total = child_total;
-    view.child_page = std::min(view.child_page, child_total == 0 ? 0 : (child_total - 1) / domain::FAMILY_CHILD_PAGE);
-    view.spouse_page = std::min(view.spouse_page,
-        view.spouse_total == 0 ? 0 : (view.spouse_total - 1) / domain::FAMILY_SPOUSE_PAGE);
-    view.child_count = 0;
-    view.spouse_count = 0;
-
-    std::size_t child_index = 0;
-    std::size_t spouse_index = 0;
-
-    for (std::size_t i = 0; i < state.child_count; ++i) {
-        const std::uint16_t id = state.children[i];
-        const FamilyOfficer& officer = state.officers[id];
-        const ChildSchedule& schedule = state.schedules[id];
-
-        if (view.child_spouse != 0 && state.child_other_parent[id] != view.child_spouse) {
-            continue;
-        }
-        if (child_index++ < view.child_page * domain::FAMILY_CHILD_PAGE ||
-            view.child_count >= view.children.size()) {
-            continue;
-        }
-        view.children[view.child_count++] = {id, state.child_other_parent[id], officer.appearance,
-            officer.birth, officer.death, schedule.target_year, schedule.years_later, schedule.selected};
-    }
-    for (std::size_t id = 1; id < state.officers.size(); ++id) {
-        if (!state.spouses.test(id)) {
-            continue;
-        }
-        if (spouse_index++ < view.spouse_page * domain::FAMILY_SPOUSE_PAGE ||
-            view.spouse_count >= view.spouses.size()) {
-            continue;
-        }
-        view.spouses[view.spouse_count++] = {static_cast<std::uint16_t>(id),
-            state.officers[id].birth, state.spouse_child_counts[id]};
-    }
+    state.page_view = state.view;
+    state.page_view.child_total = 0;
+    state.page_view.child_count = 0;
+    state.page_view.spouse_count = 0;
+    state.page_view.spouse_total = state.spouses.count();
+    state.page_cursor = 0;
+    state.page_child_index = 0;
+    state.page_spouse_index = 0;
+    state.page_year = state.current_year;
+    state.page_completed_children = true;
+    state.page_stage = FamilyPageStage::Count;
+    state.view.loading = true;
     state.changed = true;
 }
 
-void collect_child_rows(FamilyTools& state) {
-    state.child_count = 0;
-    state.child_other_parent.fill(0);
-    state.spouse_child_counts.fill(0);
-    for (std::size_t id = 1; id < state.officers.size(); ++id) {
+void step_family_pages(FamilyTools& state, const domain::WorkBudget& work_budget) {
+    domain::FamilyToolsView& view = state.page_view;
+
+    while (state.page_stage != FamilyPageStage::Idle && !work_budget.exhausted()) {
+        if (state.page_stage == FamilyPageStage::Count) {
+            if (state.page_cursor < state.child_count) {
+                const std::uint16_t id = state.children[state.page_cursor++];
+
+                if (view.child_spouse == 0 || state.child_other_parent[id] == view.child_spouse) {
+                    ++view.child_total;
+                }
+                continue;
+            }
+            view.child_page = std::min(view.child_page,
+                view.child_total == 0 ? 0 : (view.child_total - 1) / domain::FAMILY_CHILD_PAGE);
+            view.spouse_page = std::min(view.spouse_page,
+                view.spouse_total == 0 ? 0 : (view.spouse_total - 1) / domain::FAMILY_SPOUSE_PAGE);
+            state.page_cursor = 0;
+            state.page_stage = FamilyPageStage::Children;
+        } else if (state.page_stage == FamilyPageStage::Children) {
+            if (state.page_cursor == state.child_count || view.child_count == view.children.size()) {
+                if (state.page_completed_children && view.child_count < view.children.size()) {
+                    state.page_completed_children = false;
+                    state.page_cursor = 0;
+                } else {
+                    state.page_cursor = 1;
+                    state.page_stage = FamilyPageStage::Spouses;
+                }
+                continue;
+            }
+            const std::uint16_t id = state.children[state.page_cursor++];
+            const FamilyOfficer& officer = state.officers[id];
+            const ChildSchedule& schedule = state.schedules[id];
+            const bool completed = state.page_year != 0 && state.page_year >= officer.appearance;
+
+            // children is collected in ID order. Two passes preserve the old
+            // completed-first ordering without an uninterruptible full sort.
+            if (completed != state.page_completed_children ||
+                (view.child_spouse != 0 && state.child_other_parent[id] != view.child_spouse)) {
+                continue;
+            }
+            if (state.page_child_index++ < view.child_page * domain::FAMILY_CHILD_PAGE) {
+                continue;
+            }
+            view.children[view.child_count++] = {id, state.child_other_parent[id], officer.appearance,
+                officer.birth, officer.death, schedule.target_year, schedule.years_later, schedule.selected};
+        } else {
+            if (state.page_cursor < state.officers.size() && view.spouse_count < view.spouses.size()) {
+                const std::size_t id = state.page_cursor++;
+
+                if (!state.spouses.test(id) ||
+                    state.page_spouse_index++ < view.spouse_page * domain::FAMILY_SPOUSE_PAGE) {
+                    continue;
+                }
+                view.spouses[view.spouse_count++] = {static_cast<std::uint16_t>(id),
+                    state.officers[id].birth, state.spouse_child_counts[id]};
+                continue;
+            }
+            state.view.child_page = view.child_page;
+            state.view.spouse_page = view.spouse_page;
+            state.view.child_spouse = view.child_spouse;
+            state.view.child_total = view.child_total;
+            state.view.spouse_total = view.spouse_total;
+            state.view.child_count = view.child_count;
+            state.view.spouse_count = view.spouse_count;
+            state.view.children = view.children;
+            state.view.spouses = view.spouses;
+            state.view.loading = state.stage != FamilyScanStage::Idle;
+            state.page_stage = FamilyPageStage::Idle;
+            state.changed = true;
+            if (state.pages_again) {
+                state.pages_again = false;
+                rebuild_family_pages(state);
+            }
+        }
+    }
+}
+
+void collect_child_rows(FamilyTools& state, const domain::WorkBudget& work_budget) {
+    for (; state.cursor < state.officers.size() && !work_budget.exhausted(); ++state.cursor) {
+        const std::size_t id = state.cursor;
         const FamilyOfficer& officer = state.officers[id];
 
         if (officer.slot == 0 || !is_hero_child(state, officer)) {
@@ -219,16 +257,21 @@ void collect_child_rows(FamilyTools& state) {
             ++state.spouse_child_counts[other_id];
         }
     }
-    rebuild_family_pages(state);
+    if (state.cursor == state.officers.size()) {
+        state.view.hero = state.hero;
+        state.ready = true;
+        state.stage = FamilyScanStage::Idle;
+        rebuild_family_pages(state);
+    }
 }
 
 void finish_family_scan(FamilyTools& state, std::uint64_t now_ms) {
-    state.view.loading = false;
-    state.view.hero = state.hero;
-    state.ready = true;
-    state.stage = FamilyScanStage::Idle;
+    state.stage = FamilyScanStage::Children;
     state.last_refresh_ms = now_ms;
-    collect_child_rows(state);
+    state.child_count = 0;
+    state.child_other_parent.fill(0);
+    state.spouse_child_counts.fill(0);
+    state.cursor = 1;
 }
 
 void begin_family_scan(FamilyTools& state) {
@@ -245,14 +288,16 @@ void begin_family_scan(FamilyTools& state) {
     state.candidate = 0;
     state.hero_slot = 0;
     state.relationship_table = 0;
+    state.page_stage = FamilyPageStage::Idle;
+    state.pages_again = false;
     state.stage = FamilyScanStage::Roster;
     state.changed = true;
 }
 
-void scan_family_roster(FamilyTools& state) {
+void scan_family_roster(FamilyTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.cursor + FAMILY_READ_BUDGET, domain::OFFICER_TOOL_LIMIT);
 
-    for (; state.cursor < end; ++state.cursor) {
+    for (; state.cursor < end && !work_budget.exhausted(); ++state.cursor) {
         FamilyOfficer officer;
         std::uint16_t id = 0;
 
@@ -284,7 +329,7 @@ void next_relationship_candidate(FamilyTools& state) {
     }
 }
 
-void validate_family_relationships(FamilyTools& state) {
+void validate_family_relationships(FamilyTools& state, const domain::WorkBudget& work_budget) {
     const std::uintptr_t candidate = relationship_candidate(state, state.candidate);
 
     if (candidate == 0 || (state.relationship_table != 0 && state.relationship_table != candidate)) {
@@ -292,7 +337,7 @@ void validate_family_relationships(FamilyTools& state) {
         return;
     }
     state.relationship_table = candidate;
-    for (; state.cursor < 128; ++state.cursor) {
+    for (; state.cursor < 128 && !work_budget.exhausted(); ++state.cursor) {
         std::array<std::uintptr_t, 5> members{};
         std::uint8_t kind = 0;
 
@@ -313,6 +358,9 @@ void validate_family_relationships(FamilyTools& state) {
             ++state.valid_relationships;
         }
     }
+    if (state.cursor < 128) {
+        return;
+    }
     if (state.valid_relationships == 0) {
         next_relationship_candidate(state);
         return;
@@ -321,14 +369,14 @@ void validate_family_relationships(FamilyTools& state) {
     state.stage = FamilyScanStage::Relationships;
 }
 
-void scan_family_relationships(FamilyTools& state) {
+void scan_family_relationships(FamilyTools& state, const domain::WorkBudget& work_budget) {
     const std::size_t end = std::min(state.cursor + FAMILY_READ_BUDGET, RELATION_COUNT);
 
     if (relationship_candidate(state, state.candidate) != state.relationship_table) {
         begin_family_scan(state);
         return;
     }
-    for (; state.cursor < end; ++state.cursor) {
+    for (; state.cursor < end && !work_budget.exhausted(); ++state.cursor) {
         std::array<std::uintptr_t, 5> members{};
         std::array<std::uint16_t, 5> ids{};
         std::uint8_t kind = 0;
@@ -367,7 +415,7 @@ void scan_family_relationships(FamilyTools& state) {
     }
 }
 
-void scan_pregnancy_table(FamilyTools& state, std::uint64_t now_ms) {
+void scan_pregnancy_table(FamilyTools& state, std::uint64_t now_ms, const domain::WorkBudget& work_budget) {
     if (state.pregnancy_cursor == 0) {
         std::array<domain::PregnancyToolSlot, 3> slots{};
         bool found = read_pregnancy_table(state.game_base + state.pregnancy_offset, slots);
@@ -417,10 +465,12 @@ void scan_pregnancy_table(FamilyTools& state, std::uint64_t now_ms) {
     // is still searched rather than discarding the whole block on failure.
     const std::size_t length = std::min(state.scan_buffer.size(), region_remaining);
     std::size_t candidates = 0;
-    std::size_t offset = static_cast<std::size_t>((8 - (address & 7)) & 7);
+    const std::size_t first_offset = static_cast<std::size_t>((8 - (address & 7)) & 7);
+    std::size_t offset = first_offset;
 
     if (platform::windows::read_memory(address, std::span(state.scan_buffer).first(length))) {
-        for (; offset + sizeof(std::uintptr_t) <= length; offset += sizeof(std::uintptr_t)) {
+        for (; offset + sizeof(std::uintptr_t) <= length &&
+            (offset == first_offset || !work_budget.exhausted()); offset += sizeof(std::uintptr_t)) {
             const std::uintptr_t pointer = field<std::uintptr_t>(state.scan_buffer, offset) & OFFICER_POINTER_MASK;
             const std::uint16_t slot = pointer_slot(pointer, state.roster);
             const std::uint16_t id = slot == 0 ? 0 : state.slot_ids[slot - 1];
@@ -463,7 +513,7 @@ void scan_pregnancy_table(FamilyTools& state, std::uint64_t now_ms) {
     }
 }
 
-void maintain_family(FamilyTools& state, const OfficerToolContext& context) {
+void maintain_family(FamilyTools& state, const OfficerToolContext& context, const domain::WorkBudget& work_budget) {
     if (!state.maintain_children && context.now_ms - state.last_maintenance_ms >= 1000) {
         state.last_maintenance_ms = context.now_ms;
         state.maintenance_cursor = 0;
@@ -481,7 +531,7 @@ void maintain_family(FamilyTools& state, const OfficerToolContext& context) {
     std::uint8_t month = 0;
     const bool valid_year = read_scenario_date(context.module, year, month) && year >= 171 && year < 270;
 
-    for (; state.maintenance_cursor < end; ++state.maintenance_cursor) {
+    for (; state.maintenance_cursor < end && !work_budget.exhausted(); ++state.maintenance_cursor) {
         const std::uint16_t id = state.children[state.maintenance_cursor];
         FamilyOfficer refreshed;
         std::uint16_t actual_id = 0;
@@ -503,25 +553,36 @@ void maintain_family(FamilyTools& state, const OfficerToolContext& context) {
     }
 }
 
-void maintain_schedule_calendar(FamilyTools& state, const OfficerToolContext& context) {
-    if (state.last_schedule_ms != 0 && context.now_ms - state.last_schedule_ms < 1000) {
-        return;
-    }
-    std::uint16_t year = 0;
-    std::uint8_t month = 0;
+void maintain_schedule_calendar(FamilyTools& state, const OfficerToolContext& context,
+    const domain::WorkBudget& work_budget) {
+    if (!state.scanning_schedules) {
+        if (state.last_schedule_ms != 0 && context.now_ms - state.last_schedule_ms < 1000) {
+            return;
+        }
+        std::uint16_t year = 0;
+        std::uint8_t month = 0;
 
-    state.last_schedule_ms = context.now_ms;
-    if (!read_scenario_date(context.module, year, month) || year < 171 || year >= 270) {
-        state.current_year = 0;
-        return;
+        state.last_schedule_ms = context.now_ms;
+        if (!read_scenario_date(context.module, year, month) || year < 171 || year >= 270) {
+            state.current_year = 0;
+            return;
+        }
+        state.current_year = year;
+        state.schedule_cursor = 0;
+        state.scanning_schedules = true;
     }
-    state.current_year = year;
-    for (ChildSchedule& schedule : state.schedules) {
-        if (schedule.selected && schedule.target_year != 0 && year >= schedule.target_year) {
+    for (; state.schedule_cursor < state.schedules.size() && !work_budget.exhausted(); ++state.schedule_cursor) {
+        ChildSchedule& schedule = state.schedules[state.schedule_cursor];
+
+        if (schedule.selected && schedule.target_year != 0 && state.current_year >= schedule.target_year) {
             schedule = {};
             state.changed = true;
         }
     }
+    if (state.schedule_cursor != state.schedules.size()) {
+        return;
+    }
+    state.scanning_schedules = false;
     // Calendar completion does not wait for the optional pregnancy search.
     for (std::size_t i = 0; i < state.view.child_count; ++i) {
         domain::ChildToolRow& row = state.view.children[i];
@@ -554,6 +615,10 @@ void reset_family_tools(FamilyTools& state, domain::GameEpoch epoch) {
     state.last_refresh_ms = 0;
     state.last_maintenance_ms = 0;
     state.last_schedule_ms = 0;
+    state.schedule_cursor = 0;
+    state.scanning_schedules = false;
+    state.page_stage = FamilyPageStage::Idle;
+    state.pages_again = false;
     state.stage = FamilyScanStage::Idle;
     state.schedules.fill({});
     state.spouses.reset();
@@ -564,7 +629,11 @@ void request_family_tools_refresh(FamilyTools& state) {
     state.requested = true;
 }
 
-bool tick_family_tools(FamilyTools& state, const OfficerToolContext& context) {
+bool tick_family_tools(FamilyTools& state, const OfficerToolContext& context,
+    const domain::WorkBudget& work_budget) {
+    if (work_budget.exhausted()) {
+        return false;
+    }
     const std::uint16_t hero = officer_id(context.player);
     const std::uintptr_t roster = resolve_officer_roster_base(context.module);
 
@@ -585,14 +654,18 @@ bool tick_family_tools(FamilyTools& state, const OfficerToolContext& context) {
             context.now_ms - state.last_refresh_ms >= 30000)) {
             begin_family_scan(state);
         }
-        maintain_schedule_calendar(state, context);
-        switch (state.stage) {
-        case FamilyScanStage::Idle: maintain_family(state, context); break;
-        case FamilyScanStage::Roster: scan_family_roster(state); break;
-        case FamilyScanStage::ValidateRelationships: validate_family_relationships(state); break;
-        case FamilyScanStage::Relationships: scan_family_relationships(state); break;
-        case FamilyScanStage::Pregnancy: scan_pregnancy_table(state, context.now_ms); break;
+        maintain_schedule_calendar(state, context, work_budget);
+        if (!work_budget.exhausted()) {
+            switch (state.stage) {
+            case FamilyScanStage::Idle: maintain_family(state, context, work_budget); break;
+            case FamilyScanStage::Roster: scan_family_roster(state, work_budget); break;
+            case FamilyScanStage::ValidateRelationships: validate_family_relationships(state, work_budget); break;
+            case FamilyScanStage::Relationships: scan_family_relationships(state, work_budget); break;
+            case FamilyScanStage::Pregnancy: scan_pregnancy_table(state, context.now_ms, work_budget); break;
+            case FamilyScanStage::Children: collect_child_rows(state, work_budget); break;
+            }
         }
+        step_family_pages(state, work_budget);
     }
     const bool changed = state.changed;
 
@@ -612,6 +685,8 @@ std::uintptr_t resolve_family_officer(const FamilyTools& state, const OfficerToo
 }
 
 void set_family_page(FamilyTools& state, const domain::SetFamilyPage& request) {
+    state.page_stage = FamilyPageStage::Idle;
+    state.pages_again = false;
     state.view.child_page = request.child_page;
     state.view.spouse_page = request.spouse_page;
     state.view.child_spouse = request.child_spouse;

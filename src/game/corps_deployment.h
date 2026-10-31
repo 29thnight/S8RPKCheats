@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/corps_deployment.h"
+#include "../domain/work_budget.h"
 
 #include <array>
 #include <cstddef>
@@ -180,7 +181,8 @@ domain::CorpsStatus request_corps_deployment(CorpsDeployment& state, std::uintpt
 // allocates. All mutation runs at the owning game boundary, with live binding
 // checks and a retained rollback journal. Successfully completed edits persist.
 void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, std::uintptr_t game_root,
-    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units = 64);
+    std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units = 64,
+    const domain::WorkBudget& work_budget = {});
 bool stop_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, domain::GameEpoch epoch);
 
 } // namespace s8::game

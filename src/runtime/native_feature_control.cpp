@@ -256,12 +256,13 @@ void change_native_feature_epoch(Runtime& runtime) {
     control.council_reset_after_ms = 0;
 }
 
-void update_native_feature_candidates(Runtime& runtime, std::uintptr_t module_base) {
+void update_native_feature_candidates(Runtime& runtime, std::uintptr_t module_base,
+    const domain::WorkBudget& work_budget) {
 
     game::CouncilExecuteFree& state = runtime.native_features.council_execute_free;
 
     if (state.preparing_enable || state.patches.applied) {
-        game::update_council_execute_candidates(state, module_base, runtime.epoch, 128);
+        game::update_council_execute_candidates(state, module_base, runtime.epoch, 128, work_budget);
     }
 }
 

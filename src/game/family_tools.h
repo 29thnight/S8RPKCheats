@@ -2,6 +2,7 @@
 
 #include "officer_tool_context.h"
 #include "../domain/officer_tools.h"
+#include "../domain/work_budget.h"
 
 #include <array>
 #include <bitset>
@@ -27,7 +28,8 @@ struct ChildSchedule {
     bool selected = false;
 };
 
-enum class FamilyScanStage { Idle, Roster, ValidateRelationships, Relationships, Pregnancy };
+enum class FamilyScanStage { Idle, Roster, ValidateRelationships, Relationships, Pregnancy, Children };
+enum class FamilyPageStage { Idle, Count, Children, Spouses };
 
 struct FamilyTools {
     domain::FamilyToolsView view;
@@ -45,6 +47,11 @@ struct FamilyTools {
     std::size_t invalid_relationships = 0;
     std::size_t maintenance_cursor = 0;
     std::size_t child_count = 0;
+    std::size_t schedule_cursor = 0;
+    std::size_t page_cursor = 0;
+    std::size_t page_child_index = 0;
+    std::size_t page_spouse_index = 0;
+    std::uint16_t page_year = 0;
     std::uint32_t pregnancy_offset = 0x5b40;
     std::uint32_t pregnancy_cursor = 0;
     std::uint64_t last_refresh_ms = 0;
@@ -54,7 +61,12 @@ struct FamilyTools {
     bool ready = false;
     bool changed = false;
     bool maintain_children = false;
+    bool scanning_schedules = false;
+    bool page_completed_children = true;
+    bool pages_again = false;
     FamilyScanStage stage = FamilyScanStage::Idle;
+    FamilyPageStage page_stage = FamilyPageStage::Idle;
+    domain::FamilyToolsView page_view;
     std::array<std::uint16_t, domain::OFFICER_TOOL_LIMIT> slot_ids{};
     std::array<FamilyOfficer, domain::OFFICER_TOOL_LIMIT + 1> officers{};
     std::array<ChildSchedule, domain::OFFICER_TOOL_LIMIT + 1> schedules{};
@@ -71,7 +83,8 @@ void request_family_tools_refresh(FamilyTools& state);
 
 // At most 128 roster/relation records or 16 pregnancy candidates per call.
 // A completed snapshot contains IDs and values, never game addresses.
-bool tick_family_tools(FamilyTools& state, const OfficerToolContext& context);
+bool tick_family_tools(FamilyTools& state, const OfficerToolContext& context,
+    const domain::WorkBudget& work_budget = {});
 
 domain::OfficerToolStatus set_child_schedule(FamilyTools& state, const OfficerToolContext& context,
     const domain::SetChildSchedule& request);

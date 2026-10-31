@@ -69,14 +69,15 @@ domain::Result<void> submit_officer_tools_request(Runtime& runtime, services::Ui
     return std::unexpected(domain::Error{error, static_cast<std::uint32_t>(status)});
 }
 
-void service_officer_tools(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module) {
-    if (runtime.stopping) {
+void service_officer_tools(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module,
+    const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || work_budget.exhausted()) {
         return;
     }
     const game::OfficerToolContext context = context_for(runtime, module);
     const bool was_running = runtime.officer_tools->running;
 
-    if (game::tick_officer_tools(*runtime.officer_tools, context)) {
+    if (game::tick_officer_tools(*runtime.officer_tools, context, work_budget)) {
         runtime.officer_tools_publish_pending = true;
     }
     if (was_running && !runtime.officer_tools->running && runtime.selected_officer) {
@@ -85,6 +86,14 @@ void service_officer_tools(Runtime& runtime, services::UiBridge& ui, std::uintpt
     if (runtime.officer_tools_publish_pending && ui.officer_tools.publish(runtime.officer_tools->view)) {
         runtime.officer_tools_publish_pending = false;
     }
+}
+
+void service_officer_notices(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module,
+    const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || work_budget.exhausted()) {
+        return;
+    }
+    const game::OfficerToolContext context = context_for(runtime, module);
     std::uint8_t phase = 0xff;
     const bool stable_player = runtime.config_loaded && runtime.loop_player_ready &&
         runtime.config_first_player_ms != 0 && context.now_ms - runtime.config_first_player_ms >= 3000;
@@ -95,7 +104,7 @@ void service_officer_tools(Runtime& runtime, services::UiBridge& ui, std::uintpt
     game::tick_officer_notifications(*runtime.officer_notices, module, runtime.epoch, context.player, phase,
         runtime.battle_state.mode == game::BattleMode::Battle,
         stable_player && runtime.features.get(domain::FeatureId::MonitorRonin),
-        stable_player && runtime.features.get(domain::FeatureId::OfficerChangeNotify));
+        stable_player && runtime.features.get(domain::FeatureId::OfficerChangeNotify), 128, work_budget);
     const domain::OfficerNotificationView& current = runtime.officer_notices->view;
     domain::OfficerNoticesSnapshot& snapshot = runtime.officer_notices_snapshot;
 

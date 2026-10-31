@@ -247,7 +247,7 @@ void reset_council_execute_free(CouncilExecuteFree& state, domain::GameEpoch epo
 }
 
 void update_council_execute_candidates(CouncilExecuteFree& state, std::uintptr_t module_base,
-    domain::GameEpoch epoch, std::size_t slot_budget) {
+    domain::GameEpoch epoch, std::size_t slot_budget, const domain::WorkBudget& work_budget) {
     if (!module_base || (state.module_base && state.module_base != module_base) || !slot_budget) {
         return;
     }
@@ -282,7 +282,7 @@ void update_council_execute_candidates(CouncilExecuteFree& state, std::uintptr_t
     const std::size_t budget = std::min(slot_budget, COUNCIL_OFFICER_SLOT_LIMIT);
     const std::size_t end = std::min(state.next_slot + budget, COUNCIL_OFFICER_SLOT_LIMIT + 1);
 
-    for (; state.next_slot < end; ++state.next_slot) {
+    for (; state.next_slot < end && !work_budget.exhausted(); ++state.next_slot) {
         const std::uint16_t slot = static_cast<std::uint16_t>(state.next_slot);
 
         if (eligible_officer(root, force, slot)) {

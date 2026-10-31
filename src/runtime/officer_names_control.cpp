@@ -8,8 +8,9 @@
 namespace s8::runtime {
 
 void update_officer_names(game::NativeOfficerNames& state, Runtime& runtime,
-    services::UiBridge& bridge, std::uintptr_t module, std::uint64_t now_ms) {
-    if (runtime.stopping) {
+    services::UiBridge& bridge, std::uintptr_t module, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || work_budget.exhausted()) {
         return;
     }
     if (state.layout_module != module) {
@@ -22,7 +23,7 @@ void update_officer_names(game::NativeOfficerNames& state, Runtime& runtime,
     const game::NativeOfficerNameContext context{
         module, game::read_game_base(runtime.game_base_pointer), runtime.game_base_pointer, runtime.epoch, now_ms};
 
-    game::update_native_officer_names(state, context);
+    game::update_native_officer_names(state, context, work_budget);
     if (state.pending && bridge.native_officer_names.push(state.output)) {
         state.pending = false;
     }

@@ -3,14 +3,17 @@
 #include "../game/game_base.h"
 #include "../game/stratagem5_owner.h"
 #include "../platform/windows/speed_clock.h"
+#include "../platform/windows/process_memory.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace s8::runtime {
 namespace {
@@ -52,6 +55,7 @@ enum class StopStep : std::size_t {
     SiegeFirst,
     SiegeSecond,
     LordBonus,
+    TavernRecovery,
     BattleMap,
     Jewels,
     SecondaryJewels,
@@ -120,10 +124,11 @@ bool needed(const Runtime& runtime, StopStep step) {
     case StopStep::Manbyeong: return runtime.skill_condition_applied[0];
     case StopStep::Yumok: return runtime.skill_condition_applied[1];
     case StopStep::Sangbyeong: return runtime.skill_condition_applied[2];
-    case StopStep::SiegeFirst: return runtime.siege[0].move_applied || runtime.siege[0].terrain_applied;
-    case StopStep::SiegeSecond: return runtime.siege[1].move_applied || runtime.siege[1].terrain_applied;
-    case StopStep::LordBonus: return runtime.faction_lord_bonus.enabled || runtime.faction_lord_bonus.names_applied ||
-        !runtime.faction_lord_bonus.assigned.empty();
+    case StopStep::SiegeFirst: return runtime.siege[0].move_applied || runtime.siege[0].move_restore_pending || runtime.siege[0].terrain_applied;
+    case StopStep::SiegeSecond: return runtime.siege[1].move_applied || runtime.siege[1].move_restore_pending || runtime.siege[1].terrain_applied;
+    case StopStep::LordBonus: return runtime.faction_lord_bonus.enabled ||
+        game::faction_lord_bonus_pending(runtime.faction_lord_bonus);
+    case StopStep::TavernRecovery: return runtime.tavern_requests.pending.active;
     case StopStep::BattleMap: return runtime.battle_map_shuffle.active;
     case StopStep::Jewels: return runtime.jewel_open.preferred;
     case StopStep::SecondaryJewels: return runtime.secondary_jewels.has_value();
@@ -238,10 +243,22 @@ domain::Result<void> perform_stop(Runtime& runtime, std::uintptr_t module_base, 
     case StopStep::SiegeFirst:
     case StopStep::SiegeSecond:
         return stop_result(game::disable_siege(runtime.siege[step == StopStep::SiegeSecond], module_base), step);
-    case StopStep::LordBonus:
+    case StopStep::LordBonus: {
+        constexpr std::chrono::microseconds RESTORE_SLICE{250};
+        const domain::WorkBudget budget{std::chrono::steady_clock::now() + RESTORE_SLICE};
+
+        game::set_faction_lord_bonus(runtime.faction_lord_bonus, module_base, false);
+        game::update_faction_lord_bonus(runtime.faction_lord_bonus, module_base, GetTickCount64(), budget);
         return stop_result(game::set_faction_lord_bonus(runtime.faction_lord_bonus, module_base, false), step);
-    case StopStep::BattleMap:
-        return stop_result(game::disable_battle_map_shuffle(runtime.battle_map_shuffle), step);
+    }
+    case StopStep::TavernRecovery:
+        return stop_result(game::recover_tavern_requests(runtime.tavern_requests, module_base), step);
+    case StopStep::BattleMap: {
+        constexpr std::chrono::microseconds RESTORE_SLICE{250};
+        const domain::WorkBudget budget{std::chrono::steady_clock::now() + RESTORE_SLICE};
+
+        return stop_result(game::disable_battle_map_shuffle(runtime.battle_map_shuffle, budget), step);
+    }
     case StopStep::Jewels: {
 
         const std::uintptr_t root = game::read_game_base(runtime.game_base_pointer);
@@ -299,7 +316,15 @@ domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module) {
         return {};
     }
 
-    const std::uintptr_t current_root = game::read_game_base(runtime.game_base_pointer);
+    std::uintptr_t current_root = 0;
+
+    if ((!runtime.game_base_pointer && runtime.session_game_base) ||
+        (runtime.game_base_pointer && !platform::windows::read_memory(runtime.game_base_pointer,
+            std::as_writable_bytes(std::span(&current_root, 1))))) {
+        // A retryable read failure is not an epoch transition. Retain every
+        // object-bound restoration record until the root can be observed.
+        return std::unexpected(domain::Error{domain::ErrorCode::QueueFull});
+    }
 
     if (runtime.session_game_base != 0 && current_root != runtime.session_game_base) {
         // Shutdown can span several window messages while a scenario unloads.
@@ -315,7 +340,7 @@ domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module) {
         runtime.pending_trait_change.reset();
         runtime.pending_annual_assignment = 0;
         runtime.ai_growth.running = false;
-        runtime.auto_affinity = {};
+        game::reset_auto_affinity(runtime.auto_affinity);
         runtime.officer_roster.requested = false;
         runtime.undiscovered_ronin = {};
         runtime.special_assignment_notices.reset();

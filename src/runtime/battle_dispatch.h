@@ -2,6 +2,7 @@
 
 #include "../domain/error.h"
 #include "../domain/ids.h"
+#include "../domain/work_budget.h"
 #include "../game/stratagem5_native.h"
 
 #include <cstdint>
@@ -37,10 +38,10 @@ struct BattleDispatch {
 // Coordinator-only startup work. Pattern searches and unpublished code buffers
 // are prepared here before the owner thread begins native commit dispatch.
 bool prepare_battle_dispatch(BattleDispatch& state, Runtime& runtime, std::uintptr_t module_base);
-// Call after tick_game established this dispatch's root/epoch, before command
+// Call after observe_game_context established this dispatch's root/epoch, before command
 // completion publishes the frame. Native UI work uses the same admitted thread.
 void update_battle_dispatch(BattleDispatch& state, Runtime& runtime,
-    std::uintptr_t module_base, std::uint64_t now_ms);
+    std::uintptr_t module_base, std::uint64_t now_ms, const domain::WorkBudget& work_budget = {});
 // A fixed message only when a requested feature changes failure state. Native
 // model/layout readiness gets a short grace period; no per-frame log spam.
 std::string_view take_battle_dispatch_notice(BattleDispatch& state, std::uint64_t now_ms);

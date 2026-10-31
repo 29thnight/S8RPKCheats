@@ -2,6 +2,7 @@
 
 #include "../domain/ai_officer_growth.h"
 #include "../domain/ids.h"
+#include "../domain/work_budget.h"
 
 #include <array>
 #include <cstddef>
@@ -55,6 +56,7 @@ bool read_current_ai_growth_preview(std::uintptr_t module_base, std::uintptr_t o
 void update_ai_officer_growth(AiGrowthState& state, std::uintptr_t module_base,
                               std::uintptr_t game_base, std::uintptr_t player,
                               domain::GameEpoch epoch, std::uint64_t now_ms,
-                              const domain::AiGrowthSettings& settings);
+                              const domain::AiGrowthSettings& settings,
+                              const domain::WorkBudget& work_budget = {});
 
 } // namespace s8::game

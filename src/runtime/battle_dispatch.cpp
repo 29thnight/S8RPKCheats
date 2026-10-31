@@ -14,7 +14,8 @@ bool valid_context(void* context) {
     const Runtime* const runtime = state.runtime;
     std::uintptr_t current_root = 0;
 
-    return runtime && !state.stopping && !runtime->stopping &&
+    return runtime && !state.stopping && !runtime->stopping && runtime->loop_context_observed &&
+        runtime->loop_game_base_ready &&
         state.epoch == runtime->epoch && state.game_root && state.game_root == runtime->loop_game_base &&
         state.root_pointer && platform::windows::read_memory(state.root_pointer,
             std::as_writable_bytes(std::span(&current_root, 1))) && current_root == state.game_root;
@@ -122,8 +123,8 @@ bool prepare_battle_dispatch(BattleDispatch& state, Runtime& runtime, std::uintp
 }
 
 void update_battle_dispatch(BattleDispatch& state, Runtime& runtime,
-    std::uintptr_t module_base, std::uint64_t now_ms) {
-    if (state.stopping || runtime.stopping || !module_base) {
+    std::uintptr_t module_base, std::uint64_t now_ms, const domain::WorkBudget& work_budget) {
+    if (state.stopping || runtime.stopping || !module_base || work_budget.exhausted()) {
         return;
     }
     const bool changed = state.epoch != runtime.epoch || state.game_root != runtime.loop_game_base;
@@ -145,7 +146,7 @@ void update_battle_dispatch(BattleDispatch& state, Runtime& runtime,
     const Stratagem5UiActions actions{&state, prepare_bridge, set_metadata, ensure_capture};
     const bool previously_seen = state.battle_seen;
 
-    monitor_battle(runtime, module_base, runtime.loop_game_base, now_ms, actions);
+    monitor_battle(runtime, module_base, runtime.loop_game_base, now_ms, actions, work_budget);
     state.battle_seen = runtime.battle_seen;
     game::update_stratagem5_native(state.native,
         !should_skip_stratagem5(runtime.stratagem5_lifecycle), state.epoch.value,

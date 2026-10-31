@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "native_patch.h"
 #include "../domain/ids.h"
 
@@ -27,7 +29,7 @@ struct CouncilExecuteFree {
 bool set_council_execute_free(CouncilExecuteFree& state, std::uintptr_t module_base,
     domain::GameEpoch epoch, bool enabled);
 void update_council_execute_candidates(CouncilExecuteFree& state, std::uintptr_t module_base,
-    domain::GameEpoch epoch, std::size_t slot_budget = 128);
+    domain::GameEpoch epoch, std::size_t slot_budget = 128, const domain::WorkBudget& work_budget = {});
 void reset_council_execute_free(CouncilExecuteFree& state, domain::GameEpoch epoch);
 
 } // namespace s8::game

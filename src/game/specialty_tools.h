@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../domain/work_budget.h"
+
 #include "../domain/named_specialties.h"
 #include "../domain/specialty_tools.h"
 
@@ -42,7 +44,8 @@ struct SpecialtyTools {
 
 bool request_specialty_tools(SpecialtyTools& state, const SpecialtyContext& context,
     const domain::SpecialtyRequest& request, const domain::NamedSpecialties& named);
-void update_specialty_tools(SpecialtyTools& state, const SpecialtyContext& context, std::mt19937& random);
+void update_specialty_tools(SpecialtyTools& state, const SpecialtyContext& context, std::mt19937& random,
+    const domain::WorkBudget& work_budget = {});
 void stop_specialty_tools(SpecialtyTools& state);
 
 } // namespace s8::game

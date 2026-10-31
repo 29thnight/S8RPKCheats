@@ -102,10 +102,11 @@ void finish_scan(DebugTools& state, domain::DebugStatus status) {
     state.dirty = true;
 }
 
-void load_scan_block(DebugTools& state) {
+void load_scan_block(DebugTools& state, std::chrono::steady_clock::time_point deadline) {
     const std::size_t width = domain::memory_value_size(state.query.type);
 
-    for (std::size_t visited = 0; visited < REGIONS_PER_TICK && state.cursor < state.end; ++visited) {
+    for (std::size_t visited = 0; visited < REGIONS_PER_TICK && state.cursor < state.end &&
+        std::chrono::steady_clock::now() < deadline; ++visited) {
         MEMORY_BASIC_INFORMATION region{};
 
         if (VirtualQuery(reinterpret_cast<const void*>(state.cursor), &region, sizeof(region)) != sizeof(region)) {
@@ -159,7 +160,7 @@ void search_tick(DebugTools& state, std::chrono::steady_clock::time_point deadli
     if (state.block_cursor == state.block_candidates) {
         state.block_candidates = 0;
         state.block_cursor = 0;
-        load_scan_block(state);
+        load_scan_block(state, deadline);
     }
     if (!state.snapshot.scanning || !state.block_candidates) {
         return;
@@ -377,10 +378,11 @@ void publish(DebugTools& state, services::DebugBridge& bridge, std::uint64_t now
 } // namespace
 
 void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain::GameEpoch epoch,
-    std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms) {
+    std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget) {
     const platform::windows::RealClockScope real_clock;
 
-    if (state.stopped) {
+    if (state.stopped || work_budget.exhausted()) {
         return;
     }
     if (!state.initialized || state.snapshot.epoch.value != epoch.value) {
@@ -402,7 +404,7 @@ void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain
         state.dirty = true;
     }
     if (state.snapshot.scanning) {
-        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + SCAN_BUDGET;
+        const std::chrono::steady_clock::time_point deadline = std::min(work_budget.deadline, std::chrono::steady_clock::now() + SCAN_BUDGET);
 
         if (state.snapshot.refining) {
             refine_tick(state, deadline);

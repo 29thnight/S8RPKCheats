@@ -17,6 +17,7 @@
 #include <Windows.h>
 #include <winrt/base.h>
 
+#include <algorithm>
 #include <atomic>
 #include <array>
 #include <chrono>
@@ -29,7 +30,8 @@ namespace s8::runtime {
 namespace {
 
 constexpr std::size_t COMMANDS_PER_DISPATCH = 4;
-constexpr std::chrono::microseconds COMMAND_BUDGET{750};
+constexpr std::chrono::microseconds DISPATCH_BUDGET{1500};
+constexpr std::chrono::microseconds JOB_SLICE{250};
 constexpr std::uint64_t STOP_RETRY_INTERVAL_MS = 100;
 
 struct RuntimeSession {
@@ -61,6 +63,7 @@ struct RuntimeSession {
     std::atomic<bool> dispatch_active{false};
     UINT_PTR stop_timer = 0;
     bool dispatching = false;
+    std::size_t next_job = 0;
     std::uint64_t next_stop_attempt_ms = 0;
     bool stop_failure_reported = false;
 };
@@ -181,6 +184,66 @@ struct DispatchScope {
     }
 };
 
+void dispatch_game_jobs(RuntimeSession& session) {
+    enum class Job : std::size_t { Game, Battle, Ui, Debug, Specialty, OfficerNames, Count };
+    constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
+    const domain::WorkBudget dispatch_budget{std::chrono::steady_clock::now() + DISPATCH_BUDGET};
+    const std::uint64_t now_ms = GetTickCount64();
+
+    // Root/epoch observation precedes all consumers. Work below shares one
+    // deadline; native calls and started write transactions complete in place.
+    observe_game_context(session.runtime, session.game_module, now_ms, dispatch_budget);
+    if (!session.runtime.loop_context_observed) {
+        return;
+    }
+    for (std::size_t attempted = 0; attempted < JOB_COUNT && !dispatch_budget.exhausted(); ++attempted) {
+        if (session.stop_requested.load(std::memory_order_acquire)) {
+            break;
+        }
+        const Job job = static_cast<Job>(session.next_job);
+        const domain::WorkBudget slice{
+            std::min(dispatch_budget.deadline, std::chrono::steady_clock::now() + JOB_SLICE)};
+
+        // Advance before entering a job so an overrun yields to the next group
+        // on the following message instead of starving later services.
+        session.next_job = (session.next_job + 1) % JOB_COUNT;
+        switch (job) {
+        case Job::Game:
+            tick_game(session.runtime, session.game_module, now_ms, slice);
+            break;
+        case Job::Battle: {
+            update_battle_dispatch(session.battle_dispatch, session.runtime, session.game_module, now_ms, slice);
+
+            const std::string_view notice = take_battle_dispatch_notice(session.battle_dispatch, now_ms);
+
+            if (!notice.empty()) {
+                session.services.overlay.bridge.publish_notice(std::string(notice));
+            }
+            break;
+        }
+        case Job::Ui:
+            commit_ui_commands(session.runtime, session.services.overlay.bridge,
+                session.game_module, COMMANDS_PER_DISPATCH, JOB_SLICE, slice);
+            break;
+        case Job::Debug:
+            update_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools,
+                session.runtime.epoch, session.game_module, session.runtime.loop_game_base,
+                session.runtime.loop_player, now_ms, slice);
+            break;
+        case Job::Specialty:
+            update_specialty_tools(session.specialty_tools, session.runtime,
+                session.services.overlay.bridge, session.game_module, slice);
+            break;
+        case Job::OfficerNames:
+            update_officer_names(session.officer_names, session.runtime,
+                session.services.overlay.bridge, session.game_module, now_ms, slice);
+            break;
+        case Job::Count:
+            break;
+        }
+    }
+}
+
 bool dispatch_window_message(void* context, HWND, UINT message, WPARAM wparam,
                              LPARAM, LRESULT* result) noexcept {
     RuntimeSession& session = *static_cast<RuntimeSession*>(context);
@@ -237,24 +300,7 @@ bool dispatch_window_message(void* context, HWND, UINT message, WPARAM wparam,
             // A window thread is an explicit dispatch context, not proof of
             // exclusive game-state ownership. Session/target guards remain
             // mandatory around every operation that reads or changes the game.
-            tick_game(session.runtime, session.game_module, GetTickCount64());
-            update_battle_dispatch(session.battle_dispatch, session.runtime, session.game_module, GetTickCount64());
-            const std::string_view battle_notice = take_battle_dispatch_notice(session.battle_dispatch, GetTickCount64());
-
-            if (!battle_notice.empty()) {
-                session.services.overlay.bridge.publish_notice(std::string(battle_notice));
-            }
-            if (!session.stop_requested.load(std::memory_order_acquire)) {
-                commit_ui_commands(session.runtime, session.services.overlay.bridge,
-                                   session.game_module, COMMANDS_PER_DISPATCH, COMMAND_BUDGET);
-                update_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools,
-                    session.runtime.epoch, session.game_module, session.runtime.loop_game_base,
-                    session.runtime.loop_player, GetTickCount64());
-                update_specialty_tools(session.specialty_tools, session.runtime,
-                    session.services.overlay.bridge, session.game_module);
-                update_officer_names(session.officer_names, session.runtime,
-                    session.services.overlay.bridge, session.game_module, GetTickCount64());
-            }
+            dispatch_game_jobs(session);
         }
         if (session.stop_requested.load(std::memory_order_acquire) &&
             session.running.load(std::memory_order_acquire) &&

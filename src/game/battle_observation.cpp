@@ -63,23 +63,25 @@ bool battle_records_ready(std::uintptr_t game_base, const BattleObservation& obs
         !platform::windows::is_committed_memory(player, 0x200)) {
         return false;
     }
-    bool has_unit = false;
+    constexpr std::size_t MAX_UNITS = 60;
+    std::array<std::uintptr_t, MAX_UNITS * 2> records{};
+    const std::size_t record_bytes = (observation.unit_count - 1) * 0x10 + sizeof(std::uintptr_t);
+
+    if (!platform::windows::read_memory(observation.unit_list + 8,
+            std::as_writable_bytes(std::span(records)).first(record_bytes))) {
+        return false;
+    }
     for (std::size_t i = 0; i < observation.unit_count; ++i) {
-        std::uintptr_t unit = 0;
-        if (!platform::windows::read_memory(observation.unit_list + 8 + i * 0x10,
-                                             std::as_writable_bytes(std::span(&unit, 1)))) {
-            return false;
-        }
-        if (!platform::windows::is_committed_memory(unit, 0x600)) {
-            continue;
-        }
+        const std::uintptr_t unit = records[i * 2];
         std::uintptr_t member = 0;
-        if (platform::windows::read_memory(unit + 0x18, std::as_writable_bytes(std::span(&member, 1))) &&
+
+        if (platform::windows::is_committed_memory(unit, 0x600) &&
+            platform::windows::read_memory(unit + 0x18, std::as_writable_bytes(std::span(&member, 1))) &&
             platform::windows::is_committed_memory(member, 0x100)) {
-            has_unit = true;
+            return true;
         }
     }
-    return has_unit;
+    return false;
 }
 
 bool update_battle_readiness(BattleReadiness& state, const BattleObservation& observation,
