@@ -14,6 +14,7 @@
 #include "domestic_reward.h"
 #include "officer_basic.h"
 #include "officer_roster.h"
+#include "tengi.h"
 
 #include <cstdint>
 #include <optional>
@@ -55,6 +56,12 @@ struct ConfigSnapshot {
     std::optional<std::uint8_t> protagonist_gender;
     std::optional<OfficerDetail> selected_officer;
     std::optional<OfficerTraits> protagonist_traits;
+    float speed_multiplier = 1.0f;
+    TengiSettings tengi_settings;
+    bool tengi_layout_supported = false;
+    bool tengi_ready = false;
+    std::uint8_t tengi_momentum = 0;
+    int tengi_error = 0;
 };
 
 } // namespace s8::domain

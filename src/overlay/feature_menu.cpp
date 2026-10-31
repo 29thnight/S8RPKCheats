@@ -198,6 +198,9 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         FeatureItem{"AI 친밀도 가속", domain::FeatureId::AutoAffinityGrowth},
         FeatureItem{"결혼 무제한", domain::FeatureId::MarriageApplied},
         FeatureItem{"세력 기술 초기화", domain::FeatureId::TechZero},
+        FeatureItem{"시나리오 초기 설정 보정", domain::FeatureId::StartSetting},
+        FeatureItem{"게임 배속", domain::FeatureId::SpeedHack},
+        FeatureItem{"매 평정 새로운 전기", domain::FeatureId::InfTengi},
         FeatureItem{"치료", domain::FeatureId::SelfHeal},
         FeatureItem{"동토", domain::FeatureId::Dongto},
         FeatureItem{"천계", domain::FeatureId::Celestial},
@@ -309,6 +312,56 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
             menu.pending_notice = requested == domain::DomesticRewardMode::Off
                 ? "내정 포상 조건 완화 OFF" : "내정 포상 조건 완화 적용 완료";
             menu.pending_failure_notice = "내정 포상 조건 완화 변경 실패";
+        }
+    }
+    if (menu.snapshot.features.get(domain::FeatureId::SpeedHack)) {
+        constexpr std::array<const char*, 9> SPEED_LABELS{
+            "1.0x", "1.5x", "2.0x", "2.5x", "3.0x", "3.5x", "4.0x", "4.5x", "5.0x"};
+        int selected_speed = static_cast<int>((menu.snapshot.speed_multiplier - 1.0f) * 2.0f);
+
+        if (ImGui::Combo("배속 배율", &selected_speed, SPEED_LABELS.data(), static_cast<int>(SPEED_LABELS.size()))) {
+            submit(domain::SetSpeedMultiplier{1.0f + static_cast<float>(selected_speed) * 0.5f});
+        }
+    }
+    if (ImGui::CollapsingHeader("전기 발생 · 기간 · 재발생 간격")) {
+        if (!menu.tengi_editing && !menu.pending) {
+            menu.tengi_draft = menu.snapshot.tengi_settings;
+        }
+
+        bool editing = false;
+        bool changed = false;
+
+        if (!menu.snapshot.tengi_layout_supported) {
+            ImGui::TextUnformatted("지원 게임 버전의 전기 데이터를 확인하는 중입니다.");
+        } else if (menu.snapshot.tengi_ready) {
+            ImGui::Text("현재 기운: %u", static_cast<unsigned>(menu.snapshot.tengi_momentum));
+        }
+        if (menu.snapshot.tengi_error != 0) {
+            ImGui::Text("전기 기능 준비 실패 (%d)", menu.snapshot.tengi_error);
+        }
+
+        ImGui::TextUnformatted("기간 0: 기본값 / 재발생 -1: 기본값, 0: 제한 없음");
+        for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
+            domain::TengiEventSettings& event = menu.tengi_draft.events[index];
+
+            ImGui::PushID(static_cast<int>(index));
+            changed = ImGui::Checkbox(domain::TENGI_EVENT_NAMES[index].data(), &event.allowed) || changed;
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(72.0f * menu.dpi_scale);
+            ImGui::InputInt("개월", &event.duration_months, 0, 0);
+            editing = ImGui::IsItemActive() || editing;
+            changed = ImGui::IsItemDeactivatedAfterEdit() || changed;
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(72.0f * menu.dpi_scale);
+            ImGui::InputInt("재발생(년)", &event.cooldown_years, 0, 0);
+            editing = ImGui::IsItemActive() || editing;
+            changed = ImGui::IsItemDeactivatedAfterEdit() || changed;
+            ImGui::PopID();
+        }
+        menu.tengi_editing = editing;
+        if (changed) {
+            menu.tengi_draft = domain::normalize_tengi_settings(menu.tengi_draft);
+            submit(domain::SetTengiSettings{menu.tengi_draft});
         }
     }
     if (menu.snapshot.features.get(domain::FeatureId::Domestics)) {

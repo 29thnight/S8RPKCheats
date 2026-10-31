@@ -31,5 +31,9 @@
   <ItemGroup><ClInclude Include="process_memory.h" /><ClInclude Include="config_file.h" /><ClInclude Include="config_commit.h" /><ClInclude Include="module_image.h" /><ClInclude Include="code_memory.h" /><ClInclude Include="hook.h" /><ClInclude Include="present_hook.h" /><ClInclude Include="dx11_present_target.h" /></ItemGroup>
   <ItemGroup><ProjectReference Include="S8.MinHook.vcxproj"><Project>{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}</Project></ProjectReference></ItemGroup>
   <ItemGroup><ClCompile Include="unicode.cpp" /><ClInclude Include="unicode.h" /></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="speed_clock.cpp" />
+    <ClInclude Include="speed_clock.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

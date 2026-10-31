@@ -1,5 +1,6 @@
 #include "command_commit.h"
 #include "../platform/windows/process_memory.h"
+#include "../platform/windows/speed_clock.h"
 #include "../game/game_base.h"
 
 #include <type_traits>
@@ -16,6 +17,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             std::uintptr_t game_module, std::size_t max_commands,
                             std::chrono::steady_clock::duration time_budget,
                             services::UiBridge* ui) {
+    const platform::windows::RealClockScope real_clock;
+
     const auto deadline = std::chrono::steady_clock::now() + time_budget;
     std::size_t processed = 0;
     std::array<bool, 5103> ronin_changes{};
@@ -140,6 +143,21 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     case domain::FeatureId::TechZero:
                         game::set_tech_zero(runtime.tech_zero, command.enabled);
                         break;
+                    case domain::FeatureId::StartSetting:
+                    case domain::FeatureId::InfTengi:
+                        break;
+                    case domain::FeatureId::SpeedHack: {
+                        const std::expected<void, int> configured = platform::windows::configure_speed_clock(
+                            {command.enabled, runtime.speed_multiplier});
+
+                        runtime.speed_clock_configured = true;
+                        runtime.speed_clock_error = configured ? 0 : configured.error();
+                        if (!configured) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure,
+                                static_cast<std::uint32_t>(configured.error())});
+                        }
+                        break;
+                    }
                     case domain::FeatureId::SelfHeal:
                         if (!game::set_self_heal(game_module, command.enabled, runtime.self_heal_settings)) {
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
@@ -214,6 +232,23 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             runtime.features.get(domain::FeatureId::WeatherSkillComplex), true,
                             runtime.features.get(domain::FeatureId::TerrainIgnore));
                     }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSpeedMultiplier>) {
+                    const float multiplier = domain::normalize_speed_multiplier(command.multiplier);
+                    const std::expected<void, int> configured = platform::windows::configure_speed_clock(
+                        {runtime.features.get(domain::FeatureId::SpeedHack), multiplier});
+
+                    runtime.speed_clock_error = configured ? 0 : configured.error();
+                    if (!configured) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure,
+                            static_cast<std::uint32_t>(configured.error())});
+                    }
+                    runtime.speed_multiplier = multiplier;
+                    runtime.speed_clock_configured = true;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetTengiSettings>) {
+                    runtime.tengi_settings = domain::normalize_tengi_settings(command.settings);
+                    runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetShortBattleCooldown>) {
                     if ((command.enabled || runtime.short_battle_cooldown.applied) &&

@@ -66,5 +66,10 @@
     <ClInclude Include="auto_affinity.h" />
   </ItemGroup>
   <ItemGroup><ClCompile Include="auto_affinity.cpp" /></ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ownership.h" />
+    <ClInclude Include="speed_hack.h" />
+    <ClInclude Include="tengi.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

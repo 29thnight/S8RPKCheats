@@ -1,4 +1,5 @@
 #include "config_json.h"
+#include "tengi_config_keys.h"
 #include "../platform/windows/unicode.h"
 
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
@@ -184,6 +185,14 @@ domain::Result<std::string> config_lines_for_load(std::string_view source, Secon
             return item->is_boolean() && item->get<bool>();
         };
         scalars->notification_speed = read_float("g_notificationSpeed");
+        scalars->speed_multiplier = read_float("g_speedMultiplier");
+        for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
+            const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
+
+            scalars->tengi_allowed[index] = read_bool(keys.allowed.data());
+            scalars->tengi_duration[index] = read_int(keys.duration.data());
+            scalars->tengi_cooldown[index] = read_int(keys.cooldown.data());
+        }
         scalars->domestics_player = read_float("fDomesticsPlayer");
         scalars->domestics_force = read_float("fDomesticsForce");
         scalars->siege_heal_rate = read_int("iSiegeHealRate");

@@ -91,6 +91,8 @@ struct FeatureMenu {
     domain::TerrainTacticsSettings terrain_tactics_draft;
     domain::DefBuildingSettings def_building_draft;
     domain::TerrainBonus terrain_bonus_draft;
+    domain::TengiSettings tengi_draft;
+    bool tengi_editing = false;
 };
 
 // Snapshot and completions are delivered by the owner of the Present context.

@@ -51,6 +51,8 @@
 #include "../game/auto_affinity.h"
 #include "../game/battle_observation.h"
 #include "../game/battle_state.h"
+#include "../game/start_setting.h"
+#include "../game/tengi.h"
 #include "stratagem5_lifecycle.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
@@ -59,6 +61,8 @@
 #include <string_view>
 #include <string>
 #include <span>
+#include <vector>
+#include <cstddef>
 
 namespace s8::services {
 struct ConfigLoad;
@@ -76,6 +80,14 @@ struct PendingTraitChange {
 };
 
 struct Runtime {
+    game::StartSettingState start_setting;
+    game::TengiState tengi;
+    domain::TengiSettings tengi_settings;
+    float speed_multiplier = 1.0f;
+    bool speed_clock_configured = false;
+    int speed_clock_error = 0;
+    std::vector<std::byte> module_image;
+    std::uintptr_t image_module = 0;
     domain::GameEpoch epoch{0};
     domain::FeatureFlags features;
     std::array<game::CityConversion, 4> city_conversions{};

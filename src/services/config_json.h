@@ -5,6 +5,7 @@
 #include "../domain/secondary_jewel.h"
 #include "../domain/def_building.h"
 #include "../domain/officer_roster.h"
+#include "../domain/tengi.h"
 
 #include <span>
 #include <array>
@@ -25,6 +26,10 @@ struct SecondaryJewelConfig {
 using TerrainBonusChanges = std::array<std::array<std::optional<std::int16_t>, 18>, 13>;
 using DefBuildingChanges = std::array<std::optional<int>, domain::DEF_BUILDING_KEYS.size()>;
 struct ScalarConfigChanges {
+    std::optional<float> speed_multiplier;
+    std::array<std::optional<bool>, domain::TENGI_EVENT_COUNT> tengi_allowed;
+    std::array<std::optional<int>, domain::TENGI_EVENT_COUNT> tengi_duration;
+    std::array<std::optional<int>, domain::TENGI_EVENT_COUNT> tengi_cooldown;
     std::optional<float> notification_speed;
     std::optional<float> domestics_player;
     std::optional<float> domestics_force;

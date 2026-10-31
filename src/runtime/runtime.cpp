@@ -6,6 +6,7 @@
 #include "../game/stratagem5_metadata.h"
 #include "../platform/windows/process_memory.h"
 #include "../platform/windows/module_image.h"
+#include "../platform/windows/speed_clock.h"
 #include "../services/ui_bridge.h"
 
 #include <utility>
@@ -48,6 +49,12 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.protagonist_gender,
         runtime.selected_officer,
         runtime.protagonist_traits,
+        runtime.speed_multiplier,
+        runtime.tengi_settings,
+        runtime.tengi.layout_supported,
+        runtime.tengi.snapshot_ready,
+        runtime.tengi.momentum,
+        runtime.tengi.filter_error,
     };
 }
 
@@ -58,8 +65,18 @@ bool initialize_game_base(Runtime& runtime, std::span<const std::byte> image, st
 }
 
 bool initialize_game_base_from_module(Runtime& runtime, std::uintptr_t module_base) {
-    const auto image = platform::windows::read_module_image(module_base);
-    return image && initialize_game_base(runtime, *image, module_base);
+    if (runtime.image_module != module_base || runtime.module_image.empty()) {
+        std::optional<std::vector<std::byte>> image = platform::windows::read_module_image(module_base);
+
+        if (!image) {
+            return false;
+        }
+
+        runtime.module_image = std::move(*image);
+        runtime.image_module = module_base;
+    }
+
+    return initialize_game_base(runtime, runtime.module_image, module_base);
 }
 
 void change_game_session(Runtime& runtime) {
@@ -431,6 +448,24 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
     const auto& features = config.features;
     const auto& def_building = config.def_building;
     const auto& scalars = config.scalars;
+    if (scalars.speed_multiplier) {
+        runtime.speed_multiplier = domain::normalize_speed_multiplier(*scalars.speed_multiplier);
+    }
+    runtime.speed_clock_configured = false;
+    for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
+        domain::TengiEventSettings& event = runtime.tengi_settings.events[index];
+
+        if (scalars.tengi_allowed[index]) {
+            event.allowed = *scalars.tengi_allowed[index];
+        }
+        if (scalars.tengi_duration[index]) {
+            event.duration_months = *scalars.tengi_duration[index];
+        }
+        if (scalars.tengi_cooldown[index]) {
+            event.cooldown_years = *scalars.tengi_cooldown[index];
+        }
+    }
+    runtime.tengi_settings = domain::normalize_tengi_settings(runtime.tengi_settings);
     if (const auto value = scalars.notification_speed) {
         runtime.notification_speed = *value;
     }
@@ -580,6 +615,18 @@ void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,
 }
 
 void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms) {
+    const platform::windows::RealClockScope real_clock;
+
+    game::update_start_setting(runtime.start_setting, game_module, now_ms,
+        runtime.features.get(domain::FeatureId::StartSetting));
+    if (runtime.config_loaded && !runtime.speed_clock_configured) {
+        const std::expected<void, int> configured = platform::windows::configure_speed_clock(
+            {runtime.features.get(domain::FeatureId::SpeedHack), runtime.speed_multiplier});
+
+        runtime.speed_clock_configured = true;
+        runtime.speed_clock_error = configured ? 0 : configured.error();
+    }
+
     auto game_base = game::read_game_base(runtime.game_base_pointer);
     if (!(game_base && game_base == runtime.cached_game_base && now_ms - runtime.game_base_probe_ms < 300)) {
         runtime.game_base_probe_ms = now_ms;
@@ -609,6 +656,11 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
 
     tick_recurring_features(runtime, game_module, game_base, runtime.loop_game_base_ready,
                             player, runtime.loop_player_ready);
+    runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
+    if (runtime.config_loaded) {
+        game::update_tengi(runtime.tengi, game_module, runtime.loop_player_ready ? player : 0,
+                          now_ms, runtime.tengi_settings);
+    }
     game::update_officer_roster(runtime.officer_roster, game_module);
     game::tick_auto_affinity(runtime.auto_affinity, game_module, game_base, player, now_ms,
                              runtime.features.get(domain::FeatureId::AutoAffinityGrowth));
@@ -628,8 +680,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
             runtime.loyalty_last_attempt_ms = now_ms;
             if (runtime.instant_loyalty.address || !enabled) {
                 game::set_instant_loyalty(runtime.instant_loyalty, game_module, {}, enabled);
-            } else if (const auto image = platform::windows::read_module_image(game_module)) {
-                game::set_instant_loyalty(runtime.instant_loyalty, game_module, *image, enabled);
+            } else if (!runtime.module_image.empty()) {
+                game::set_instant_loyalty(runtime.instant_loyalty, game_module, runtime.module_image, enabled);
             }
         }
     }
@@ -640,8 +692,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         runtime.love_hate_last_attempt_ms = now_ms;
         if (!love_enabled) {
             game::set_love_hate(runtime.love_hate, game_module, {}, false);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            game::set_love_hate(runtime.love_hate, game_module, *image, true);
+        } else if (!runtime.module_image.empty()) {
+            game::set_love_hate(runtime.love_hate, game_module, runtime.module_image, true);
         }
     }
     const bool domestics_enabled = runtime.features.get(domain::FeatureId::Domestics);
@@ -653,8 +705,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         runtime.domestics_last_attempt_ms = now_ms;
         if (!domestics_enabled) {
             game::set_domestics(runtime.domestics_patch, game_module, {}, false);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            if (game::set_domestics(runtime.domestics_patch, game_module, *image, true)) {
+        } else if (!runtime.module_image.empty()) {
+            if (game::set_domestics(runtime.domestics_patch, game_module, runtime.module_image, true)) {
                 runtime.domestics_manual_request = false;
             }
         }
@@ -666,8 +718,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         runtime.resonance_last_attempt_ms = now_ms;
         if (!resonance_enabled) {
             game::set_instant_resonance(runtime.instant_resonance, game_module, {}, false);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            game::set_instant_resonance(runtime.instant_resonance, game_module, *image, true);
+        } else if (!runtime.module_image.empty()) {
+            game::set_instant_resonance(runtime.instant_resonance, game_module, runtime.module_image, true);
         }
     }
     if (runtime.features.get(domain::FeatureId::FactionLordBonus) && !runtime.faction_lord_bonus.enabled &&
@@ -753,8 +805,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         bool applied = false;
         if (runtime.instant_attitude.address) {
             applied = game::set_instant_attitude(runtime.instant_attitude, game_module, {}, runtime.instant_attitude_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_instant_attitude(runtime.instant_attitude, game_module, *image, runtime.instant_attitude_enabled);
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_instant_attitude(runtime.instant_attitude, game_module, runtime.module_image, runtime.instant_attitude_enabled);
         }
         if (applied) {
             runtime.instant_attitude_config_applied = runtime.instant_attitude_enabled;
@@ -764,8 +816,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         bool applied = false;
         if (runtime.fast_relationship.address) {
             applied = game::set_fast_relationship(runtime.fast_relationship, game_module, {}, runtime.fast_relationship_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_fast_relationship(runtime.fast_relationship, game_module, *image, runtime.fast_relationship_enabled);
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_fast_relationship(runtime.fast_relationship, game_module, runtime.module_image, runtime.fast_relationship_enabled);
         }
         if (applied) {
             runtime.fast_relationship_config_applied = runtime.fast_relationship_enabled;
@@ -775,8 +827,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         bool applied = false;
         if (runtime.infinite_gift.code_address) {
             applied = set_infinite_gift(runtime, game_module, {}, runtime.infinite_gift_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = set_infinite_gift(runtime, game_module, *image, runtime.infinite_gift_enabled);
+        } else if (!runtime.module_image.empty()) {
+            applied = set_infinite_gift(runtime, game_module, runtime.module_image, runtime.infinite_gift_enabled);
         }
         if (applied) {
             runtime.infinite_gift_config_applied = runtime.infinite_gift_enabled;
@@ -786,8 +838,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         bool applied = false;
         if (runtime.infinite_talk.hook) {
             applied = game::set_infinite_talk(runtime.infinite_talk, game_module, {}, runtime.infinite_talk_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_infinite_talk(runtime.infinite_talk, game_module, *image, runtime.infinite_talk_enabled);
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_infinite_talk(runtime.infinite_talk, game_module, runtime.module_image, runtime.infinite_talk_enabled);
         }
         if (applied) {
             runtime.infinite_talk_config_applied = runtime.infinite_talk_enabled;
@@ -798,8 +850,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         if (runtime.infinite_duel_debate.hook) {
             applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, {},
                 game::DuelDebateFeature::Duel, runtime.infinite_duel_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, *image,
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, runtime.module_image,
                 game::DuelDebateFeature::Duel, runtime.infinite_duel_enabled);
         }
         if (applied) {
@@ -811,8 +863,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         if (runtime.infinite_duel_debate.hook) {
             applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, {},
                 game::DuelDebateFeature::Debate, runtime.infinite_debate_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, *image,
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, runtime.module_image,
                 game::DuelDebateFeature::Debate, runtime.infinite_debate_enabled);
         }
         if (applied) {
@@ -823,8 +875,8 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
         bool applied = false;
         if (runtime.marriage_condition.address) {
             applied = game::set_marriage_condition(runtime.marriage_condition, game_module, {}, runtime.marriage_enabled);
-        } else if (const auto image = platform::windows::read_module_image(game_module)) {
-            applied = game::set_marriage_condition(runtime.marriage_condition, game_module, *image, runtime.marriage_enabled);
+        } else if (!runtime.module_image.empty()) {
+            applied = game::set_marriage_condition(runtime.marriage_condition, game_module, runtime.module_image, runtime.marriage_enabled);
         }
         if (applied) {
             runtime.marriage_config_applied = runtime.marriage_enabled;

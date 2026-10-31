@@ -14,6 +14,7 @@
 #include "domestics.h"
 #include "domestic_reward.h"
 #include "officer_roster.h"
+#include "tengi.h"
 
 #include <cstdint>
 #include <optional>
@@ -109,7 +110,10 @@ struct ReviveRosterOfficer { std::uint16_t officer_id; std::optional<std::uint8_
 struct SetRosterOfficerTrait { std::uint16_t officer_id; std::uint8_t slot; std::uint16_t trait_id; bool protagonist = false; };
 struct SetRosterOfficerTraining { std::uint16_t officer_id; OfficerTrainingKind kind; std::uint8_t index; std::uint8_t value; };
 
-using CommandPayload = std::variant<SetFeature, SetShortBattleCooldown, SetTroopCountCombat,
+struct SetSpeedMultiplier { float multiplier; };
+struct SetTengiSettings { TengiSettings settings; };
+
+using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSettings, SetShortBattleCooldown, SetTroopCountCombat,
                                     SetReinforcementArrival, SetTechCityVisibility,
                                     SetStratagem5Enabled, SetStratagem5Settings, SetSelfHealSettings,
                                     SetDongtoSettings, SetCelestialSettings, SetCatapultSettings,

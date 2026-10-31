@@ -1,4 +1,5 @@
 #include "config_changes.h"
+#include "tengi_config_keys.h"
 
 #include <array>
 #include <string>
@@ -72,7 +73,7 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
         FeatureKey{domain::FeatureId::HealLv3Self, "bHealLv3_Self"},
     };
     std::vector<ConfigChange> changes;
-    changes.reserve(FEATURES.size() + 70);
+    changes.reserve(FEATURES.size() + 128 + 12 * 11 + domain::TENGI_EVENT_COUNT * 3);
     for (const auto& feature : FEATURES) {
         changes.push_back({feature.key, snapshot.features.get(feature.id)});
     }
@@ -83,6 +84,15 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
     changes.push_back({"fDomesticsPlayer", snapshot.domestics.player});
     changes.push_back({"fDomesticsForce", snapshot.domestics.force});
     changes.push_back({"g_notificationSpeed", snapshot.notification_speed});
+    changes.push_back({"g_speedMultiplier", snapshot.speed_multiplier});
+    for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
+        const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
+        const domain::TengiEventSettings& event = snapshot.tengi_settings.events[index];
+
+        changes.push_back({keys.allowed.data(), event.allowed});
+        changes.push_back({keys.duration.data(), event.duration_months});
+        changes.push_back({keys.cooldown.data(), event.cooldown_years});
+    }
     if (snapshot.secondary_jewels) {
         const auto all = domain::all_secondary_jewels();
         changes.push_back({"bAllSecondaryJewels", snapshot.secondary_jewels->words == all.words});
