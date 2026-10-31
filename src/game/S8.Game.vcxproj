@@ -229,5 +229,15 @@
     <ClInclude Include="city_management.h" />
     <ClCompile Include="city_management.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="corps_deployment.h" />
+    <ClCompile Include="corps_deployment.cpp" />
+    <ClInclude Include="corps_plan.h" />
+    <ClCompile Include="corps_plan.cpp" />
+    <ClInclude Include="corps_relationships.h" />
+    <ClCompile Include="corps_relationships.cpp" />
+    <ClInclude Include="corps_mutation.h" />
+    <ClCompile Include="corps_mutation.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

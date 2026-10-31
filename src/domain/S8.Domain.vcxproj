@@ -95,5 +95,8 @@
   <ItemGroup>
     <ClInclude Include="city_management.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="corps_deployment.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
