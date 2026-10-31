@@ -106,7 +106,7 @@ SHORT WINAPI capture_key(int key) {
     return blocked_key(policy, key) ? 0 : result;
 }
 
-BOOL WINAPI capture_keyboard(PBYTE keys) {
+BOOL WINAPI capture_keyboard_state(PBYTE keys) {
     using Function = BOOL (WINAPI*)(PBYTE);
     const Function original = reinterpret_cast<Function>(input_originals[KEYBOARD_INDEX].load(std::memory_order_acquire));
     const BOOL result = original(keys);
@@ -269,10 +269,19 @@ std::expected<void, int> install_input_capture(InputCaptureHooks& state, HWND wi
         "GetCursorPos", "GetAsyncKeyState", "GetKeyState",
         "GetKeyboardState", "PeekMessageW", "PeekMessageA",
     };
+
+    // Check callback types against Win32 declarations before MinHook type erasure.
+    constexpr decltype(&::GetCursorPos) CURSOR_DETOUR = &capture_cursor;
+    constexpr decltype(&::GetAsyncKeyState) ASYNC_KEY_DETOUR = &capture_async_key;
+    constexpr decltype(&::GetKeyState) KEY_DETOUR = &capture_key;
+    constexpr decltype(&::GetKeyboardState) KEYBOARD_DETOUR = &capture_keyboard_state;
+    constexpr decltype(&::PeekMessageW) PEEK_W_DETOUR = &capture_peek_w;
+    constexpr decltype(&::PeekMessageA) PEEK_A_DETOUR = &capture_peek_a;
+
     const std::array<void*, InputCaptureHooks::COUNT> detours{
-        reinterpret_cast<void*>(&capture_cursor), reinterpret_cast<void*>(&capture_async_key),
-        reinterpret_cast<void*>(&capture_key), reinterpret_cast<void*>(&capture_keyboard),
-        reinterpret_cast<void*>(&capture_peek_w), reinterpret_cast<void*>(&capture_peek_a),
+        reinterpret_cast<void*>(CURSOR_DETOUR), reinterpret_cast<void*>(ASYNC_KEY_DETOUR),
+        reinterpret_cast<void*>(KEY_DETOUR), reinterpret_cast<void*>(KEYBOARD_DETOUR),
+        reinterpret_cast<void*>(PEEK_W_DETOUR), reinterpret_cast<void*>(PEEK_A_DETOUR),
     };
 
     if (!user32) {
