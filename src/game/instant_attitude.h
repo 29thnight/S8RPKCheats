@@ -7,6 +7,7 @@
 namespace s8::game {
 
 struct InstantAttitude {
+    bool signature_prepared = false;
     std::uintptr_t address = 0;
 };
 

@@ -1,5 +1,6 @@
 #include "infinite_duel_debate.h"
 #include "find_bytes.h"
+#include "signature_patterns.h"
 #include "../platform/windows/code_memory.h"
 #include "../platform/windows/process_memory.h"
 
@@ -12,12 +13,7 @@
 namespace s8::game {
 namespace {
 
-constexpr std::array SEARCH_BYTES{
-    std::byte{0x40}, std::byte{0x0f}, std::byte{0xb6}, std::byte{0xc5},
-    std::byte{0xc1}, std::byte{0xe0}, std::byte{0x08}, std::byte{0x05},
-    std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x00},
-    std::byte{0x09}, std::byte{0x87}, std::byte{0x20}, std::byte{0x03},
-    std::byte{0x00}, std::byte{0x00}};
+constexpr std::array SEARCH_BYTES = signatures::INFINITE_DUEL_DEBATE;
 constexpr std::array ORIGINAL_BYTES{
     std::byte{0x09}, std::byte{0x87}, std::byte{0x20},
     std::byte{0x03}, std::byte{0x00}, std::byte{0x00}};
@@ -33,9 +29,15 @@ bool install(InfiniteDuelDebate& state, std::uintptr_t module_base, std::span<co
     if (state.applied)
         return write_flags(state);
     if (!state.hook) {
-        const auto found = find_bytes(image, SEARCH_BYTES, 0x3000000);
-        if (!found)
+        if (state.signature_prepared || image.empty()) {
             return false;
+        }
+        state.signature_prepared = true;
+        const std::optional<std::size_t> found = find_bytes(image, SEARCH_BYTES, 0x3000000);
+
+        if (!found) {
+            return false;
+        }
         state.hook = module_base + *found + 12;
     }
     std::array<std::byte, 6> current{};

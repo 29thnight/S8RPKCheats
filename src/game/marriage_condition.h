@@ -8,6 +8,7 @@
 namespace s8::game {
 
 struct MarriageCondition {
+    bool signature_prepared = false;
     std::uintptr_t address = 0;
     std::array<std::byte, 2> original{};
     bool original_saved = false;

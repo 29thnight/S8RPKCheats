@@ -8,6 +8,7 @@
 namespace s8::game {
 
 struct LoveHate {
+    bool signature_prepared = false;
     std::uintptr_t affinity_address = 0;
     std::uintptr_t relationship_address = 0;
     std::uintptr_t affinity_cave = 0;

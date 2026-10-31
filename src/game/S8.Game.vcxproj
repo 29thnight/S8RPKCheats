@@ -208,5 +208,9 @@
     <ClInclude Include="trait_viewer_native.h" />
     <ClInclude Include="trait_viewer_data.inc" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="signature_patterns.h" />
+    <ClInclude Include="bytecode_buffer.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

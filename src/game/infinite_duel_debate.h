@@ -9,6 +9,7 @@ namespace s8::game {
 enum class DuelDebateFeature { Duel, Debate };
 
 struct InfiniteDuelDebate {
+    bool signature_prepared = false;
     std::uintptr_t hook = 0;
     std::uintptr_t cave = 0;
     bool duel = false;

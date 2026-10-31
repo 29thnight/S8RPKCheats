@@ -1,6 +1,7 @@
 #include "fast_relationship.h"
 
 #include "find_bytes.h"
+#include "signature_patterns.h"
 #include "../platform/windows/process_memory.h"
 
 #include <array>
@@ -9,9 +10,7 @@ namespace s8::game {
 
 bool set_fast_relationship(FastRelationship& state, std::uintptr_t module_base,
                            std::span<const std::byte> image, bool enabled) {
-    constexpr std::array ORIGINAL{
-        std::byte{0x0f}, std::byte{0xb6}, std::byte{0xcb}, std::byte{0x3a},
-        std::byte{0xda}, std::byte{0x0f}, std::byte{0x4f}, std::byte{0xca}};
+    constexpr std::array ORIGINAL = signatures::FAST_RELATIONSHIP;
     constexpr std::array PATCHED{
         std::byte{0x0f}, std::byte{0xb6}, std::byte{0xca}, std::byte{0x88},
         std::byte{0xd3}, std::byte{0x90}, std::byte{0x90}, std::byte{0x90}};
@@ -19,7 +18,12 @@ bool set_fast_relationship(FastRelationship& state, std::uintptr_t module_base,
         return false;
     }
     if (!state.address) {
-        const auto offset = find_bytes(image, ORIGINAL, image.size());
+        if (state.signature_prepared || image.empty()) {
+            return false;
+        }
+        state.signature_prepared = true;
+
+        const std::optional<std::size_t> offset = find_bytes(image, ORIGINAL, image.size());
         if (!offset) {
             return false;
         }

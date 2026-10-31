@@ -4,6 +4,7 @@
 #include "runtime_services.h"
 #include "command_commit.h"
 #include "debug_tools.h"
+#include "native_preparation.h"
 #include "../domain/ownership.h"
 #include "../overlay/window_subclass.h"
 #include "../platform/windows/speed_clock.h"
@@ -450,6 +451,7 @@ DWORD WINAPI coordinator_thread(void* context) noexcept {
         }
         SetThreadDescription(GetCurrentThread(), L"S8RPKCheats coordinator");
         initialize_game_base_from_module(session->runtime, session->game_module);
+        prepare_native_signatures(session->runtime, session->game_module);
 
         overlay::OverlayPresent& overlay = session->services.overlay.overlay;
 

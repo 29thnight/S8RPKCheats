@@ -8,6 +8,7 @@
 namespace s8::game {
 
 struct InfiniteTalk {
+    bool signature_prepared = false;
     std::uintptr_t hook = 0;
     std::uintptr_t cave = 0;
     std::array<std::byte, 7> original{};

@@ -47,15 +47,23 @@ bool set_love_hate(LoveHate& state, std::uintptr_t module_base, std::span<const 
         }
         return restored;
     }
-    const auto targets = find_love_hate_targets(image);
-    if (!state.relationship_applied && targets.relationship) {
-        state.relationship_address = module_base + *targets.relationship;
+    if (!state.signature_prepared && !image.empty()) {
+        const LoveHateTargets targets = find_love_hate_targets(image);
+
+        state.affinity_address = targets.affinity ? module_base + *targets.affinity : 0;
+        state.relationship_address = targets.relationship ? module_base + *targets.relationship : 0;
+        state.relationship_offset = targets.relationship_offset.value_or(0);
+        state.signature_prepared = true;
+    }
+    if (!state.affinity_address || !state.relationship_address) {
+        return false;
+    }
+    if (!state.relationship_applied) {
         if (platform::windows::read_memory(state.relationship_address, state.relationship_original)) {
             if (!state.relationship_cave) {
                 state.relationship_cave = platform::windows::allocate_code_near(state.relationship_address, 256);
             }
             if (state.relationship_cave) {
-                state.relationship_offset = *targets.relationship_offset;
                 std::vector<std::byte> code(state.relationship_original.begin(), state.relationship_original.begin() + 9);
                 const auto emit = [&](std::initializer_list<unsigned char> bytes) {
                     for (const auto byte : bytes) { code.push_back(static_cast<std::byte>(byte)); }
@@ -74,8 +82,7 @@ bool set_love_hate(LoveHate& state, std::uintptr_t module_base, std::span<const 
             }
         }
     }
-    if (!state.affinity_applied && targets.affinity) {
-        state.affinity_address = module_base + *targets.affinity;
+    if (!state.affinity_applied) {
         if (platform::windows::read_memory(state.affinity_address, state.affinity_original)) {
             if (!state.affinity_cave) {
                 state.affinity_cave = platform::windows::allocate_code_near(state.affinity_address, 512);

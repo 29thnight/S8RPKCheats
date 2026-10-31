@@ -1,5 +1,6 @@
 #include "infinite_gift.h"
 #include "find_bytes.h"
+#include "signature_patterns.h"
 #include "../platform/windows/process_memory.h"
 
 #include <array>
@@ -7,12 +8,8 @@
 namespace s8::game {
 namespace {
 
-constexpr std::array ORIGINAL_BYTES{
-    std::byte{0x81}, std::byte{0x8e}, std::byte{0x20}, std::byte{0x03}, std::byte{0x00},
-    std::byte{0x00}, std::byte{0x00}, std::byte{0x04}, std::byte{0x00}, std::byte{0x00}};
-constexpr std::array PATCHED_BYTES{
-    std::byte{0x81}, std::byte{0xa6}, std::byte{0x20}, std::byte{0x03}, std::byte{0x00},
-    std::byte{0x00}, std::byte{0xff}, std::byte{0xfb}, std::byte{0xff}, std::byte{0xff}};
+constexpr std::array ORIGINAL_BYTES = signatures::INFINITE_GIFT;
+constexpr std::array PATCHED_BYTES = signatures::INFINITE_GIFT_PATCHED;
 
 } // namespace
 
@@ -21,7 +18,12 @@ bool set_infinite_gift(InfiniteGift& state, std::uintptr_t module_base,
     if (!module_base)
         return false;
     if (!state.code_address) {
-        auto found = find_bytes(image, ORIGINAL_BYTES, 0x3000000);
+        if (state.signature_prepared || image.empty()) {
+            return false;
+        }
+        state.signature_prepared = true;
+
+        std::optional<std::size_t> found = find_bytes(image, ORIGINAL_BYTES, 0x3000000);
         if (!found)
             found = find_bytes(image, PATCHED_BYTES, 0x3000000);
         if (found)

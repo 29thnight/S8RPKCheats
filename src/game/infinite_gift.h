@@ -7,6 +7,7 @@
 namespace s8::game {
 
 struct InfiniteGift {
+    bool signature_prepared = false;
     std::uintptr_t code_address = 0;
     bool applied = false;
 };

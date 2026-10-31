@@ -1,5 +1,6 @@
 #include "infinite_talk.h"
 #include "find_bytes.h"
+#include "signature_patterns.h"
 #include "../platform/windows/code_memory.h"
 #include "../platform/windows/process_memory.h"
 
@@ -12,11 +13,14 @@ bool set_infinite_talk(InfiniteTalk& state, std::uintptr_t module_base,
                        std::span<const std::byte> image, bool enabled) {
     if (!module_base)
         return false;
-    constexpr std::array ORIGINAL{
-        std::byte{0x83}, std::byte{0x8f}, std::byte{0x20}, std::byte{0x03},
-        std::byte{0x00}, std::byte{0x00}, std::byte{0x04}};
+    constexpr std::array ORIGINAL = signatures::INFINITE_TALK;
     if (!state.hook) {
-        const auto found = find_bytes(image, ORIGINAL, 0x3000000);
+        if (state.signature_prepared || image.empty()) {
+            return false;
+        }
+        state.signature_prepared = true;
+
+        const std::optional<std::size_t> found = find_bytes(image, ORIGINAL, 0x3000000);
         if (!found)
             return false;
         state.hook = module_base + *found;

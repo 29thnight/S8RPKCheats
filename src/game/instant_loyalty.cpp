@@ -1,5 +1,6 @@
 #include "instant_loyalty.h"
 #include "find_bytes.h"
+#include "signature_patterns.h"
 #include "../platform/windows/code_memory.h"
 #include "../platform/windows/process_memory.h"
 
@@ -27,10 +28,14 @@ bool set_instant_loyalty(InstantLoyalty& state, std::uintptr_t module_base,
     if (state.applied) {
         return true;
     }
-    constexpr std::array ORIGINAL{std::byte{0x0f},std::byte{0xb6},std::byte{0x86},std::byte{0xec},
-                                  std::byte{0},std::byte{0},std::byte{0}};
+    constexpr std::array ORIGINAL = signatures::INSTANT_LOYALTY;
     if (!state.address) {
-        const auto found = find_bytes(image, ORIGINAL, 0x3000000);
+        if (state.signature_prepared || image.empty()) {
+            return false;
+        }
+        state.signature_prepared = true;
+
+        const std::optional<std::size_t> found = find_bytes(image, ORIGINAL, 0x3000000);
         if (!found) {
             return false;
         }

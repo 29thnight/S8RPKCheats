@@ -6,16 +6,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <vector>
 
 namespace s8::game {
 
 struct Domestics {
+    bool signature_prepared = false;
     std::uintptr_t address = 0;
     std::uintptr_t cave = 0;
     std::uintptr_t player = 0;
     std::uintptr_t force = 0;
-    std::vector<std::uintptr_t> retained_caves;
     std::array<std::byte, 9> original{};
     domain::DomesticsMultipliers multipliers;
     bool applied = false;
