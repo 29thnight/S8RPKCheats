@@ -18,8 +18,11 @@
 #include "ai_officer_growth.h"
 #include "special_ability_assignment.h"
 #include "native_features.h"
+#include "legacy_features.h"
 #include "trait_control.h"
+#include "city_management.h"
 #include "ownership.h"
+#include "player_resources.h"
 
 #include <cstdint>
 #include <optional>
@@ -78,6 +81,10 @@ struct ConfigSnapshot {
     std::uint64_t special_assignment_generation = 0;
     NativeFeatureStatuses native_features{};
     TraitControlView traits;
+    CitySettings city_settings;
+    float ui_scale = 1.0f;
+    std::optional<PlayerResources> player_resources;
+    LegacyFeatureStatuses legacy_features{};
 };
 
 } // namespace s8::domain

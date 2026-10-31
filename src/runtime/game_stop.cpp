@@ -17,6 +17,8 @@ namespace {
 
 enum class StopStep : std::size_t {
     Traits,
+    CityManagement,
+    CorpsDeployment,
     Native,
     Tengi,
     AiGrowth,
@@ -59,9 +61,9 @@ enum class StopStep : std::size_t {
     GrazingCity,
     FarmingCity,
     CommerceCity,
-    StratagemCount,
     StratagemModel,
     StratagemCamp,
+    StratagemCount,
     StratagemData,
     Count
 };
@@ -86,6 +88,8 @@ bool needed(const Runtime& runtime, StopStep step) {
 
     switch (step) {
     case StopStep::Traits: return true;
+    case StopStep::CityManagement: return true;
+    case StopStep::CorpsDeployment: return true;
     case StopStep::Native: return true;
     case StopStep::Tengi: return runtime.tengi.module_base != 0;
     case StopStep::AiGrowth: return runtime.ai_growth_settings.enabled;
@@ -148,6 +152,10 @@ bool needed(const Runtime& runtime, StopStep step) {
 domain::Result<void> perform_stop(Runtime& runtime, std::uintptr_t module_base, StopStep step) {
 
     switch (step) {
+    case StopStep::CityManagement:
+        return stop_result(game::stop_city_management(runtime.city_management, module_base, runtime.epoch), step);
+    case StopStep::CorpsDeployment:
+        return stop_result(game::stop_corps_deployment(*runtime.corps_deployment, module_base, runtime.epoch), step);
     case StopStep::Traits:
         return stop_trait_control(runtime.traits, module_base, runtime.loop_game_base, runtime.epoch.value);
     case StopStep::Native:
@@ -311,6 +319,9 @@ domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module) {
         runtime.officer_roster.requested = false;
         runtime.undiscovered_ronin = {};
         runtime.special_assignment_notices.reset();
+        game::stop_officer_tools(*runtime.officer_tools);
+        game::reset_officer_notifications(*runtime.officer_notices, runtime.epoch);
+        runtime.specialty_assignment_requested = false;
         runtime.stratagem5_lifecycle.effective.store(false);
         runtime.stratagem5_lifecycle.skip_current_battle.store(true);
         runtime.stratagem5_count.requested = false;
@@ -343,13 +354,15 @@ domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module) {
 
         const domain::Result<void> result = perform_stop(runtime, game_module, step);
 
-        runtime.next_stop_step = (index + 1) % STOP_STEP_COUNT;
-
         if (!result) {
+            // Layered backups must unwind in order. In particular, restoring
+            // COUNT before a failed MODEL retry would discard the real value.
+            runtime.next_stop_step = index;
             runtime.failed_stop_steps |= bit;
             return result;
         }
 
+        runtime.next_stop_step = (index + 1) % STOP_STEP_COUNT;
         runtime.failed_stop_steps &= ~bit;
         runtime.completed_stop_steps |= bit;
 

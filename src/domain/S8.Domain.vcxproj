@@ -104,5 +104,8 @@
   <ItemGroup>
     <ClInclude Include="native_officer_names.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="legacy_features.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

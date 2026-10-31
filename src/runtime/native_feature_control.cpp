@@ -20,6 +20,7 @@ game::NativePatchGroup& patch_group(NativeFeatureControl& control, domain::Nativ
     case domain::NativeFeatureGroup::MissionCpuExclusion: return control.mission_cpu_exclusion.patches;
     case domain::NativeFeatureGroup::CouncilExecuteFree: return control.council_execute_free.patches;
     case domain::NativeFeatureGroup::AffinityDisplay: return control.affinity_display.patches;
+    case domain::NativeFeatureGroup::RulerTransferProposal: return control.ruler_transfer.patches;
     default: return control.ai_war.patches;
     }
 }
@@ -48,6 +49,8 @@ bool desired_group(const domain::FeatureFlags& flags, domain::NativeFeatureGroup
         return flags.get(domain::FeatureId::CouncilExecuteFreeOfficers);
     case domain::NativeFeatureGroup::AffinityDisplay:
         return flags.get(domain::FeatureId::AffinityDisplay);
+    case domain::NativeFeatureGroup::RulerTransferProposal:
+        return flags.get(domain::FeatureId::RulerTransferProposal);
     default:
         return false;
     }
@@ -105,6 +108,8 @@ bool apply_group(Runtime& runtime, std::uintptr_t module_base, domain::NativeFea
         return game::set_council_execute_free(control.council_execute_free, module_base, runtime.epoch, enabled);
     case domain::NativeFeatureGroup::AffinityDisplay:
         return game::set_affinity_display(control.affinity_display, module_base, enabled);
+    case domain::NativeFeatureGroup::RulerTransferProposal:
+        return game::set_ruler_transfer_proposal(control.ruler_transfer, module_base, enabled);
     default:
         return false;
     }

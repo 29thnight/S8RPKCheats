@@ -79,6 +79,8 @@ constexpr std::array FEATURE_KEYS{
     std::string_view{"\"bCouncilExecuteFreeOfficers\""},
     std::string_view{"\"bAffinityDisplay\""},
     std::string_view{"\"bTraitViewer\""},
+    std::string_view{"\"bOfficerChangeNotify\""},
+    std::string_view{"\"bRulerTransferProposal\""},
 };
 
 static_assert(FEATURE_KEYS.size() == static_cast<std::size_t>(FeatureId::Count));

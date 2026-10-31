@@ -5,6 +5,9 @@
 #include "command_commit.h"
 #include "debug_tools.h"
 #include "native_preparation.h"
+#include "specialty_tools.h"
+#include "battle_dispatch.h"
+#include "officer_names_control.h"
 #include "../domain/ownership.h"
 #include "../overlay/window_subclass.h"
 #include "../platform/windows/speed_clock.h"
@@ -19,6 +22,8 @@
 #include <chrono>
 #include <cwchar>
 #include <expected>
+#include <string>
+#include <string_view>
 
 namespace s8::runtime {
 namespace {
@@ -30,6 +35,9 @@ constexpr std::uint64_t STOP_RETRY_INTERVAL_MS = 100;
 struct RuntimeSession {
     Runtime runtime;
     DebugTools debug_tools;
+    game::SpecialtyTools specialty_tools;
+    BattleDispatch battle_dispatch;
+    game::NativeOfficerNames officer_names;
     RuntimeServices services;
     winrt::handle wake;
     winrt::handle instance;
@@ -106,6 +114,18 @@ bool stop_on_window_thread(RuntimeSession& session, std::uint64_t now_ms) {
     }
     session.next_stop_attempt_ms = now_ms + STOP_RETRY_INTERVAL_MS;
     stop_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools);
+    stop_specialty_tools(session.specialty_tools, session.services.overlay.bridge);
+
+    const domain::Result<void> quiesced = quiesce_battle_dispatch(session.battle_dispatch);
+
+    if (!quiesced) {
+        schedule_stop_retry(session);
+        if (quiesced.error().code != domain::ErrorCode::QueueFull && !session.stop_failure_reported) {
+            session.services.overlay.bridge.publish_notice("책략 UI 콜백을 정리하지 못해 종료를 보류했습니다.");
+            session.stop_failure_reported = true;
+        }
+        return false;
+    }
 
     const domain::Result<void> stopped = stop_game(session.runtime, session.game_module);
 
@@ -114,6 +134,17 @@ bool stop_on_window_thread(RuntimeSession& session, std::uint64_t now_ms) {
         if (stopped.error().code != domain::ErrorCode::QueueFull && !session.stop_failure_reported) {
             session.services.overlay.bridge.publish_notice(
                 "종료 복구가 아직 완료되지 않았습니다. 다음 안전한 갱신 시점에 재시도합니다.");
+            session.stop_failure_reported = true;
+        }
+        return false;
+    }
+
+    const domain::Result<void> battle_stopped = stop_battle_dispatch(session.battle_dispatch, session.runtime);
+
+    if (!battle_stopped) {
+        schedule_stop_retry(session);
+        if (battle_stopped.error().code != domain::ErrorCode::QueueFull && !session.stop_failure_reported) {
+            session.services.overlay.bridge.publish_notice("책략 UI 연결 복구가 완료되지 않아 종료를 보류했습니다.");
             session.stop_failure_reported = true;
         }
         return false;
@@ -194,7 +225,9 @@ bool dispatch_window_message(void* context, HWND, UINT message, WPARAM wparam,
 
     try {
         if (session.window_destroyed.load(std::memory_order_acquire)) {
+            abandon_battle_dispatch(session.battle_dispatch);
             stop_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools);
+            stop_specialty_tools(session.specialty_tools, session.services.overlay.bridge);
             stop_runtime_entries(session.services);
             OutputDebugStringW(L"S8RPKCheats: window lost; native state retained without further game writes.\n");
         } else if (session.stop_requested.load(std::memory_order_acquire) &&
@@ -205,12 +238,22 @@ bool dispatch_window_message(void* context, HWND, UINT message, WPARAM wparam,
             // exclusive game-state ownership. Session/target guards remain
             // mandatory around every operation that reads or changes the game.
             tick_game(session.runtime, session.game_module, GetTickCount64());
+            update_battle_dispatch(session.battle_dispatch, session.runtime, session.game_module, GetTickCount64());
+            const std::string_view battle_notice = take_battle_dispatch_notice(session.battle_dispatch, GetTickCount64());
+
+            if (!battle_notice.empty()) {
+                session.services.overlay.bridge.publish_notice(std::string(battle_notice));
+            }
             if (!session.stop_requested.load(std::memory_order_acquire)) {
                 commit_ui_commands(session.runtime, session.services.overlay.bridge,
                                    session.game_module, COMMANDS_PER_DISPATCH, COMMAND_BUDGET);
                 update_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools,
                     session.runtime.epoch, session.game_module, session.runtime.loop_game_base,
                     session.runtime.loop_player, GetTickCount64());
+                update_specialty_tools(session.specialty_tools, session.runtime,
+                    session.services.overlay.bridge, session.game_module);
+                update_officer_names(session.officer_names, session.runtime,
+                    session.services.overlay.bridge, session.game_module, GetTickCount64());
             }
         }
         if (session.stop_requested.load(std::memory_order_acquire) &&
@@ -452,6 +495,7 @@ DWORD WINAPI coordinator_thread(void* context) noexcept {
         SetThreadDescription(GetCurrentThread(), L"S8RPKCheats coordinator");
         initialize_game_base_from_module(session->runtime, session->game_module);
         prepare_native_signatures(session->runtime, session->game_module);
+        prepare_battle_dispatch(session->battle_dispatch, session->runtime, session->game_module);
 
         overlay::OverlayPresent& overlay = session->services.overlay.overlay;
 

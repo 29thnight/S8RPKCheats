@@ -19,25 +19,27 @@ bool update_stratagem5_lifecycle(Stratagem5Lifecycle& lifecycle, bool battle_act
     bool result = true;
     const bool desired = lifecycle.desired.load();
 
-    if (desired != lifecycle.effective.load()) {
+    if (desired != lifecycle.effective.load() || !lifecycle.last_transition_succeeded.load()) {
         if (desired) {
             const bool bridge_ok = actions.prepare_bridge(actions.context);
-            const bool data_ok = actions.set_data(actions.context, true);
-            const bool metadata_ok = actions.set_metadata(actions.context, true);
-            const bool count_ok = actions.set_count(actions.context, true);
+            const bool data_ok = bridge_ok && actions.set_data(actions.context, true);
+            const bool metadata_ok = data_ok && actions.set_metadata(actions.context, true);
+            const bool count_ok = metadata_ok && actions.set_count(actions.context, true);
 
             result = bridge_ok && data_ok && metadata_ok && count_ok;
         } else {
+            lifecycle.effective.store(false);
+
             const bool metadata_ok = actions.set_metadata(actions.context, false);
-            const bool count_ok = actions.set_count(actions.context, false);
-            const bool data_ok = actions.set_data(actions.context, false);
+            const bool count_ok = metadata_ok && actions.set_count(actions.context, false);
+            const bool data_ok = count_ok && actions.set_data(actions.context, false);
 
             result = metadata_ok && count_ok && data_ok;
         }
         lifecycle.last_transition_succeeded.store(result);
-        lifecycle.effective.store(desired);
+        lifecycle.effective.store(desired && result);
     }
-    lifecycle.skip_current_battle.store(false);
+    lifecycle.skip_current_battle.store(!result);
     return result;
 }
 

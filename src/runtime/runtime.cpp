@@ -3,6 +3,7 @@
 #include "../game/stratagem5_owner.h"
 #include "../game/legacy_config.h"
 #include "../game/game_base.h"
+#include "../game/player_resources.h"
 #include "../game/stratagem5_metadata.h"
 #include "../platform/windows/process_memory.h"
 #include "../platform/windows/module_image.h"
@@ -10,6 +11,8 @@
 #include "../services/ui_bridge.h"
 
 #include <utility>
+#include <algorithm>
+#include <cmath>
 
 namespace s8::runtime {
 
@@ -70,6 +73,10 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.special_assignment_generation,
         runtime.native_features.statuses,
         runtime.traits.view,
+        runtime.city_management.snapshot.settings,
+        runtime.ui_scale,
+        runtime.player_resources,
+        runtime.legacy_features.statuses,
     };
 }
 
@@ -95,6 +102,8 @@ bool initialize_game_base_from_module(Runtime& runtime, std::uintptr_t module_ba
 }
 
 void change_game_session(Runtime& runtime) {
+    runtime.player_resources.reset();
+    runtime.player_resources_next_ms = 0;
     runtime.skill_condition_applied.fill(false);
     runtime.battle_date = {};
     runtime.battle_weather = {};
@@ -121,6 +130,7 @@ void change_game_session(Runtime& runtime) {
     runtime.siege = {};
     runtime.tavern_requests = {};
     runtime.specialty_last_council = false;
+    runtime.specialty_assignment_requested = false;
     game::reset_secondary_jewel_cache();
     runtime.battle_map_shuffle = {};
     runtime.faction_lord_bonus = {};
@@ -138,7 +148,12 @@ void change_game_session(Runtime& runtime) {
     runtime.stratagem5_attack_owner = 0;
     runtime.stratagem5_defense_owner = 0;
     ++runtime.epoch.value;
+    game::reset_officer_tools(*runtime.officer_tools, runtime.epoch);
+    game::reset_officer_notifications(*runtime.officer_notices, runtime.epoch);
+    runtime.officer_tools_publish_pending = true;
+    runtime.officer_notices_publish_pending = true;
     change_native_feature_epoch(runtime);
+    change_legacy_feature_epoch(runtime);
 }
 
 void request_stratagem5(Runtime& runtime, bool enabled) {
@@ -173,29 +188,34 @@ bool on_stratagem5_lifecycle(Runtime& runtime, std::uintptr_t module_base, bool 
     const Stratagem5LifecycleActions actions{
         &context,
         [](void* value) {
-            const auto& context = *static_cast<Context*>(value);
+            const Context& context = *static_cast<Context*>(value);
+
             return context.ui.prepare_bridge(context.ui.context);
         },
         [](void* value, bool enabled) {
-            auto& context = *static_cast<Context*>(value);
+            Context& context = *static_cast<Context*>(value);
+
             return enabled ? enable_stratagem5_data(context.runtime, context.module_base)
                            : disable_stratagem5_data(context.runtime);
         },
         [](void* value, bool enabled) {
-            const auto& context = *static_cast<Context*>(value);
+            const Context& context = *static_cast<Context*>(value);
+
             if (!enabled) {
-                restore_stratagem5_model(context.runtime);
-                restore_stratagem5_camp(context.runtime);
+                // The saved model includes the count/owner backing state.
+                // Keep that state intact until model restoration succeeds.
+                if (!restore_stratagem5_model(context.runtime) || !restore_stratagem5_camp(context.runtime)) {
+                    return false;
+                }
             }
             return context.ui.set_metadata(context.ui.context, enabled);
         },
         [](void* value, bool enabled) {
-            auto& context = *static_cast<Context*>(value);
-            set_stratagem5_count_request(context.runtime, enabled,
+            Context& context = *static_cast<Context*>(value);
+            const bool count_ok = set_stratagem5_count_request(context.runtime, enabled,
                 context.runtime.stratagem5_attack_owner, context.runtime.stratagem5_defense_owner);
-            if (enabled)
-                context.ui.ensure_count_capture(context.ui.context);
-            return true;
+
+            return count_ok && (!enabled || context.ui.ensure_count_capture(context.ui.context));
         },
     };
     return update_stratagem5_lifecycle(runtime.stratagem5_lifecycle, battle_active, safe_non_battle, actions);
@@ -278,7 +298,7 @@ void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t
         const bool council = runtime.battle_state.game_state == 5;
         if (!council && runtime.specialty_last_council && mode == game::BattleMode::NonBattle &&
             runtime.features.get(domain::FeatureId::AutoFillSpecialties) && runtime.named_specialties) {
-            game::assign_specialties(module_base, *runtime.named_specialties, runtime.specialty_random);
+            runtime.specialty_assignment_requested = true;
         }
         if (council || mode != game::BattleMode::Unknown) {
             runtime.specialty_last_council = council;
@@ -354,12 +374,54 @@ bool on_stratagem5_context(Runtime& runtime, std::uintptr_t metadata_table, std:
                             std::uintptr_t attack_owner, std::uintptr_t defense_owner) {
     runtime.stratagem5_attack_owner = attack_owner;
     runtime.stratagem5_defense_owner = defense_owner;
-    if (should_skip_stratagem5(runtime.stratagem5_lifecycle))
+    if (should_skip_stratagem5(runtime.stratagem5_lifecycle)) {
         return false;
-    if (!update_stratagem5_count(runtime, metadata_table, dialog, attack_owner, defense_owner))
+    }
+    const std::optional<game::Stratagem5CountCandidate> candidate =
+        game::read_stratagem5_dialog_candidate(dialog, metadata_table);
+    std::uintptr_t camp_data = 0;
+
+    if (!candidate || !platform::windows::read_memory(candidate->owner + 0x10,
+            std::as_writable_bytes(std::span(&camp_data, 1))) || !camp_data) {
         return false;
-    if (!attach_stratagem5_camp(runtime, metadata_table))
+    }
+    const std::optional<game::Stratagem5CountApplied>& count = runtime.stratagem5_count.applied;
+    const std::optional<game::Stratagem5CampSlot>& camp = runtime.stratagem5_camp.slot;
+    const std::optional<game::Stratagem5ModelApplied>& model = runtime.stratagem5_model.applied;
+    const bool count_matches = !count || (count->epoch == runtime.epoch && count->owner == candidate->owner &&
+        count->camp_data == camp_data && count->entry_index == candidate->plan.original_count &&
+        count->metadata_row == candidate->plan.added.data);
+    const bool camp_matches = !camp || (camp->epoch == runtime.epoch && camp->owner == candidate->owner &&
+        camp->camp_data == camp_data && camp->metadata_table == metadata_table &&
+        camp->original_count == candidate->plan.original_count &&
+        camp->address == camp_data + 0x68 + static_cast<std::uintptr_t>(candidate->plan.camp_slot) * sizeof(std::uintptr_t));
+    const bool model_matches = !model || (model->epoch == runtime.epoch && model->owner == candidate->owner &&
+        model->camp_data == camp_data && model->original_count == candidate->plan.original_count &&
+        model->replacement_entry.data == candidate->plan.added.data);
+    const bool pending_recovery = (count && !count->verified) || (camp && camp->uncertain) ||
+        (model && (model->uncertain || !candidate->plan.already_present));
+
+    if (!count_matches || !camp_matches || !model_matches || pending_recovery) {
+        // Finish the old owner's restoration before publishing another owner.
+        // A failed read/write retains that layer's backup for the next event.
+        if (!restore_stratagem5_model(runtime) || !restore_stratagem5_camp(runtime)) {
+            return false;
+        }
+        const bool requested = runtime.stratagem5_count.requested;
+        const bool restored = game::disable_stratagem5_count(runtime.stratagem5_count,
+            runtime.epoch, std::nullopt, std::nullopt);
+
+        runtime.stratagem5_count.requested = requested;
+        if (!restored) {
+            return false;
+        }
+    }
+    if (!update_stratagem5_count(runtime, metadata_table, dialog, attack_owner, defense_owner)) {
         return false;
+    }
+    if (!attach_stratagem5_camp(runtime, metadata_table)) {
+        return false;
+    }
     return extend_stratagem5_model(runtime, dialog, metadata_table);
 }
 
@@ -383,17 +445,18 @@ bool update_stratagem5_count(Runtime& runtime, std::uintptr_t metadata_table,
                                           valid_attack, valid_defense, dialog, attack, defense);
 }
 
-void set_stratagem5_count_request(Runtime& runtime, bool enabled,
+bool set_stratagem5_count_request(Runtime& runtime, bool enabled,
                                   std::uintptr_t attack_owner, std::uintptr_t defense_owner) {
     if (enabled) {
         runtime.stratagem5_count.requested = true;
-        return;
+        return true;
     }
-    const auto valid_attack = game::is_stratagem5_owner(attack_owner, 0)
-        ? std::optional{attack_owner} : std::nullopt;
-    const auto valid_defense = game::is_stratagem5_owner(defense_owner, 1)
-        ? std::optional{defense_owner} : std::nullopt;
-    game::disable_stratagem5_count(runtime.stratagem5_count, runtime.epoch, valid_attack, valid_defense);
+    const std::optional<std::uintptr_t> valid_attack = game::is_stratagem5_owner(attack_owner, 0)
+        ? std::optional<std::uintptr_t>{attack_owner} : std::nullopt;
+    const std::optional<std::uintptr_t> valid_defense = game::is_stratagem5_owner(defense_owner, 1)
+        ? std::optional<std::uintptr_t>{defense_owner} : std::nullopt;
+
+    return game::disable_stratagem5_count(runtime.stratagem5_count, runtime.epoch, valid_attack, valid_defense);
 }
 
 bool attach_stratagem5_camp(Runtime& runtime, std::uintptr_t metadata_table) {
@@ -405,8 +468,8 @@ bool attach_stratagem5_camp(Runtime& runtime, std::uintptr_t metadata_table) {
                                                       owner, metadata_table, candidate->plan);
 }
 
-void restore_stratagem5_camp(Runtime& runtime) {
-    game::restore_stratagem5_camp(runtime.stratagem5_camp, runtime.epoch);
+bool restore_stratagem5_camp(Runtime& runtime) {
+    return game::restore_stratagem5_camp(runtime.stratagem5_camp, runtime.epoch);
 }
 
 bool extend_stratagem5_model(Runtime& runtime, std::uintptr_t dialog, std::uintptr_t metadata_table) {
@@ -419,8 +482,8 @@ bool extend_stratagem5_model(Runtime& runtime, std::uintptr_t dialog, std::uintp
                                           candidate->owner, candidate->plan);
 }
 
-void restore_stratagem5_model(Runtime& runtime) {
-    game::restore_stratagem5_model(runtime.stratagem5_model, runtime.epoch);
+bool restore_stratagem5_model(Runtime& runtime) {
+    return game::restore_stratagem5_model(runtime.stratagem5_model, runtime.epoch);
 }
 
 bool set_short_battle_cooldown(Runtime& runtime, std::uintptr_t module_base, bool enabled, std::int32_t days) {
@@ -450,23 +513,40 @@ bool set_infinite_gift(Runtime& runtime, std::uintptr_t module_base,
     return game::set_infinite_gift(runtime.infinite_gift, module_base, image, enabled);
 }
 
-void load_short_battle_cooldown_config(Runtime& runtime, std::string_view text, std::uintptr_t module_base) {
+void load_short_battle_cooldown_config(Runtime& runtime, std::string_view text, std::uintptr_t) {
     if (const auto days = game::read_legacy_int(text, "\"iShortBattleCooldownDays\""))
         runtime.short_battle_cooldown_days = *days;
     if (const auto enabled = game::read_legacy_bool(text, "\"bShortBattleCooldownEnabled\"")) {
         runtime.short_battle_cooldown_enabled = *enabled;
-        if (!set_short_battle_cooldown(runtime, module_base, *enabled, runtime.short_battle_cooldown_days))
-            runtime.short_battle_cooldown_enabled = runtime.short_battle_cooldown.applied;
+        request_legacy_group(runtime, domain::LegacyFeatureGroup::ShortBattleCooldown, false);
     }
 }
 
-void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t game_module) {
+void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t) {
     runtime.config_baseline = std::move(config.contents);
     const auto& secondary_jewels = config.secondary_jewels;
     const auto& terrain_bonus = config.terrain_bonus;
     const auto& features = config.features;
     const auto& def_building = config.def_building;
     const auto& scalars = config.scalars;
+    domain::CitySettings city_settings = runtime.city_management.snapshot.settings;
+
+    if (scalars.city_grain_limit && *scalars.city_grain_limit >= 0) {
+        city_settings.grain_limit = static_cast<std::uint32_t>(*scalars.city_grain_limit);
+    }
+    if (scalars.city_retained_grain && *scalars.city_retained_grain >= 0) {
+        city_settings.retained_grain = static_cast<std::uint32_t>(*scalars.city_retained_grain);
+    }
+    if (scalars.city_exchange_rate && *scalars.city_exchange_rate > 0) {
+        city_settings.exchange_rate = static_cast<std::uint32_t>(*scalars.city_exchange_rate);
+    }
+    if (scalars.city_auto_exchange) {
+        city_settings.auto_exchange = *scalars.city_auto_exchange;
+    }
+    if (scalars.city_revolt_zero) {
+        city_settings.revolt_always_zero = *scalars.city_revolt_zero;
+    }
+    game::set_city_settings(runtime.city_management, city_settings);
     if (scalars.ai_growth_enabled) {
         runtime.ai_growth_settings.enabled = *scalars.ai_growth_enabled;
     }
@@ -501,6 +581,9 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
     if (const auto value = scalars.notification_speed) {
         runtime.notification_speed = *value;
     }
+    if (scalars.ui_scale && std::isfinite(*scalars.ui_scale)) {
+        runtime.ui_scale = std::clamp(*scalars.ui_scale, 0.5f, 3.0f);
+    }
     if (const auto value = scalars.domestics_player) {
         runtime.domestics.player = *value;
     }
@@ -508,9 +591,7 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
         runtime.domestics.force = *value;
     }
     runtime.domestics_patch.multipliers = runtime.domestics;
-    if (game::set_secondary_jewels(secondary_jewels, game_module, runtime.game_base_pointer)) {
-        runtime.secondary_jewels = secondary_jewels;
-    }
+    runtime.secondary_jewels = secondary_jewels;
     if (const auto value = scalars.all_jewels_open) {
         runtime.jewel_open.preferred = *value;
     }
@@ -608,8 +689,9 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
             runtime.def_building_settings.values[i] = *value;
         }
     }
-    if (const auto enabled = scalars.tech_city_visibility)
-        set_tech_city_visibility(runtime, game_module, *enabled);
+    if (scalars.tech_city_visibility) {
+        runtime.tech_city_visibility_enabled = *scalars.tech_city_visibility;
+    }
     auto stratagem5 = runtime.stratagem5.runtime.settings;
     constexpr std::array stratagem5_fields{
         &domain::Stratagem5Settings::target, &domain::Stratagem5Settings::effect1,
@@ -624,20 +706,20 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
     }
     request_stratagem5(runtime, scalars.stratagem5_enabled);
     set_stratagem5_settings(runtime, stratagem5);
-    if (const auto enabled = scalars.reinforcement_arrival)
-        set_reinforcement_arrival(runtime, game_module, *enabled);
+    if (scalars.reinforcement_arrival) {
+        runtime.reinforcement_arrival_enabled = *scalars.reinforcement_arrival;
+    }
     if (const auto days = scalars.short_battle_cooldown_days) {
         runtime.short_battle_cooldown_days = *days;
     }
     if (const auto enabled = scalars.short_battle_cooldown_enabled) {
         runtime.short_battle_cooldown_enabled = *enabled;
-        if (!set_short_battle_cooldown(runtime, game_module, *enabled, runtime.short_battle_cooldown_days)) {
-            runtime.short_battle_cooldown_enabled = runtime.short_battle_cooldown.applied;
-        }
     }
-    if (const auto enabled = scalars.troop_count_combat)
-        set_troop_count_combat(runtime, game_module, *enabled);
+    if (scalars.troop_count_combat) {
+        runtime.troop_count_combat_enabled = *scalars.troop_count_combat;
+    }
 
+    queue_legacy_configuration(runtime);
     request_trait_viewer(runtime.traits, runtime.features.get(domain::FeatureId::TraitViewer));
 }
 
@@ -657,13 +739,6 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
 
     game::update_start_setting(runtime.start_setting, game_module, now_ms,
         runtime.features.get(domain::FeatureId::StartSetting));
-    if (runtime.config_loaded && !runtime.speed_clock_configured) {
-        const std::expected<void, int> configured = platform::windows::configure_speed_clock(
-            {runtime.features.get(domain::FeatureId::SpeedHack), runtime.speed_multiplier});
-
-        runtime.speed_clock_configured = true;
-        runtime.speed_clock_error = configured ? 0 : configured.error();
-    }
 
     auto game_base = game::read_game_base(runtime.game_base_pointer);
     if (!(game_base && game_base == runtime.cached_game_base && now_ms - runtime.game_base_probe_ms < 300)) {
@@ -694,6 +769,10 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
 
     tick_recurring_features(runtime, game_module, game_base, runtime.loop_game_base_ready,
                             player, runtime.loop_player_ready);
+    if (now_ms >= runtime.player_resources_next_ms) {
+        runtime.player_resources_next_ms = now_ms + 250;
+        runtime.player_resources = game::read_player_resources(runtime.game_base_pointer, game_base, player);
+    }
     runtime.tengi_settings.force_quarterly = runtime.features.get(domain::FeatureId::InfTengi);
     if (runtime.config_loaded) {
         game::update_tengi(runtime.tengi, game_module, runtime.loop_player_ready ? player : 0,
@@ -718,212 +797,18 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
     game::update_undiscovered_ronin(runtime.undiscovered_ronin, game_module, game_base, player, now_ms,
                                     runtime.features.get(domain::FeatureId::UndiscoveredToRonin));
     game::update_jewel_open(runtime.jewel_open, game_base, now_ms);
-    if (runtime.features.get(domain::FeatureId::Loyalty) != runtime.instant_loyalty.applied) {
-        const bool enabled = runtime.features.get(domain::FeatureId::Loyalty);
-        if (!enabled || now_ms - runtime.loyalty_last_attempt_ms >= 1000) {
-            runtime.loyalty_last_attempt_ms = now_ms;
-            if (runtime.instant_loyalty.address || !enabled) {
-                game::set_instant_loyalty(runtime.instant_loyalty, game_module, {}, enabled);
-            } else if (!runtime.module_image.empty()) {
-                game::set_instant_loyalty(runtime.instant_loyalty, game_module, runtime.module_image, enabled);
-            }
-        }
-    }
-    const bool love_enabled = runtime.features.get(domain::FeatureId::HateCave);
-    if ((!love_enabled && (runtime.love_hate.affinity_applied || runtime.love_hate.relationship_applied)) ||
-        (love_enabled && (!runtime.love_hate.affinity_applied || !runtime.love_hate.relationship_applied) &&
-         now_ms - runtime.love_hate_last_attempt_ms >= 1000)) {
-        runtime.love_hate_last_attempt_ms = now_ms;
-        if (!love_enabled) {
-            game::set_love_hate(runtime.love_hate, game_module, {}, false);
-        } else if (!runtime.module_image.empty()) {
-            game::set_love_hate(runtime.love_hate, game_module, runtime.module_image, true);
-        }
-    }
-    const bool domestics_enabled = runtime.features.get(domain::FeatureId::Domestics);
-    const bool domestics_config_ready = runtime.loop_player_ready && runtime.config_first_player_ms &&
-        now_ms - runtime.config_first_player_ms >= 3000;
-    if (domestics_enabled != runtime.domestics_patch.applied &&
-        (!domestics_enabled || ((runtime.domestics_manual_request || domestics_config_ready) &&
-         now_ms - runtime.domestics_last_attempt_ms >= 1000))) {
-        runtime.domestics_last_attempt_ms = now_ms;
-        if (!domestics_enabled) {
-            game::set_domestics(runtime.domestics_patch, game_module, {}, false);
-        } else if (!runtime.module_image.empty()) {
-            if (game::set_domestics(runtime.domestics_patch, game_module, runtime.module_image, true)) {
-                runtime.domestics_manual_request = false;
-            }
-        }
-    }
-    const bool resonance_enabled = runtime.features.get(domain::FeatureId::Resonance);
-    if ((!resonance_enabled && (runtime.instant_resonance.select_applied || runtime.instant_resonance.getter_applied)) ||
-        (resonance_enabled && (!runtime.instant_resonance.select_applied || !runtime.instant_resonance.getter_applied) &&
-         now_ms - runtime.resonance_last_attempt_ms >= 1000)) {
-        runtime.resonance_last_attempt_ms = now_ms;
-        if (!resonance_enabled) {
-            game::set_instant_resonance(runtime.instant_resonance, game_module, {}, false);
-        } else if (!runtime.module_image.empty()) {
-            game::set_instant_resonance(runtime.instant_resonance, game_module, runtime.module_image, true);
-        }
-    }
-    if (runtime.features.get(domain::FeatureId::FactionLordBonus) && !runtime.faction_lord_bonus.enabled &&
-        runtime.config_first_player_ms && now_ms - runtime.config_first_player_ms >= 3000) {
-        game::set_faction_lord_bonus(runtime.faction_lord_bonus, game_module, true);
-    }
+    observe_legacy_player(runtime, now_ms);
     game::update_faction_lord_bonus(runtime.faction_lord_bonus, game_module, now_ms);
-    for (std::size_t i = 0; i < runtime.road_blocks.size(); ++i) {
-        game::tick_road_block(runtime.road_blocks[i], game_module, i == 1, now_ms, runtime.epoch);
-    }
-    for (auto& conversion : runtime.city_conversions)
-        game::tick_city_conversion(conversion, runtime.epoch, now_ms);
-
-    if (!game_base) {
-        if (runtime.config_first_game_base_ms || runtime.config_first_player_ms) {
-            runtime.infinite_gift_config_applied = false;
-            runtime.infinite_talk_config_applied = false;
-            runtime.infinite_duel_config_applied = false;
-            runtime.infinite_debate_config_applied = false;
-            runtime.instant_attitude_config_applied = false;
-            runtime.fast_relationship_config_applied = false;
-            runtime.city_config_applied.fill(false);
-            runtime.marriage_config_applied = false;
-            runtime.config_first_game_base_ms = 0;
-            runtime.config_first_player_ms = 0;
-        }
-        return;
-    }
-    if (now_ms - runtime.config_last_check_ms < 1000)
-        return;
-    runtime.config_last_check_ms = now_ms;
-    if (!runtime.config_first_game_base_ms) {
-        runtime.config_first_game_base_ms = now_ms;
-        return;
-    }
-    const bool player_valid = player > 0x10000 && platform::windows::is_committed_memory(player, 0x100);
-    if (player_valid) {
-        if (!runtime.config_first_player_ms)
-            runtime.config_first_player_ms = now_ms;
-    } else if (runtime.config_first_player_ms) {
-        runtime.infinite_gift_config_applied = false;
-        runtime.infinite_talk_config_applied = false;
-        runtime.infinite_duel_config_applied = false;
-        runtime.infinite_debate_config_applied = false;
-        runtime.instant_attitude_config_applied = false;
-        runtime.fast_relationship_config_applied = false;
-        runtime.city_config_applied.fill(false);
-        runtime.marriage_config_applied = false;
-        runtime.config_first_player_ms = 0;
-    }
-    if (!player_valid || !runtime.config_first_player_ms || now_ms - runtime.config_first_player_ms < 3000)
-        return;
     constexpr std::array ROAD_FEATURES{domain::FeatureId::RoadBlock, domain::FeatureId::RoadBlock2};
-    for (std::size_t i = 0; i < ROAD_FEATURES.size(); ++i) {
-        if (runtime.features.get(ROAD_FEATURES[i]) && !runtime.road_blocks[i].applied) {
-            game::set_road_block(runtime.road_blocks[i], game_module, i == 1, true, runtime.epoch);
-        }
-    }
-    constexpr std::array SKILL_FEATURES{domain::FeatureId::SkillCondition, domain::FeatureId::YumokCondition,
-                                        domain::FeatureId::SangbyeongCondition};
-    for (std::size_t i = 0; i < SKILL_FEATURES.size(); ++i) {
-        if (runtime.features.get(SKILL_FEATURES[i]) && !runtime.skill_condition_applied[i] &&
-            game::set_skill_condition(game_module, static_cast<game::SkillConditionKind>(i), true)) {
-            runtime.skill_condition_applied[i] = true;
-        }
-    }
-    constexpr std::array CITY_FEATURES{
-        domain::FeatureId::BigCity, domain::FeatureId::BangmokCity,
-        domain::FeatureId::NonggyeongCity, domain::FeatureId::SangeopCity};
-    constexpr std::array CITY_KINDS{
-        game::CityConversionKind::BigCity, game::CityConversionKind::Grazing,
-        game::CityConversionKind::Farming, game::CityConversionKind::Commerce};
-    for (std::size_t i = 0; i < CITY_FEATURES.size(); ++i) {
-        const bool enabled = runtime.features.get(CITY_FEATURES[i]);
-        if (enabled != runtime.city_config_applied[i]) {
-            if (game::request_city_conversion(runtime.city_conversions[i], CITY_KINDS[i], enabled,
-                                               runtime.epoch, game_module, now_ms)) {
-                runtime.city_config_applied[i] = enabled;
-            }
-        }
-    }
-    if (runtime.instant_attitude_enabled != runtime.instant_attitude_config_applied) {
-        bool applied = false;
-        if (runtime.instant_attitude.address) {
-            applied = game::set_instant_attitude(runtime.instant_attitude, game_module, {}, runtime.instant_attitude_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_instant_attitude(runtime.instant_attitude, game_module, runtime.module_image, runtime.instant_attitude_enabled);
-        }
-        if (applied) {
-            runtime.instant_attitude_config_applied = runtime.instant_attitude_enabled;
-        }
-    }
-    if (runtime.fast_relationship_enabled != runtime.fast_relationship_config_applied) {
-        bool applied = false;
-        if (runtime.fast_relationship.address) {
-            applied = game::set_fast_relationship(runtime.fast_relationship, game_module, {}, runtime.fast_relationship_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_fast_relationship(runtime.fast_relationship, game_module, runtime.module_image, runtime.fast_relationship_enabled);
-        }
-        if (applied) {
-            runtime.fast_relationship_config_applied = runtime.fast_relationship_enabled;
-        }
-    }
-    if (runtime.infinite_gift_enabled != runtime.infinite_gift_config_applied) {
-        bool applied = false;
-        if (runtime.infinite_gift.code_address) {
-            applied = set_infinite_gift(runtime, game_module, {}, runtime.infinite_gift_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = set_infinite_gift(runtime, game_module, runtime.module_image, runtime.infinite_gift_enabled);
-        }
-        if (applied) {
-            runtime.infinite_gift_config_applied = runtime.infinite_gift_enabled;
-        }
-    }
-    if (runtime.infinite_talk_enabled != runtime.infinite_talk_config_applied) {
-        bool applied = false;
-        if (runtime.infinite_talk.hook) {
-            applied = game::set_infinite_talk(runtime.infinite_talk, game_module, {}, runtime.infinite_talk_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_infinite_talk(runtime.infinite_talk, game_module, runtime.module_image, runtime.infinite_talk_enabled);
-        }
-        if (applied) {
-            runtime.infinite_talk_config_applied = runtime.infinite_talk_enabled;
-        }
-    }
-    if (runtime.infinite_duel_enabled != runtime.infinite_duel_config_applied) {
-        bool applied = false;
-        if (runtime.infinite_duel_debate.hook) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, {},
-                game::DuelDebateFeature::Duel, runtime.infinite_duel_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, runtime.module_image,
-                game::DuelDebateFeature::Duel, runtime.infinite_duel_enabled);
-        }
-        if (applied) {
-            runtime.infinite_duel_config_applied = runtime.infinite_duel_enabled;
-        }
-    }
-    if (runtime.infinite_debate_enabled != runtime.infinite_debate_config_applied) {
-        bool applied = false;
-        if (runtime.infinite_duel_debate.hook) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, {},
-                game::DuelDebateFeature::Debate, runtime.infinite_debate_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_infinite_duel_debate(runtime.infinite_duel_debate, game_module, runtime.module_image,
-                game::DuelDebateFeature::Debate, runtime.infinite_debate_enabled);
-        }
-        if (applied) {
-            runtime.infinite_debate_config_applied = runtime.infinite_debate_enabled;
-        }
-    }
-    if (runtime.marriage_enabled != runtime.marriage_config_applied) {
-        bool applied = false;
-        if (runtime.marriage_condition.address) {
-            applied = game::set_marriage_condition(runtime.marriage_condition, game_module, {}, runtime.marriage_enabled);
-        } else if (!runtime.module_image.empty()) {
-            applied = game::set_marriage_condition(runtime.marriage_condition, game_module, runtime.module_image, runtime.marriage_enabled);
-        }
-        if (applied) {
-            runtime.marriage_config_applied = runtime.marriage_enabled;
+
+    for (std::size_t index = 0; index < runtime.road_blocks.size(); ++index) {
+
+        game::RoadBlock& road = runtime.road_blocks[index];
+
+        // Routine zero maintenance is data-only. New-session capture and OFF
+        // restoration belong to the one-group configuration scheduler.
+        if (road.epoch == runtime.epoch && road.requested && runtime.features.get(ROAD_FEATURES[index])) {
+            game::tick_road_block(road, game_module, index == 1, now_ms, runtime.epoch);
         }
     }
 }

@@ -12,6 +12,7 @@
 #include "../game/mission_cpu_exclusion.h"
 #include "../game/council_execute_free.h"
 #include "../game/affinity_display.h"
+#include "../game/ruler_transfer_proposal.h"
 
 #include <array>
 #include <cstddef>
@@ -38,6 +39,7 @@ struct NativeFeatureControl {
     game::MissionCpuExclusion mission_cpu_exclusion;
     game::CouncilExecuteFree council_execute_free;
     game::AffinityDisplay affinity_display;
+    game::RulerTransferProposal ruler_transfer;
     domain::NativeFeatureStatuses statuses{};
     std::array<bool, domain::NATIVE_FEATURE_GROUP_COUNT> pending{};
     std::array<bool, domain::NATIVE_FEATURE_GROUP_COUNT> announce{};

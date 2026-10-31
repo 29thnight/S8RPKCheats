@@ -49,6 +49,7 @@ std::expected<void, int> start_overlay(OverlayLifecycle& state, HWND game_window
 int stop_overlay_entries(OverlayLifecycle& state) {
     state.bridge.close_officer_name_requests();
     state.bridge.debug_tools.close();
+    state.bridge.specialties.close();
     state.bridge.commands.close();
     while (std::optional<services::AcceptedCommand> command = state.bridge.commands.pop()) {
         state.bridge.commands.complete(command->completion,

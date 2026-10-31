@@ -17,6 +17,10 @@
 #include "tengi.h"
 #include "ai_officer_growth.h"
 #include "trait_control.h"
+#include "officer_tools.h"
+#include "city_management.h"
+#include "corps_deployment.h"
+#include "player_resources.h"
 
 #include <cstdint>
 #include <optional>
@@ -95,6 +99,7 @@ struct SetDomesticsMultipliers { DomesticsMultipliers multipliers; };
 struct SetMissionAppointmentLimit { std::int32_t value; };
 struct RestoreMissionAppointmentLimit {};
 struct SetNotificationSpeed { float speed; };
+struct SetUiScale { float scale; };
 struct SetDomesticRewardMode { DomesticRewardMode mode; };
 struct SetSkillCount { int officer_id; std::uintptr_t offset; int count; };
 struct SetProtagonistTacticLevel { std::uint16_t officer_id; std::uint8_t index; std::uint8_t level; };
@@ -135,7 +140,9 @@ using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSett
                                     SetProtagonistBasic, SetProtagonistGender, RefreshOfficerRoster, SelectRosterOfficer,
                                     SetRosterOfficerBasic, SetRosterOfficerGender, SetRosterOfficerVoice,
                                     SetRosterOfficerRonin, MoveRosterOfficer, ReviveRosterOfficer,
-                                    SetRosterOfficerTrait, SetRosterOfficerTraining, ApplyTraitTextEdits>;
+                                    SetRosterOfficerTrait, SetRosterOfficerTraining, ApplyTraitTextEdits,
+                                    OfficerToolsRequest, CityRequest, SetCitySettings, SetCitySupportRoutes, CorpsRequest,
+                                    SetUiScale, SetPlayerResource>;
 
 struct Command {
     RequestId request;

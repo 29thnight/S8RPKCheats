@@ -1,12 +1,17 @@
 #include "command_commit.h"
+#include "officer_tools_control.h"
+#include "city_control.h"
+#include "corps_control.h"
 #include "../platform/windows/process_memory.h"
 #include "../platform/windows/speed_clock.h"
 #include "../game/game_base.h"
+#include "../game/player_resources.h"
 
 #include <type_traits>
 #include <algorithm>
 #include <utility>
 #include <variant>
+#include <cmath>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -47,6 +52,9 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     if (request_native_feature(runtime, command.feature, command.enabled)) {
                         return {};
                     }
+                    if (request_legacy_feature(runtime, command.feature, command.enabled)) {
+                        return {};
+                    }
 
                     switch (command.feature) {
                     case domain::FeatureId::InfiniteAp:
@@ -77,23 +85,19 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     case domain::FeatureId::ZeroInfamy:
                     case domain::FeatureId::InfiniteTavernRequests:
                     case domain::FeatureId::AutoFillSpecialties:
-                    case domain::FeatureId::Loyalty:
-                    case domain::FeatureId::HateCave:
-                    case domain::FeatureId::Resonance:
                     case domain::FeatureId::AutoLoadMenu:
                     case domain::FeatureId::ShowWidgetNotif:
                     case domain::FeatureId::ShowWidgetHero:
                     case domain::FeatureId::ShowWidgetAllOfficers:
                     case domain::FeatureId::FileLog:
+                    case domain::FeatureId::MonitorRonin:
+                    case domain::FeatureId::OfficerChangeNotify:
                         break;
                     case domain::FeatureId::TraitViewer:
                         request_trait_viewer(runtime.traits, command.enabled);
                         break;
                     case domain::FeatureId::AutoAffinityGrowth:
                         runtime.auto_affinity = {};
-                        break;
-                    case domain::FeatureId::Domestics:
-                        runtime.domestics_manual_request = command.enabled;
                         break;
                     case domain::FeatureId::UndiscoveredToRonin:
                         if (!command.enabled) {
@@ -104,9 +108,6 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         if (!command.enabled) {
                             game::disable_battle_map_shuffle(runtime.battle_map_shuffle);
                         }
-                        break;
-                    case domain::FeatureId::FactionLordBonus:
-                        game::set_faction_lord_bonus(runtime.faction_lord_bonus, game_module, command.enabled);
                         break;
                     case domain::FeatureId::SiegeWarfare:
                     case domain::FeatureId::SiegeWarfare2: {
@@ -139,38 +140,12 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             runtime.features.set(domain::FeatureId::TerrainAbilityAtkDef, false);
                         }
                         break;
-                    case domain::FeatureId::BigCity:
-                    case domain::FeatureId::BangmokCity:
-                    case domain::FeatureId::NonggyeongCity:
-                    case domain::FeatureId::SangeopCity:
-                        break;
-                    case domain::FeatureId::AttitudeHack:
-                        runtime.instant_attitude_enabled = command.enabled;
-                        break;
-                    case domain::FeatureId::FastRelationship:
-                        runtime.fast_relationship_enabled = command.enabled;
-                        break;
-                    case domain::FeatureId::MarriageApplied:
-                        runtime.marriage_enabled = command.enabled;
-                        break;
                     case domain::FeatureId::TechZero:
                         game::set_tech_zero(runtime.tech_zero, command.enabled);
                         break;
                     case domain::FeatureId::StartSetting:
                     case domain::FeatureId::InfTengi:
                         break;
-                    case domain::FeatureId::SpeedHack: {
-                        const std::expected<void, int> configured = platform::windows::configure_speed_clock(
-                            {command.enabled, runtime.speed_multiplier});
-
-                        runtime.speed_clock_configured = true;
-                        runtime.speed_clock_error = configured ? 0 : configured.error();
-                        if (!configured) {
-                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure,
-                                static_cast<std::uint32_t>(configured.error())});
-                        }
-                        break;
-                    }
                     case domain::FeatureId::SelfHeal:
                         if (!game::set_self_heal(game_module, command.enabled, runtime.self_heal_settings)) {
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
@@ -201,38 +176,6 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
                         break;
-                    case domain::FeatureId::RoadBlock:
-                    case domain::FeatureId::RoadBlock2: {
-                        const bool second = command.feature == domain::FeatureId::RoadBlock2;
-                        if (!game::set_road_block(runtime.road_blocks[second], game_module, second,
-                                                  command.enabled, runtime.epoch)) {
-                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                        }
-                        break;
-                    }
-                    case domain::FeatureId::SkillCondition:
-                    case domain::FeatureId::YumokCondition:
-                    case domain::FeatureId::SangbyeongCondition: {
-                        const auto index = command.feature == domain::FeatureId::SkillCondition ? 0u
-                            : command.feature == domain::FeatureId::YumokCondition ? 1u : 2u;
-                        if (!game::set_skill_condition(game_module, static_cast<game::SkillConditionKind>(index), command.enabled)) {
-                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                        }
-                        runtime.skill_condition_applied[index] = command.enabled;
-                        break;
-                    }
-                    case domain::FeatureId::InfiniteGift:
-                        runtime.infinite_gift_enabled = command.enabled;
-                        break;
-                    case domain::FeatureId::InfiniteTalk:
-                        runtime.infinite_talk_enabled = command.enabled;
-                        break;
-                    case domain::FeatureId::InfiniteDuel:
-                        runtime.infinite_duel_enabled = command.enabled;
-                        break;
-                    case domain::FeatureId::InfiniteDebate:
-                        runtime.infinite_debate_enabled = command.enabled;
-                        break;
                     default:
                         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
                     }
@@ -247,17 +190,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetSpeedMultiplier>) {
-                    const float multiplier = domain::normalize_speed_multiplier(command.multiplier);
-                    const std::expected<void, int> configured = platform::windows::configure_speed_clock(
-                        {runtime.features.get(domain::FeatureId::SpeedHack), multiplier});
-
-                    runtime.speed_clock_error = configured ? 0 : configured.error();
-                    if (!configured) {
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure,
-                            static_cast<std::uint32_t>(configured.error())});
-                    }
-                    runtime.speed_multiplier = multiplier;
-                    runtime.speed_clock_configured = true;
+                    runtime.speed_multiplier = domain::normalize_speed_multiplier(command.multiplier);
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::SpeedClock, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetTengiSettings>) {
                     runtime.tengi_settings = domain::normalize_tengi_settings(command.settings);
@@ -329,28 +263,21 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
 
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetShortBattleCooldown>) {
-                    if ((command.enabled || runtime.short_battle_cooldown.applied) &&
-                        !set_short_battle_cooldown(runtime, game_module, command.enabled, command.days)) {
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                    }
                     runtime.short_battle_cooldown_enabled = command.enabled;
                     runtime.short_battle_cooldown_days = command.days;
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::ShortBattleCooldown, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetTroopCountCombat>) {
-                    if (!set_troop_count_combat(runtime, game_module, command.enabled)) {
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                    }
+                    runtime.troop_count_combat_enabled = command.enabled;
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::TroopCountCombat, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetReinforcementArrival>) {
-                    if (!set_reinforcement_arrival(runtime, game_module, command.enabled)) {
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                    }
+                    runtime.reinforcement_arrival_enabled = command.enabled;
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::ReinforcementArrival, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetTechCityVisibility>) {
-                    if (!set_tech_city_visibility(runtime, game_module, command.enabled)) {
-                        settings_changed_on_failure = true;
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                    }
+                    runtime.tech_city_visibility_enabled = command.enabled;
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::TechCityVisibility, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetStratagem5Enabled>) {
                     request_stratagem5(runtime, command.enabled);
@@ -430,14 +357,15 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetSecondaryJewels>) {
-                    if (!game::set_secondary_jewels(command.mask, game_module, runtime.game_base_pointer)) {
-                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
-                    }
                     runtime.secondary_jewels = command.mask;
+                    request_legacy_group(runtime, domain::LegacyFeatureGroup::SecondaryJewels, true);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetDomesticsMultipliers>) {
                     runtime.domestics = command.multipliers;
                     runtime.domestics_patch.multipliers = command.multipliers;
+                    if (runtime.features.get(domain::FeatureId::Domestics)) {
+                        request_legacy_group(runtime, domain::LegacyFeatureGroup::Domestics, true);
+                    }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetMissionAppointmentLimit>) {
                     save_config = false;
@@ -460,6 +388,20 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                 } else if constexpr (std::is_same_v<T, domain::SetNotificationSpeed>) {
                     runtime.notification_speed = command.speed;
                     return {};
+                } else if constexpr (std::is_same_v<T, domain::SetUiScale>) {
+                    if (!std::isfinite(command.scale) || command.scale < 0.5f || command.scale > 3.0f) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    runtime.ui_scale = command.scale;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetPlayerResource>) {
+                    save_config = false;
+                    const domain::Result<void> applied = game::write_player_resource(runtime.game_base_pointer,
+                        runtime.loop_game_base, runtime.loop_player, command);
+
+                    runtime.player_resources = game::read_player_resources(runtime.game_base_pointer,
+                        runtime.loop_game_base, runtime.loop_player);
+                    return applied;
                 } else if constexpr (std::is_same_v<T, domain::SetDomesticRewardMode>) {
                     save_config = false;
                     if (!game::set_domestic_reward(runtime.domestic_reward, game_module, command.mode)) {
@@ -601,6 +543,26 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                 } else if constexpr (std::is_same_v<T, domain::ApplyTraitTextEdits>) {
                     save_config = false;
                     return request_trait_text_apply(runtime.traits, command);
+                } else if constexpr (std::is_same_v<T, domain::OfficerToolsRequest>) {
+                    save_config = false;
+                    return submit_officer_tools_request(runtime, ui, game_module, command);
+                } else if constexpr (std::is_same_v<T, domain::CityRequest>) {
+                    save_config = false;
+                    return submit_city_request(runtime, game_module, command);
+                } else if constexpr (std::is_same_v<T, domain::CorpsRequest>) {
+                    save_config = false;
+                    return submit_corps_request(runtime, game_module, command);
+                } else if constexpr (std::is_same_v<T, domain::SetCitySettings>) {
+                    if (!game::set_city_settings(runtime.city_management, command.settings)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetCitySupportRoutes>) {
+                    save_config = false;
+                    if (!game::set_city_support_routes(runtime.city_management, command.routes)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    return {};
                 } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerRonin>) {
                     save_config = false;
                     if (!game::set_roster_officer_ronin(runtime.officer_roster, game_module,
@@ -611,6 +573,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         runtime.selected_officer->status = 0x58;
                     }
                     ronin_changes[command.officer_id] = true;
+                    game::update_ronin_notice_baseline(*runtime.officer_notices, command.officer_id, 0x58);
                     ronin_changed = true;
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::ReviveRosterOfficer>) {
@@ -624,6 +587,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
                     }
                     ronin_changes[command.officer_id] = true;
+                    game::update_ronin_notice_baseline(*runtime.officer_notices, command.officer_id, 0x58);
                     ronin_changed = true;
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::MoveRosterOfficer>) {
@@ -1009,14 +973,45 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         runtime.ship_weaponization.last_active_unit = 0;
     }
     service_ai_jobs(runtime, ui, game_module);
+    service_officer_tools(runtime, ui, game_module);
+    service_city_management(runtime, ui, game_module);
+    service_corps_deployment(runtime, ui, game_module);
     consume_trait_configuration(runtime.traits, ui);
 
     const std::uint64_t native_now_ms = GetTickCount64();
-    const bool native_operation = reconcile_native_features(runtime, game_module, native_now_ms);
+    constexpr std::uint8_t PATCH_CONTROLLER_COUNT = 3;
 
-    if (runtime.config_loaded && !native_operation) {
-        reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
-            runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
+    // Each controller also rotates its own groups. A busy legacy group cannot
+    // monopolize the native/trait controllers, nor can their retries starve it.
+    for (std::uint8_t offset = 0; offset < PATCH_CONTROLLER_COUNT; ++offset) {
+
+        const std::uint8_t controller = static_cast<std::uint8_t>(
+            (runtime.legacy_features.next_controller + offset) % PATCH_CONTROLLER_COUNT);
+        bool attempted = false;
+
+        if (controller == 0) {
+            attempted = reconcile_legacy_features(runtime, game_module, native_now_ms);
+        } else if (controller == 1) {
+            attempted = reconcile_native_features(runtime, game_module, native_now_ms);
+        } else if (runtime.config_loaded) {
+            attempted = reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
+                runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
+        }
+        if (attempted) {
+            runtime.legacy_features.next_controller = static_cast<std::uint8_t>((controller + 1) % PATCH_CONTROLLER_COUNT);
+            break;
+        }
+    }
+
+    if (runtime.legacy_features.notice) {
+
+        const LegacyFeatureNotice notice = *runtime.legacy_features.notice;
+        std::string message = domain::legacy_feature_label(notice.group);
+
+        message += notice.succeeded ? ": 요청한 설정을 적용했습니다." :
+            ": 적용하지 못했습니다. 요청을 유지하고 다시 시도합니다.";
+        ui.publish_notice(std::move(message));
+        runtime.legacy_features.notice.reset();
     }
 
     if (runtime.traits.notice) {

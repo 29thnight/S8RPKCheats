@@ -30,11 +30,17 @@ struct ScalarConfigChanges {
     std::optional<int> ai_growth_speed;
     std::optional<bool> ai_growth_restore_none;
     std::optional<bool> annual_special_abilities;
+    std::optional<int> city_grain_limit;
+    std::optional<int> city_retained_grain;
+    std::optional<int> city_exchange_rate;
+    std::optional<bool> city_auto_exchange;
+    std::optional<bool> city_revolt_zero;
     std::optional<float> speed_multiplier;
     std::array<std::optional<bool>, domain::TENGI_EVENT_COUNT> tengi_allowed;
     std::array<std::optional<int>, domain::TENGI_EVENT_COUNT> tengi_duration;
     std::array<std::optional<int>, domain::TENGI_EVENT_COUNT> tengi_cooldown;
     std::optional<float> notification_speed;
+    std::optional<float> ui_scale;
     std::optional<float> domestics_player;
     std::optional<float> domestics_force;
     std::optional<bool> all_jewels_open;

@@ -42,8 +42,11 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
     const UINT dpi = GetDpiForWindow(state.target_window);
 
     state.menu.dpi_scale = dpi ? static_cast<float>(dpi) / 96.0f : 1.0f;
+    state.menu.dpi_scale *= state.menu.snapshot.ui_scale;
     const bool rendered = render_dx11_overlay(state.renderer, swap_chain, [](void* value) {
         OverlayPresent& state = *static_cast<OverlayPresent*>(value);
+
+        ImGui::GetIO().FontGlobalScale = state.menu.snapshot.ui_scale;
 
         if (!state.renderer.range_textures_loaded) {
             if (const own::shared_owner<const services::RangeImages> images = state.bridge.range_images_view()) {
@@ -134,8 +137,20 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
             }
             draw_officer_roster(state.menu, state.bridge);
             draw_protagonist_abilities(state.menu, state.bridge);
+            draw_officer_tools(state.menu, state.bridge);
+            draw_city_management(state.menu.city_management, state.bridge, state.menu.epoch,
+                state.menu.next_request, state.menu.officer_names ? &*state.menu.officer_names : nullptr);
+            draw_corps_deployment(state.menu.corps_deployment, state.bridge.corps_deployment, state.bridge.commands,
+                state.menu.epoch, state.menu.next_request, state.menu.officer_names ? &*state.menu.officer_names : nullptr);
             draw_debug_tools(state.menu.debug_tools, state.bridge.debug_tools, state.menu.epoch);
+            draw_specialty_tools(state.menu.specialty_tools, state.bridge, state.menu.epoch,
+                state.menu.officer_names ? &*state.menu.officer_names : nullptr);
             draw_notifications(state.menu.notifications, state.bridge, state.menu.snapshot.notification_speed);
+        }
+        if (state.menu.officer_notices.epoch == state.menu.epoch) {
+            draw_officer_notice_panel(state.menu.officer_notices,
+                state.menu.snapshot.features.get(domain::FeatureId::MonitorRonin),
+                state.menu.officer_names ? &*state.menu.officer_names : nullptr, state.menu.dpi_scale);
         }
     }, &state);
     if (rendered) {

@@ -7,6 +7,11 @@
 #include "notifications.h"
 #include "trait_text_editor.h"
 #include "debug_tools_panel.h"
+#include "specialty_tools_panel.h"
+#include "officer_tools_panel.h"
+#include "city_management_panel.h"
+#include "corps_deployment_panel.h"
+#include "officer_notice_panel.h"
 
 #include <cstdint>
 #include <optional>
@@ -14,6 +19,14 @@
 #include <vector>
 
 namespace s8::overlay {
+
+struct MenuFloatDraft {
+    float value = 0.0f;
+    bool editing = false;
+    bool commit_requested = false;
+    std::optional<domain::RequestId> request;
+    std::optional<float> submitted;
+};
 
 struct FeatureMenu {
     std::array<void*, 11> range_textures{};
@@ -32,6 +45,15 @@ struct FeatureMenu {
     Notifications notifications;
     TraitTextEditor trait_text_editor;
     DebugToolsPanel debug_tools;
+    SpecialtyToolsPanel specialty_tools;
+    std::array<std::uint32_t, domain::PLAYER_RESOURCE_COUNT> resource_draft{};
+    domain::GameEpoch resource_epoch{};
+    std::uint16_t resource_officer = 0;
+    OfficerToolsPanel officer_tools;
+    CityManagementPanel city_management;
+    CorpsDeploymentPanel corps_deployment;
+    OfficerNoticePanel officer_notices;
+    std::optional<domain::OfficerToolsView> officer_tools_view;
     bool open = false;
     bool ready = false;
     bool file_log_failed = false;
@@ -47,6 +69,8 @@ struct FeatureMenu {
     int skip_days_draft = 0;
     int siege_heal_rate_draft = 10;
     int mission_appointment_limit_draft = 10;
+    MenuFloatDraft ui_scale_draft{1.0f};
+    MenuFloatDraft notification_speed_draft{100.0f};
     bool mission_appointment_limit_editing = false;
     bool secondary_jewel_window = false;
     bool protagonist_detail = false;
@@ -109,5 +133,6 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge);
 void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox);
 void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge);
 void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge);
+void draw_officer_tools(FeatureMenu& menu, services::UiBridge& bridge);
 
 } // namespace s8::overlay

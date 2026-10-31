@@ -20,6 +20,7 @@ enum class NativeFeatureGroup : std::uint8_t {
     MissionCpuExclusion,
     CouncilExecuteFree,
     AffinityDisplay,
+    RulerTransferProposal,
     Count
 };
 
@@ -81,6 +82,8 @@ constexpr std::optional<NativeFeatureGroup> native_feature_group(FeatureId featu
         return NativeFeatureGroup::CouncilExecuteFree;
     case FeatureId::AffinityDisplay:
         return NativeFeatureGroup::AffinityDisplay;
+    case FeatureId::RulerTransferProposal:
+        return NativeFeatureGroup::RulerTransferProposal;
     default:
         return std::nullopt;
     }
@@ -93,12 +96,13 @@ constexpr const char* native_feature_label(NativeFeatureGroup group) {
     case NativeFeatureGroup::PrisonerCapture: return "포로 포획 관리";
     case NativeFeatureGroup::GovernorPrisoner: return "태수 포로 처분";
     case NativeFeatureGroup::StratagemGauge: return "전법 게이지";
-    case NativeFeatureGroup::IsolatedTerritory: return "고립 영토 이동";
+    case NativeFeatureGroup::IsolatedTerritory: return "단절 영토 무장 이동 제한";
     case NativeFeatureGroup::ReinforcementPlacement: return "수비 증원 배치";
     case NativeFeatureGroup::CouncilContinue: return "이동 후 평정 계속";
     case NativeFeatureGroup::MissionCpuExclusion: return "CPU 임무에서 주인공 제외";
-    case NativeFeatureGroup::CouncilExecuteFree: return "평정 미행동 무장 실행";
+    case NativeFeatureGroup::CouncilExecuteFree: return "세력 도시 재야 무장 처단";
     case NativeFeatureGroup::AffinityDisplay: return "상성 수치 표시";
+    case NativeFeatureGroup::RulerTransferProposal: return "부하의 군주 이동 제안";
     default: return "게임 패치";
     }
 }

@@ -47,5 +47,19 @@
     <ClInclude Include="officer_names_control.h" />
     <ClCompile Include="officer_names_control.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="legacy_feature_control.cpp" />
+    <ClInclude Include="legacy_feature_control.h" />
+    <ClInclude Include="officer_tools_control.h" />
+    <ClInclude Include="city_control.h" />
+    <ClCompile Include="city_control.cpp" />
+    <ClInclude Include="corps_control.h" />
+    <ClCompile Include="corps_control.cpp" />
+    <ClCompile Include="officer_tools_control.cpp" />
+    <ClInclude Include="specialty_tools.h" />
+    <ClCompile Include="specialty_tools.cpp" />
+    <ClInclude Include="battle_dispatch.h" />
+    <ClCompile Include="battle_dispatch.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

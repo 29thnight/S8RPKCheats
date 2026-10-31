@@ -83,7 +83,9 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
         FeatureKey{domain::FeatureId::MissionCpuHeroExclusion, "bMissionCpuHeroExclusion"},
         FeatureKey{domain::FeatureId::CouncilExecuteFreeOfficers, "bCouncilExecuteFreeOfficers"},
         FeatureKey{domain::FeatureId::AffinityDisplay, "bAffinityDisplay"},
+        FeatureKey{domain::FeatureId::RulerTransferProposal, "bRulerTransferProposal"},
         FeatureKey{domain::FeatureId::TraitViewer, "bTraitViewer"},
+        FeatureKey{domain::FeatureId::OfficerChangeNotify, "bOfficerChangeNotify"},
     };
     std::vector<ConfigChange> changes;
     changes.reserve(FEATURES.size() + 128 + 12 * 11 + domain::TENGI_EVENT_COUNT * 3);
@@ -97,11 +99,17 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
     changes.push_back({"fDomesticsPlayer", snapshot.domestics.player});
     changes.push_back({"fDomesticsForce", snapshot.domestics.force});
     changes.push_back({"g_notificationSpeed", snapshot.notification_speed});
+    changes.push_back({"fUiScale", snapshot.ui_scale});
     changes.push_back({"g_speedMultiplier", snapshot.speed_multiplier});
     changes.push_back({"bAIOfficerAutoGrowth", snapshot.ai_growth_settings.enabled});
     changes.push_back({"iAIOfficerGrowthSpeed", snapshot.ai_growth_settings.speed});
     changes.push_back({"bAIOfficerGrowthRestoreNone", snapshot.ai_growth_settings.restore_none});
     changes.push_back({"bAnnualSpecialAbilityAutoAssign", snapshot.ai_growth_settings.annual_special_abilities});
+    changes.push_back({"g_cityMaxGrainLimit", static_cast<int>(snapshot.city_settings.grain_limit)});
+    changes.push_back({"g_cityKeepGrain", static_cast<int>(snapshot.city_settings.retained_grain)});
+    changes.push_back({"g_cityExchangeRate", static_cast<int>(snapshot.city_settings.exchange_rate)});
+    changes.push_back({"g_cityAutoExchangeEnabled", snapshot.city_settings.auto_exchange});
+    changes.push_back({"g_cityRevoltAlwaysZero", snapshot.city_settings.revolt_always_zero});
     for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
         const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
         const domain::TengiEventSettings& event = snapshot.tengi_settings.events[index];

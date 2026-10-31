@@ -83,6 +83,8 @@ enum class FeatureId {
     CouncilExecuteFreeOfficers,
     AffinityDisplay,
     TraitViewer,
+    OfficerChangeNotify,
+    RulerTransferProposal,
     Count,
 };
 

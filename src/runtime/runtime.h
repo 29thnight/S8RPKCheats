@@ -15,6 +15,8 @@
 #include "../game/infinite_talk.h"
 #include "../game/infinite_duel_debate.h"
 #include "../game/city_conversion.h"
+#include "../game/city_management.h"
+#include "../game/corps_deployment.h"
 #include "../game/fast_relationship.h"
 #include "../game/tech_zero.h"
 #include "../game/self_heal.h"
@@ -55,8 +57,11 @@
 #include "../game/tengi.h"
 #include "../game/ai_officer_growth.h"
 #include "../game/special_ability_assignment.h"
+#include "../game/officer_tools.h"
+#include "../game/officer_notifications.h"
 #include "stratagem5_lifecycle.h"
 #include "native_feature_control.h"
+#include "legacy_feature_control.h"
 #include "trait_control.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
@@ -92,6 +97,7 @@ struct Runtime {
     std::size_t next_stop_step = 0;
     std::optional<domain::ConfigSnapshot> stop_snapshot;
     NativeFeatureControl native_features;
+    LegacyFeatureControl legacy_features;
     TraitControl traits;
     game::AiGrowthState ai_growth;
     domain::AiGrowthSettings ai_growth_settings;
@@ -100,6 +106,15 @@ struct Runtime {
     std::uint64_t ai_growth_preview_ms = 0;
     std::uint16_t pending_annual_assignment = 0;
     game::SpecialAbilityAssignment special_assignment;
+    own::unique_owner<game::OfficerTools> officer_tools = own::make_unique<game::OfficerTools>();
+    own::unique_owner<game::OfficerNotifications> officer_notices = own::make_unique<game::OfficerNotifications>();
+    domain::OfficerNoticesSnapshot officer_notices_snapshot;
+    bool officer_tools_publish_pending = true;
+    bool officer_notices_publish_pending = true;
+    game::CityManagement city_management;
+    std::uint64_t city_published_revision = ~std::uint64_t{0};
+    own::unique_owner<game::CorpsDeployment> corps_deployment = own::make_unique<game::CorpsDeployment>();
+    std::uint64_t corps_published_revision = ~std::uint64_t{0};
     own::shared_owner<const std::vector<domain::SpecialAssignmentResult>> special_assignment_results;
     own::shared_owner<const std::vector<domain::SpecialAssignmentResult>> special_assignment_notices;
     std::size_t special_assignment_notice_cursor = 0;
@@ -108,6 +123,9 @@ struct Runtime {
     game::TengiState tengi;
     domain::TengiSettings tengi_settings;
     float speed_multiplier = 1.0f;
+    float ui_scale = 1.0f;
+    std::optional<domain::PlayerResources> player_resources;
+    std::uint64_t player_resources_next_ms = 0;
     bool speed_clock_configured = false;
     int speed_clock_error = 0;
     std::vector<std::byte> module_image;
@@ -169,13 +187,13 @@ struct Runtime {
     std::optional<domain::NamedSpecialties> named_specialties;
     std::mt19937 specialty_random;
     bool specialty_last_council = false;
+    bool specialty_assignment_requested = false;
     game::BattleMapShuffle battle_map_shuffle;
     game::FactionLordBonus faction_lord_bonus;
     game::UndiscoveredRonin undiscovered_ronin;
     game::JewelOpen jewel_open;
     domain::DomesticsMultipliers domestics;
     game::Domestics domestics_patch;
-    bool domestics_manual_request = false;
     game::MissionAppointmentLimit mission_appointment_limit;
     game::DomesticReward domestic_reward;
     std::optional<std::uint16_t> protagonist_id;
@@ -186,13 +204,9 @@ struct Runtime {
     std::optional<std::uint8_t> protagonist_gender;
     std::optional<std::int32_t> mission_appointment_limit_value;
     float notification_speed = 100.0f;
-    std::uint64_t domestics_last_attempt_ms = 0;
     game::InstantLoyalty instant_loyalty;
     game::LoveHate love_hate;
     game::InstantResonance instant_resonance;
-    std::uint64_t resonance_last_attempt_ms = 0;
-    std::uint64_t love_hate_last_attempt_ms = 0;
-    std::uint64_t loyalty_last_attempt_ms = 0;
     std::optional<domain::SecondaryJewelMask> secondary_jewels;
     std::uint8_t last_relevant_phase = 0;
     int siege_heal_rate = 10;
@@ -213,7 +227,6 @@ struct Runtime {
     bool infinite_gift_config_applied = false;
     std::uint64_t config_first_game_base_ms = 0;
     std::uint64_t config_first_player_ms = 0;
-    std::uint64_t config_last_check_ms = 0;
     bool reinforcement_arrival_enabled = false;
     bool troop_count_combat_enabled = false;
     bool short_battle_cooldown_enabled = false;
@@ -266,12 +279,12 @@ std::optional<std::uintptr_t> find_stratagem5_metadata(std::span<const std::byte
                                                         std::uintptr_t game_base);
 bool update_stratagem5_count(Runtime& runtime, std::uintptr_t metadata_table,
     std::uintptr_t dialog, std::uintptr_t attack_owner, std::uintptr_t defense_owner);
-void set_stratagem5_count_request(Runtime& runtime, bool enabled,
+bool set_stratagem5_count_request(Runtime& runtime, bool enabled,
                                   std::uintptr_t attack_owner, std::uintptr_t defense_owner);
 bool attach_stratagem5_camp(Runtime& runtime, std::uintptr_t metadata_table);
-void restore_stratagem5_camp(Runtime& runtime);
+bool restore_stratagem5_camp(Runtime& runtime);
 bool extend_stratagem5_model(Runtime& runtime, std::uintptr_t dialog, std::uintptr_t metadata_table);
-void restore_stratagem5_model(Runtime& runtime);
+bool restore_stratagem5_model(Runtime& runtime);
 bool set_short_battle_cooldown(Runtime& runtime, std::uintptr_t module_base, bool enabled, std::int32_t days);
 void load_short_battle_cooldown_config(Runtime& runtime, std::string_view text, std::uintptr_t module_base);
 bool set_troop_count_combat(Runtime& runtime, std::uintptr_t module_base, bool enabled);

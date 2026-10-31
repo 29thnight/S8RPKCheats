@@ -182,14 +182,20 @@ domain::Result<std::string> config_lines_for_load(std::string_view source, Secon
             if (item == object.end() || (!item->is_boolean() && !item->is_number())) {
                 return std::nullopt;
             }
-            return item->is_boolean() && item->get<bool>();
+            return item->is_boolean() ? item->get<bool>() : item->get<double>() != 0.0;
         };
         scalars->notification_speed = read_float("g_notificationSpeed");
+        scalars->ui_scale = read_float("fUiScale");
         scalars->speed_multiplier = read_float("g_speedMultiplier");
         scalars->ai_growth_enabled = read_bool("bAIOfficerAutoGrowth");
         scalars->ai_growth_speed = read_int("iAIOfficerGrowthSpeed");
         scalars->ai_growth_restore_none = read_bool("bAIOfficerGrowthRestoreNone");
         scalars->annual_special_abilities = read_bool("bAnnualSpecialAbilityAutoAssign");
+        scalars->city_grain_limit = read_int("g_cityMaxGrainLimit");
+        scalars->city_retained_grain = read_int("g_cityKeepGrain");
+        scalars->city_exchange_rate = read_int("g_cityExchangeRate");
+        scalars->city_auto_exchange = read_bool("g_cityAutoExchangeEnabled");
+        scalars->city_revolt_zero = read_bool("g_cityRevoltAlwaysZero");
         for (std::size_t index = 0; index < domain::TENGI_EVENT_COUNT; ++index) {
             const TengiConfigKeys& keys = TENGI_CONFIG_KEYS[index];
 

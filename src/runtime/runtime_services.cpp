@@ -8,10 +8,14 @@
 
 #include <array>
 #include <charconv>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <random>
+#include <string>
+#include <unordered_map>
 #include <wincodec.h>
 #include <winrt/base.h>
 
@@ -35,7 +39,8 @@ struct ComApartment {
 
 std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND game_window,
                                                  std::uintptr_t plugin_module) {
-    const auto path = platform::windows::config_path(plugin_module);
+    const std::optional<std::filesystem::path> path = platform::windows::config_path(plugin_module);
+
     if (!path) {
         return std::unexpected(static_cast<int>(ERROR_PATH_NOT_FOUND));
     }
@@ -50,19 +55,22 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                     winrt::com_ptr<IWICImagingFactory> factory;
                     if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
                                                    IID_PPV_ARGS(factory.put())))) {
-                        const auto module = reinterpret_cast<HMODULE>(plugin_module);
+                        const HMODULE module = reinterpret_cast<HMODULE>(plugin_module);
+
                         for (std::size_t i = 0; i < images.size(); ++i) {
-                            const auto resource = FindResourceW(module, MAKEINTRESOURCEW(101 + i), RT_RCDATA);
+                            const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(101 + i), RT_RCDATA);
+
                             if (!resource) {
                                 continue;
                             }
-                            const auto size = SizeofResource(module, resource);
-                            const auto data = LockResource(LoadResource(module, resource));
+                            const DWORD size = SizeofResource(module, resource);
+                            void* const data = LockResource(LoadResource(module, resource));
                             winrt::com_ptr<IWICStream> stream;
                             winrt::com_ptr<IWICBitmapDecoder> decoder;
                             winrt::com_ptr<IWICBitmapFrameDecode> frame;
                             winrt::com_ptr<IWICFormatConverter> converter;
-                            auto& image = images[i];
+                            services::RangeImage& image = images[i];
+
                             if (!data || !size || FAILED(factory->CreateStream(stream.put())) ||
                                 FAILED(stream->InitializeFromMemory(static_cast<BYTE*>(data), size)) ||
                                 FAILED(factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put())) ||
@@ -74,7 +82,8 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                                 image = {};
                                 continue;
                             }
-                            const auto stride = image.width * 4;
+                            const UINT stride = image.width * 4;
+
                             image.pixels.resize(static_cast<std::size_t>(stride) * image.height);
                             if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(image.pixels.size()),
                                                              reinterpret_cast<BYTE*>(image.pixels.data())))) {
@@ -86,37 +95,45 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                 }
             }
             domain::NamedSpecialties named{};
-            const auto directory = path.parent_path();
+            const std::filesystem::path directory = path.parent_path();
             domain::SkillCounts skill_counts;
-            auto skill_baseline = platform::windows::read_config_for_save(directory / L"S8RPK_skill_counts.json");
+            domain::Result<std::optional<std::string>> skill_baseline =
+                platform::windows::read_config_for_save(directory / L"S8RPK_skill_counts.json");
             bool skill_file_valid = skill_baseline.has_value();
+
             if (skill_file_valid && *skill_baseline) {
-                const auto json = nlohmann::json::parse(**skill_baseline, nullptr, false);
+                const nlohmann::json json = nlohmann::json::parse(**skill_baseline, nullptr, false);
+
                 skill_file_valid = json.is_object();
                 if (json.is_object()) {
-                    for (auto it = json.begin(); it != json.end(); ++it) {
+                    for (nlohmann::json::const_iterator it = json.begin(); it != json.end(); ++it) {
                         int id = 0;
-                        const auto& key = it.key();
-                        const auto parsed = std::from_chars(key.data(), key.data() + key.size(), id);
+                        const std::string& key = it.key();
+                        const std::from_chars_result parsed = std::from_chars(key.data(), key.data() + key.size(), id);
+
                         if (parsed.ec != std::errc{} || parsed.ptr != key.data() + key.size() ||
                             !it.value().is_object()) {
                             continue;
                         }
-                        for (auto skill = it.value().begin(); skill != it.value().end(); ++skill) {
+                        for (nlohmann::json::const_iterator skill = it.value().begin(); skill != it.value().end(); ++skill) {
                             std::uintptr_t offset = 0;
-                            const auto& skill_key = skill.key();
-                            const auto parsed_offset = std::from_chars(skill_key.data(), skill_key.data() + skill_key.size(), offset);
+                            const std::string& skill_key = skill.key();
+                            const std::from_chars_result parsed_offset =
+                                std::from_chars(skill_key.data(), skill_key.data() + skill_key.size(), offset);
+
                             if (parsed_offset.ec != std::errc{} || parsed_offset.ptr != skill_key.data() + skill_key.size() ||
                                 !skill.value().is_number_integer()) {
                                 continue;
                             }
                             if (skill.value().is_number_unsigned()) {
-                                const auto value = skill.value().get<std::uint64_t>();
+                                const std::uint64_t value = skill.value().get<std::uint64_t>();
+
                                 if (value <= static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
                                     skill_counts[id][offset] = static_cast<int>(value);
                                 }
                             } else {
-                                const auto value = skill.value().get<std::int64_t>();
+                                const std::int64_t value = skill.value().get<std::int64_t>();
+
                                 if (value >= std::numeric_limits<int>::min() && value <= std::numeric_limits<int>::max()) {
                                     skill_counts[id][offset] = static_cast<int>(value);
                                 }
@@ -135,7 +152,7 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                 names_text.assign(std::istreambuf_iterator<char>(names_file), std::istreambuf_iterator<char>());
             }
             if (!names_text.empty()) {
-                if (auto names = services::read_officer_names(names_text)) {
+                if (domain::Result<domain::OfficerNames> names = services::read_officer_names(names_text)) {
                     officer_names = std::move(*names);
                 }
             }
@@ -145,38 +162,44 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
             if (effect_file) {
                 effect_text.assign(std::istreambuf_iterator<char>(effect_file), std::istreambuf_iterator<char>());
             } else {
-                const auto module = reinterpret_cast<HMODULE>(plugin_module);
-                if (const auto resource = FindResourceW(module, MAKEINTRESOURCEW(202), RT_RCDATA)) {
-                    const auto size = SizeofResource(module, resource);
-                    const auto bytes = static_cast<const char*>(LockResource(LoadResource(module, resource)));
+                const HMODULE module = reinterpret_cast<HMODULE>(plugin_module);
+
+                if (const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(202), RT_RCDATA)) {
+                    const DWORD size = SizeofResource(module, resource);
+                    const char* const bytes = static_cast<const char*>(LockResource(LoadResource(module, resource)));
+
                     if (bytes && size) {
                         effect_text.assign(bytes, size);
                     }
                 }
             }
             domain::TraitEffectDefinitions effect_definitions;
-            const auto effect_json = nlohmann::json::parse(effect_text, nullptr, false);
+            const nlohmann::json effect_json = nlohmann::json::parse(effect_text, nullptr, false);
+
             if (effect_json.is_array()) {
-                for (const auto& item : effect_json) {
+                for (const nlohmann::json& item : effect_json) {
                     if (!item.is_object() || !item.contains("type") || !item["type"].is_number_integer() ||
                         !item.contains("template") || !item["template"].is_string()) {
                         continue;
                     }
-                    const auto type = item["type"].get<std::int64_t>();
+                    const std::int64_t type = item["type"].get<std::int64_t>();
+
                     if (type < 0 || type > std::numeric_limits<std::uint16_t>::max()) {
                         continue;
                     }
                     domain::TraitEffectDefinition definition;
                     definition.text = item["template"].get<std::string>();
-                    for (const auto* key : {"valueMap", "paramMap"}) {
+                    for (const char* key : {"valueMap", "paramMap"}) {
                         if (!item.contains(key) || !item[key].is_object()) {
                             continue;
                         }
-                        auto& output = key[0] == 'v' ? definition.values : definition.params;
-                        for (auto it = item[key].begin(); it != item[key].end(); ++it) {
+                        std::unordered_map<int, std::string>& output = key[0] == 'v' ? definition.values : definition.params;
+
+                        for (nlohmann::json::const_iterator it = item[key].begin(); it != item[key].end(); ++it) {
                             int number = 0;
-                            const auto& text = it.key();
-                            const auto parsed = std::from_chars(text.data(), text.data() + text.size(), number);
+                            const std::string& text = it.key();
+                            const std::from_chars_result parsed = std::from_chars(text.data(), text.data() + text.size(), number);
+
                             if (parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size() && it.value().is_string()) {
                                 output[number] = it.value().get<std::string>();
                             }
@@ -190,7 +213,7 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                 directory / L"specialty_definitions.json", directory / L"release" / L"speciality_definitions.json",
                 directory / L"release" / L"specialty_definitions.json"};
             std::string specialty_text;
-            for (const auto& candidate : candidates) {
+            for (const std::filesystem::path& candidate : candidates) {
                 std::ifstream file(candidate, std::ios::binary);
                 if (!file) {
                     continue;
@@ -199,11 +222,13 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
                 break;
             }
             if (specialty_text.empty()) {
-                const auto module = reinterpret_cast<HMODULE>(plugin_module);
-                const auto resource = FindResourceW(module, MAKEINTRESOURCEW(204), RT_RCDATA);
+                const HMODULE module = reinterpret_cast<HMODULE>(plugin_module);
+                const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(204), RT_RCDATA);
+
                 if (resource) {
-                    const auto size = SizeofResource(module, resource);
-                    const auto bytes = static_cast<const char*>(LockResource(LoadResource(module, resource)));
+                    const DWORD size = SizeofResource(module, resource);
+                    const char* const bytes = static_cast<const char*>(LockResource(LoadResource(module, resource)));
+
                     if (bytes && size) {
                         specialty_text.assign(bytes, size);
                     }
@@ -252,7 +277,8 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
             }
         }
     });
-    const auto started = start_overlay(state.overlay, game_window);
+    const std::expected<void, int> started = start_overlay(state.overlay, game_window);
+
     if (!started) {
         state.config_thread.request_stop();
         state.config_thread.join();

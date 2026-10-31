@@ -167,11 +167,11 @@ domain::Result<void> request_trait_text_apply(TraitControl& control, const domai
     return {};
 }
 
-void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
+bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uint64_t epoch, std::uint64_t now_ms, bool external_runtime) {
 
     if (control.stopping) {
-        return;
+        return false;
     }
 
     if (control.external_runtime != external_runtime) {
@@ -198,7 +198,7 @@ void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
             publish_status(control, "기재 3칸 표시", control.view.viewer);
         }
 
-        return;
+        return true;
     }
 
     if (control.pending_catalog && now_ms >= control.catalog_retry_ms) {
@@ -223,7 +223,7 @@ void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
             }
         }
 
-        return;
+        return true;
     }
 
     if (control.pending_legacy && now_ms >= control.legacy_retry_ms) {
@@ -240,7 +240,7 @@ void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
             control.view.legacy_text = runtime_status(control.runtime.status);
             control.pending_legacy = {};
             publish_status(control, "기본 기재 텍스트", control.view.legacy_text);
-            return;
+            return true;
         }
 
         const bool retry = !applied &&
@@ -256,10 +256,13 @@ void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
             publish_status(control, "기본 기재 텍스트", control.view.legacy_text);
         }
 
-        return;
+        return true;
     }
 
-    if (control.runtime.catalog && !control.external_runtime) {
+    if (control.runtime.catalog && !control.external_runtime && control.runtime.hooks_enabled &&
+        !control.runtime.stopping && !control.runtime.table_uncertain &&
+        (control.runtime.game_root != game_root || control.runtime.epoch != epoch ||
+         control.runtime.last_tick_ms == 0 || now_ms - control.runtime.last_tick_ms >= 500)) {
 
         const domain::TraitApplyStatus previous = control.view.catalog;
 
@@ -269,7 +272,9 @@ void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
         if (control.view.catalog != previous && control.view.catalog != domain::TraitApplyStatus::WaitingForTable) {
             publish_status(control, "확장 기재", control.view.catalog);
         }
+        return true;
     }
+    return false;
 }
 
 domain::Result<void> stop_trait_control(TraitControl& control, std::uintptr_t module_base,

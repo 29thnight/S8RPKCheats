@@ -38,7 +38,7 @@ domain::Result<void> request_trait_text_apply(TraitControl& control, const domai
 // The caller yields this turn when another native patch group was committed.
 // Each call applies at most one viewer/catalog/text operation, then uses later
 // boundaries for the table's 500 ms validation and deferred restoration.
-void reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
+bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uint64_t epoch, std::uint64_t now_ms, bool external_runtime);
 domain::Result<void> stop_trait_control(TraitControl& control, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uint64_t epoch);
