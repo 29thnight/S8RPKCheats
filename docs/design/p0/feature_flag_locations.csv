@@ -1,0 +1,484 @@
+﻿config_key,flag,path,line,source
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/ConfigBase.inc,108,"{""bInfiniteAP"", u8""행동력 무한"", &bInfiniteAP, nullptr, nullptr, false, true},"
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/MenuSectionsDomestic.cpp,110,"if (ImGui::Checkbox(u8""행동력 무제한"", &bInfiniteAP)) {"
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/MenuSectionsDomestic.cpp,111,"NotifyFeatureToggle(u8""행동력 무제한"", bInfiniteAP);"
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/MenuState.cpp,17,bool bInfiniteAP = false;
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/MenuState.h,19,extern bool bInfiniteAP;
+bInfiniteAP,bInfiniteAP,Internal DX11 Base/Menu_impl.inc,439,if (bInfiniteAP) {
+bFastJewel,bFastJewel,Internal DX11 Base/ConfigBase.inc,109,"{""bFastJewel"", u8""보주교체 무제한"", &bFastJewel, nullptr, nullptr, false, true},"
+bFastJewel,bFastJewel,Internal DX11 Base/MenuSectionsDomestic.cpp,293,"if (ImGui::Checkbox(u8""보주 교체 무제한"", &bFastJewel)) {"
+bFastJewel,bFastJewel,Internal DX11 Base/MenuSectionsDomestic.cpp,294,"NotifyFeatureToggle(u8""보주 교체 무제한"", bFastJewel);"
+bFastJewel,bFastJewel,Internal DX11 Base/MenuState.cpp,18,bool bFastJewel = false;
+bFastJewel,bFastJewel,Internal DX11 Base/MenuState.h,20,extern bool bFastJewel;
+bFastJewel,bFastJewel,Internal DX11 Base/Menu_impl.inc,460,if (bFastJewel) {
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/ConfigBase.inc,110,"{""bAutoFillSpecialties"", u8""평정 시 남는 명품 자동 배분"", &bAutoFillSpecialties, nullptr, nullptr, false, true},"
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/MenuSectionsDomestic.cpp,136,"if (ImGui::Checkbox(u8""명품 자동 배분 (평정 끝날 때)"", &bAutoFillSpecialties)) {"
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/MenuSectionsDomestic.cpp,137,"NotifyFeatureToggle(u8""명품 자동 배분 (평정 끝날 때)"", bAutoFillSpecialties);"
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/MenuState.cpp,19,bool bAutoFillSpecialties = false;
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/MenuState.h,21,extern bool bAutoFillSpecialties;    // 평정 종료 시 명품 자동 배분
+bAutoFillSpecialties,bAutoFillSpecialties,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,739,if (!bAutoFillSpecialties) {
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/ConfigBase.inc,111,"{""bInfiniteTavernRequests"", u8""주점 청부 무한 유지"", &bInfiniteTavernRequests, nullptr, nullptr, false, true},"
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/MenuSectionsDomestic.cpp,129,"if (ImGui::Checkbox(u8""청부 무제한 (주점)"", &bInfiniteTavernRequests)) {"
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/MenuSectionsDomestic.cpp,130,"NotifyFeatureToggle(u8""청부 무제한 (주점)"", bInfiniteTavernRequests);"
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/MenuState.cpp,20,bool bInfiniteTavernRequests = false;
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/MenuState.h,22,extern bool bInfiniteTavernRequests; // 청부 무한 유지
+bInfiniteTavernRequests,bInfiniteTavernRequests,Internal DX11 Base/Cheats/Civilian/TavernMonitor.cpp,425,if (!bInfiniteTavernRequests) {
+bBigCity,bBigCity,Internal DX11 Base/ConfigBase.inc,112,"{""bBigCity"", u8""대도시 전환"", &bBigCity, &s_appBigCity, SetBigCityConvert, false, true},"
+bBigCity,bBigCity,Internal DX11 Base/MenuState.cpp,21,bool bBigCity = false;
+bBigCity,bBigCity,Internal DX11 Base/MenuState.h,23,extern bool bBigCity;
+bBigCity,bBigCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,318,"if (ImGui::Checkbox(u8""기술도시로 전환"", &bBigCity)) {"
+bBigCity,bBigCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,319,SetBigCityConvert(bBigCity);
+bBigCity,bBigCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,320,"NotifyFeatureToggle(u8""기술도시로 전환"", bBigCity);"
+bBigCity,bBigCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,393,bBigCity || bBangmokCity || bNonggyeongCity || bSangeopCity;
+bBangmokCity,bBangmokCity,Internal DX11 Base/ConfigBase.inc,113,"{""bBangmokCity"", u8""방목도시 황폐화"", &bBangmokCity, &s_appBangmokCity, SetBangmokCity, false, true},"
+bBangmokCity,bBangmokCity,Internal DX11 Base/MenuState.cpp,22,bool bBangmokCity = false;
+bBangmokCity,bBangmokCity,Internal DX11 Base/MenuState.h,24,extern bool bBangmokCity;
+bBangmokCity,bBangmokCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,336,"if (ImGui::Checkbox(u8""방목도시 황폐화"", &bBangmokCity)) {"
+bBangmokCity,bBangmokCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,337,SetBangmokCity(bBangmokCity);
+bBangmokCity,bBangmokCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,338,"NotifyFeatureToggle(u8""방목도시 황폐화"", bBangmokCity);"
+bBangmokCity,bBangmokCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,393,bBigCity || bBangmokCity || bNonggyeongCity || bSangeopCity;
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/ConfigBase.inc,114,"{""bNonggyeongCity"", u8""농경도시 버프"", &bNonggyeongCity, &s_appNonggyeongCity, SetNonggyeongCity, false, true},"
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/MenuState.cpp,23,bool bNonggyeongCity = false;
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/MenuState.h,25,extern bool bNonggyeongCity;
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,354,"if (ImGui::Checkbox(u8""농경도시 버프"", &bNonggyeongCity)) {"
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,355,SetNonggyeongCity(bNonggyeongCity);
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,356,"NotifyFeatureToggle(u8""농경도시 버프"", bNonggyeongCity);"
+bNonggyeongCity,bNonggyeongCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,393,bBigCity || bBangmokCity || bNonggyeongCity || bSangeopCity;
+bSangeopCity,bSangeopCity,Internal DX11 Base/ConfigBase.inc,115,"{""bSangeopCity"", u8""상업도시 버프"", &bSangeopCity, &s_appSangeopCity, SetSangeopCity, false, true},"
+bSangeopCity,bSangeopCity,Internal DX11 Base/MenuState.cpp,24,bool bSangeopCity = false;
+bSangeopCity,bSangeopCity,Internal DX11 Base/MenuState.h,26,extern bool bSangeopCity;
+bSangeopCity,bSangeopCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,372,"if (ImGui::Checkbox(u8""상업도시 버프"", &bSangeopCity)) {"
+bSangeopCity,bSangeopCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,373,SetSangeopCity(bSangeopCity);
+bSangeopCity,bSangeopCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,374,"NotifyFeatureToggle(u8""상업도시 버프"", bSangeopCity);"
+bSangeopCity,bSangeopCity,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,393,bBigCity || bBangmokCity || bNonggyeongCity || bSangeopCity;
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/ConfigBase.inc,116,"{""bAttitudeHack"", u8""견문시 민심최대"", &bAttitudeHack, &s_appAttitude, SetInstantAttitude, false, true},"
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/MenuSectionsDomestic.cpp,117,"if (ImGui::Checkbox(u8""견문 시 민심 최대"", &bAttitudeHack)) {"
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/MenuSectionsDomestic.cpp,118,::DX11Base::SetInstantAttitude(bAttitudeHack);
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/MenuSectionsDomestic.cpp,119,"NotifyFeatureToggle(u8""견문 시 민심 최대"", bAttitudeHack);"
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/MenuState.cpp,25,bool bAttitudeHack = false;
+bAttitudeHack,bAttitudeHack,Internal DX11 Base/MenuState.h,27,extern bool bAttitudeHack;
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/ConfigBase.inc,117,"{""bInfiniteBanquet"", u8""연회 무제한"", &bInfiniteBanquet, nullptr, nullptr, false, true},"
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/MenuSectionsSocial.cpp,260,"if (ImGui::Checkbox(u8""연회 무제한"", &bInfiniteBanquet)) {"
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/MenuSectionsSocial.cpp,261,if (bInfiniteBanquet)
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/MenuSectionsSocial.cpp,263,"NotifyFeatureToggle(u8""연회 무제한"", bInfiniteBanquet);"
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/MenuState.cpp,26,bool bInfiniteBanquet = false;
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/MenuState.h,28,extern bool bInfiniteBanquet; // 연회 사용 플래그 bit1 지속 해제
+bInfiniteBanquet,bInfiniteBanquet,Internal DX11 Base/Menu_impl.inc,446,if (bInfiniteBanquet) {
+bHateCave,bHateCave,Internal DX11 Base/ConfigBase.inc,118,"{""bHateCave"", u8""상극 무시/동지 조건 완화"", &bHateCave, &s_appLoveHate, ApplyLoveHate, false, true},"
+bHateCave,bHateCave,Internal DX11 Base/MenuSectionsSocial.cpp,87,bHateCave = false;
+bHateCave,bHateCave,Internal DX11 Base/MenuSectionsSocial.cpp,154,"&bHateCave,"
+bHateCave,bHateCave,Internal DX11 Base/MenuState.cpp,33,bool bHateCave = false;
+bHateCave,bHateCave,Internal DX11 Base/MenuState.h,37,extern bool bHateCave;
+bLoyalty,bLoyalty,Internal DX11 Base/ConfigBase.inc,119,"{""bLoyalty"", u8""충성도 변경"", &bLoyalty, &s_appLoyalty, SetInstantLoyalty, false, true},"
+bLoyalty,bLoyalty,Internal DX11 Base/MenuSectionsSocial.cpp,208,"if (ImGui::Checkbox(u8""무장 충성도 100"", &bLoyalty)) {"
+bLoyalty,bLoyalty,Internal DX11 Base/MenuSectionsSocial.cpp,209,DX11Base::SetInstantLoyalty(bLoyalty);
+bLoyalty,bLoyalty,Internal DX11 Base/MenuSectionsSocial.cpp,210,"NotifyFeatureToggle(u8""무장 충성도 100"", bLoyalty);"
+bLoyalty,bLoyalty,Internal DX11 Base/MenuState.cpp,34,bool bLoyalty = false;
+bLoyalty,bLoyalty,Internal DX11 Base/MenuState.h,38,extern bool bLoyalty;
+bResonance,bResonance,Internal DX11 Base/ConfigBase.inc,120,"{""bResonance"", u8""무조건 공명 발생"", &bResonance, &s_appResonance, SetInstantResonance, false, true},"
+bResonance,bResonance,Internal DX11 Base/MenuSectionsSocial.cpp,174,"if (ImGui::Checkbox(u8""무조건 공명 발생"", &bResonance)) {"
+bResonance,bResonance,Internal DX11 Base/MenuSectionsSocial.cpp,175,DX11Base::SetInstantResonance(bResonance);
+bResonance,bResonance,Internal DX11 Base/MenuSectionsSocial.cpp,176,"NotifyFeatureToggle(u8""무조건 공명 발생"", bResonance);"
+bResonance,bResonance,Internal DX11 Base/MenuState.cpp,35,bool bResonance = false;
+bResonance,bResonance,Internal DX11 Base/MenuState.h,39,extern bool bResonance;
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/ConfigBase.inc,121,"{""bInfiniteGift"", u8""증정 무한"", &bInfiniteGift, &s_appGift, SetInfiniteGift, false, true},"
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/MenuSectionsSocial.cpp,119,"if (ImGui::Checkbox(u8""선물 기증 무제한"", &bInfiniteGift)) {"
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/MenuSectionsSocial.cpp,120,DX11Base::SetInfiniteGift(bInfiniteGift);
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/MenuSectionsSocial.cpp,121,"NotifyFeatureToggle(u8""선물 기증 무제한"", bInfiniteGift);"
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/MenuState.cpp,36,bool bInfiniteGift = false;
+bInfiniteGift,bInfiniteGift,Internal DX11 Base/MenuState.h,40,extern bool bInfiniteGift;
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/ConfigBase.inc,122,"{""bInfiniteTalk"", u8""담화 무한"", &bInfiniteTalk, &s_appTalk, SetInfiniteTalk, false, true},"
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/MenuSectionsSocial.cpp,145,"if (ImGui::Checkbox(u8""담화 실행 무제한"", &bInfiniteTalk)) {"
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/MenuSectionsSocial.cpp,146,DX11Base::SetInfiniteTalk(bInfiniteTalk);
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/MenuSectionsSocial.cpp,147,"NotifyFeatureToggle(u8""담화 실행 무제한"", bInfiniteTalk);"
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/MenuState.cpp,37,bool bInfiniteTalk = false;
+bInfiniteTalk,bInfiniteTalk,Internal DX11 Base/MenuState.h,41,extern bool bInfiniteTalk;
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/ConfigBase.inc,123,"{""bInfiniteDuel"", u8""대련 무한"", &bInfiniteDuel, &s_appDuel, SetInfiniteDuel, false, true},"
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/MenuSectionsSocial.cpp,160,"if (ImGui::Checkbox(u8""대련 실행 무제한"", &bInfiniteDuel)) {"
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/MenuSectionsSocial.cpp,161,DX11Base::SetInfiniteDuel(bInfiniteDuel);
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/MenuSectionsSocial.cpp,162,"NotifyFeatureToggle(u8""대련 실행 무제한"", bInfiniteDuel);"
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/MenuState.cpp,38,bool bInfiniteDuel = false;
+bInfiniteDuel,bInfiniteDuel,Internal DX11 Base/MenuState.h,42,extern bool bInfiniteDuel;
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/ConfigBase.inc,124,"{""bInfiniteDebate"", u8""토론 무한"", &bInfiniteDebate, &s_appDebate, SetInfiniteDebate, false, true},"
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/MenuSectionsSocial.cpp,198,"if (ImGui::Checkbox(u8""토론 실행 무제한"", &bInfiniteDebate)) {"
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/MenuSectionsSocial.cpp,199,DX11Base::SetInfiniteDebate(bInfiniteDebate);
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/MenuSectionsSocial.cpp,200,"NotifyFeatureToggle(u8""토론 실행 무제한"", bInfiniteDebate);"
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/MenuState.cpp,39,bool bInfiniteDebate = false;
+bInfiniteDebate,bInfiniteDebate,Internal DX11 Base/MenuState.h,43,extern bool bInfiniteDebate;
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/ConfigBase.inc,125,"{""bInfiniteMediation"", u8""중개 무제한"", &bInfiniteMediation, nullptr, nullptr, false, true},"
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/MenuSectionsSocial.cpp,228,"if (ImGui::Checkbox(u8""중개 무제한"", &bInfiniteMediation)) {"
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/MenuSectionsSocial.cpp,229,if (bInfiniteMediation)
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/MenuSectionsSocial.cpp,231,"NotifyFeatureToggle(u8""중개 무제한"", bInfiniteMediation);"
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/MenuState.cpp,40,bool bInfiniteMediation = false;
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/MenuState.h,44,extern bool bInfiniteMediation; // 중개 사용 완료 +0x71E5 bit6 지속 해제
+bInfiniteMediation,bInfiniteMediation,Internal DX11 Base/Menu_impl.inc,452,if (bInfiniteMediation) {
+bFastRelationship,bFastRelationship,Internal DX11 Base/ConfigBase.inc,126,"{""bFastRelationship"", u8""즉시 경애 맺기"", &bFastRelationship, &s_appRelation, SetFastRelationship, false, true},"
+bFastRelationship,bFastRelationship,Internal DX11 Base/MenuSectionsSocial.cpp,126,"if (ImGui::Checkbox(u8""즉시 경애 맺기"", &bFastRelationship)) {"
+bFastRelationship,bFastRelationship,Internal DX11 Base/MenuSectionsSocial.cpp,127,DX11Base::SetFastRelationship(bFastRelationship);
+bFastRelationship,bFastRelationship,Internal DX11 Base/MenuSectionsSocial.cpp,128,"NotifyFeatureToggle(u8""즉시 경애 맺기"", bFastRelationship);"
+bFastRelationship,bFastRelationship,Internal DX11 Base/MenuState.cpp,41,bool bFastRelationship = false;
+bFastRelationship,bFastRelationship,Internal DX11 Base/MenuState.h,45,extern bool bFastRelationship;
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/ConfigBase.inc,127,"{""bAutoAffinityGrowth"", u8""AI 친밀도 가속"", &g_autoAffinityGrowthEnabled, nullptr, nullptr, false, true},"
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/MenuSectionsSocial.cpp,238,&g_autoAffinityGrowthEnabled)) {
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/MenuSectionsSocial.cpp,242,g_autoAffinityGrowthEnabled);
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/Cheats/Officer/OfficerData.h,75,extern bool g_autoAffinityGrowthEnabled;
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,55,bool g_autoAffinityGrowthEnabled = false;
+bAutoAffinityGrowth,g_autoAffinityGrowthEnabled,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,1222,if (!g_autoAffinityGrowthEnabled) {
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,326,bool marriageApplied = false;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,384,if (!marriageApplied) {
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,387,marriageApplied = true;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,391,marriageApplied = false;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,400,marriageApplied = false;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,415,marriageApplied = false;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,425,marriageApplied = false;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,432,// 설정 로드 시 marriageApplied bool이 먼저 true가 될 수 있으므로
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,435,marriageApplied = actualApplied;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,450,marriageApplied = actualApplied;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,462,marriageApplied = actualApplied;
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,480,marriageApplied = (verifyOp == 0xEB);
+marriageApplied,marriageApplied,Internal DX11 Base/Cheats.cpp,485,"marriageApplied ? ""ON"" : ""OFF"","
+marriageApplied,marriageApplied,Internal DX11 Base/ConfigBase.inc,52,extern bool marriageApplied;
+marriageApplied,marriageApplied,Internal DX11 Base/ConfigBase.inc,128,"{""marriageApplied"", u8""결혼 무제한"", &marriageApplied, &s_appMarriage, SetMarriageCondition, false, true},"
+marriageApplied,marriageApplied,Internal DX11 Base/MenuSectionsSocial.cpp,64,extern bool marriageApplied;
+marriageApplied,marriageApplied,Internal DX11 Base/MenuSectionsSocial.cpp,287,bool tempMarriage = ::DX11Base::marriageApplied;
+bSelfHeal,bSelfHeal,Internal DX11 Base/BattleMonitor.cpp,700,if (bSelfHeal) {
+bSelfHeal,bSelfHeal,Internal DX11 Base/ConfigBase.inc,129,"{""bSelfHeal"", u8""전쟁: 자가 회복"", &bSelfHeal, &s_appSelfHeal, SetSelfHeal, true, true},"
+bSelfHeal,bSelfHeal,Internal DX11 Base/MenuState.cpp,45,bool bSelfHeal = false;
+bSelfHeal,bSelfHeal,Internal DX11 Base/MenuState.h,49,extern bool bSelfHeal;
+bSelfHeal,bSelfHeal,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bSelfHeal,bSelfHeal,Internal DX11 Base/TacticsEditWindow.cpp,27,"if (ImGui::Checkbox(u8""치료"", &bSelfHeal)) {"
+bSelfHeal,bSelfHeal,Internal DX11 Base/TacticsEditWindow.cpp,28,SetSelfHeal(bSelfHeal);
+bSelfHeal,bSelfHeal,Internal DX11 Base/TacticsEditWindow.cpp,29,"NotifyFeatureToggle(u8""치료"", bSelfHeal);"
+bSelfHeal,bSelfHeal,Internal DX11 Base/TacticsEditWindow.cpp,206,SetSelfHeal(bSelfHeal); // 리프레시를 위해 강제로 다시 호출
+bDongto,bDongto,Internal DX11 Base/BattleMonitor.cpp,703,if (bDongto) {
+bDongto,bDongto,Internal DX11 Base/ConfigBase.inc,130,"{""bDongto"", u8""전쟁: 동토(금/군량 무한)"", &bDongto, &s_appDongto, SetDongto, true, true},"
+bDongto,bDongto,Internal DX11 Base/MenuState.cpp,46,bool bDongto = false;
+bDongto,bDongto,Internal DX11 Base/MenuState.h,50,extern bool bDongto;
+bDongto,bDongto,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bDongto,bDongto,Internal DX11 Base/TacticsEditWindow.cpp,35,"if (ImGui::Checkbox(u8""동토"", &bDongto)) {"
+bDongto,bDongto,Internal DX11 Base/TacticsEditWindow.cpp,36,SetDongto(bDongto);
+bDongto,bDongto,Internal DX11 Base/TacticsEditWindow.cpp,37,"NotifyFeatureToggle(u8""동토"", bDongto);"
+bDongto,bDongto,Internal DX11 Base/TacticsEditWindow.cpp,440,SetDongto(bDongto);
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/BattleMonitor.cpp,706,if (bTerrainIgnore) {
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/ConfigBase.inc,131,"{""bTerrainIgnore"", u8""전쟁: 격류낙석 지형 무시"", &bTerrainIgnore, &s_appTerrain, SetTerrainIgnore, true, true},"
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/MenuState.cpp,47,bool bTerrainIgnore = false;
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/MenuState.h,51,extern bool bTerrainIgnore;
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/TacticsEditWindow.cpp,59,"if (ImGui::Checkbox(u8""격류/낙석"", &bTerrainIgnore)) {"
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/TacticsEditWindow.cpp,60,SetTerrainIgnore(bTerrainIgnore);
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/TacticsEditWindow.cpp,61,"NotifyFeatureToggle(u8""격류/낙석"", bTerrainIgnore);"
+bTerrainIgnore,bTerrainIgnore,Internal DX11 Base/TacticsEditWindow.cpp,615,SetTerrainIgnore(bTerrainIgnore);
+bDefBuilding,bDefBuilding,Internal DX11 Base/BattleMonitor.cpp,709,if (bDefBuilding) {
+bDefBuilding,bDefBuilding,Internal DX11 Base/ConfigBase.inc,132,"{""bDefBuilding"", u8""전쟁: 방어건물 강화"", &bDefBuilding, &s_appDefBuild, SetDefBuildingBoost, true, true},"
+bDefBuilding,bDefBuilding,Internal DX11 Base/MenuState.cpp,48,bool bDefBuilding = false;
+bDefBuilding,bDefBuilding,Internal DX11 Base/MenuState.h,52,extern bool bDefBuilding;
+bDefBuilding,bDefBuilding,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bDefBuilding,bDefBuilding,Internal DX11 Base/TacticsEditWindow.cpp,67,"if (ImGui::Checkbox(u8""방어 건물 강화"", &bDefBuilding)) {"
+bDefBuilding,bDefBuilding,Internal DX11 Base/TacticsEditWindow.cpp,68,SetDefBuildingBoost(bDefBuilding);
+bDefBuilding,bDefBuilding,Internal DX11 Base/TacticsEditWindow.cpp,69,"NotifyFeatureToggle(u8""방어 건물 강화"", bDefBuilding);"
+bDefBuilding,bDefBuilding,Internal DX11 Base/TacticsEditWindow.cpp,692,DX11Base::SetDefBuildingBoost(bDefBuilding);
+bCatapult,bCatapult,Internal DX11 Base/BattleMonitor.cpp,712,if (bCatapult) {
+bCatapult,bCatapult,Internal DX11 Base/ConfigBase.inc,133,"{""bCatapult"", u8""전쟁: 투석기 강화"", &bCatapult, &s_appCatapult, SetCatapultCheat, true, true},"
+bCatapult,bCatapult,Internal DX11 Base/MenuState.cpp,49,bool bCatapult = false;
+bCatapult,bCatapult,Internal DX11 Base/MenuState.h,53,extern bool bCatapult;
+bCatapult,bCatapult,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bCatapult,bCatapult,Internal DX11 Base/TacticsEditWindow.cpp,51,"if (ImGui::Checkbox(u8""투석"", &bCatapult)) {"
+bCatapult,bCatapult,Internal DX11 Base/TacticsEditWindow.cpp,52,SetCatapultCheat(bCatapult);
+bCatapult,bCatapult,Internal DX11 Base/TacticsEditWindow.cpp,53,"NotifyFeatureToggle(u8""투석"", bCatapult);"
+bCatapult,bCatapult,Internal DX11 Base/TacticsEditWindow.cpp,505,SetCatapultCheat(bCatapult);
+bCelestial,bCelestial,Internal DX11 Base/BattleMonitor.cpp,715,if (bCelestial) {
+bCelestial,bCelestial,Internal DX11 Base/ConfigBase.inc,134,"{""bCelestial"", u8""전쟁: 천계 강화"", &bCelestial, &s_appCelestial, SetCelestialMod, true, true},"
+bCelestial,bCelestial,Internal DX11 Base/MenuState.cpp,50,bool bCelestial = false;
+bCelestial,bCelestial,Internal DX11 Base/MenuState.h,54,extern bool bCelestial;
+bCelestial,bCelestial,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bCelestial,bCelestial,Internal DX11 Base/TacticsEditWindow.cpp,43,"if (ImGui::Checkbox(u8""천계"", &bCelestial)) {"
+bCelestial,bCelestial,Internal DX11 Base/TacticsEditWindow.cpp,44,SetCelestialMod(bCelestial);
+bCelestial,bCelestial,Internal DX11 Base/TacticsEditWindow.cpp,45,"NotifyFeatureToggle(u8""천계"", bCelestial);"
+bCelestial,bCelestial,Internal DX11 Base/TacticsEditWindow.cpp,367,SetCelestialMod(bCelestial);
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/BattleMonitor.cpp,505,const bool needDefender = (bSiegeWarfare || bSiegeWarfare2);
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/BattleMonitor.cpp,676,"bSiegeWarfare ? 1 : 0, bSiegeWarfare2 ? 1 : 0);"
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/BattleMonitor.cpp,687,"currentDay, unitCountTotal, validUnitCount, bSiegeWarfare ? 1 : 0, bSiegeWarfare2 ? 1 : 0);"
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/BattleMonitor.cpp,718,if (bSiegeWarfare) {
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/BattleMonitor.cpp,817,if (bSiegeWarfare)
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/ConfigBase.inc,135,"{""bSiegeWarfare"", u8""전쟁: 공성전(성주변 얕은여울 및 회복)"", &bSiegeWarfare, &s_appSiege, SetSiegeWarfare, true, true},"
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/MenuState.cpp,51,bool bSiegeWarfare = false;
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/MenuState.h,55,extern bool bSiegeWarfare;
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/Menu_impl.inc,105,"if (ImGui::Checkbox(u8""성 주변 1칸 여울"", &bSiegeWarfare)) {"
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/Menu_impl.inc,106,if (bSiegeWarfare) {
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/Menu_impl.inc,199,bSiegeWarfare = false;
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/Menu_impl.inc,475,bSelfHeal || bDongto || bTerrainIgnore || bDefBuilding || bCatapult || bCelestial || bSiegeWarfare;
+bSiegeWarfare,bSiegeWarfare,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,159,if (!bSiegeWarfare)
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/BattleMonitor.cpp,505,const bool needDefender = (bSiegeWarfare || bSiegeWarfare2);
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/BattleMonitor.cpp,676,"bSiegeWarfare ? 1 : 0, bSiegeWarfare2 ? 1 : 0);"
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/BattleMonitor.cpp,687,"currentDay, unitCountTotal, validUnitCount, bSiegeWarfare ? 1 : 0, bSiegeWarfare2 ? 1 : 0);"
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/BattleMonitor.cpp,722,else if (bSiegeWarfare2) {
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/BattleMonitor.cpp,819,if (bSiegeWarfare2)
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/ConfigBase.inc,136,"{""bSiegeWarfare2"", u8""전쟁: 공성전(성주변 2칸여울 및 회복)"", &bSiegeWarfare2, &s_appSiege2, SetSiegeWarfare2, true, true},"
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/MenuState.cpp,80,bool bSiegeWarfare2 = false;
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/MenuState.h,84,extern bool bSiegeWarfare2;
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/Menu_impl.inc,107,bSiegeWarfare2 = false;
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/Menu_impl.inc,197,"if (ImGui::Checkbox(u8""성 주변 2칸 여울"", &bSiegeWarfare2)) {"
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/Menu_impl.inc,198,if (bSiegeWarfare2) {
+bSiegeWarfare2,bSiegeWarfare2,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,434,if (!bSiegeWarfare2)
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/ConfigBase.inc,137,"{""bWeatherSkillSimple"", u8""전쟁: 날씨 간단 변경"", &bWeatherSkillSimple, nullptr, nullptr, false, true},"
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/MenuState.cpp,72,bool bWeatherSkillSimple = false;
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/MenuState.h,76,extern bool bWeatherSkillSimple;
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/Menu_impl.inc,60,"if (ImGui::Checkbox(u8""간단 변경"", &bWeatherSkillSimple)) {"
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/Menu_impl.inc,61,if (bWeatherSkillSimple)
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/Menu_impl.inc,130,bWeatherSkillSimple = false;
+bWeatherSkillSimple,bWeatherSkillSimple,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,277,const bool weatherFeatureEnabled = (bWeatherSkillSimple || bWeatherSkillComplex);
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/ConfigBase.inc,138,"{""bWeatherSkillComplex"", u8""전쟁: 날씨 대폭 변경"", &bWeatherSkillComplex, nullptr, nullptr, false, true},"
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/MenuState.cpp,73,bool bWeatherSkillComplex = false;
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/MenuState.h,77,extern bool bWeatherSkillComplex;
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Menu_impl.inc,62,bWeatherSkillComplex = false;
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Menu_impl.inc,128,"if (ImGui::Checkbox(u8""대폭 변경"", &bWeatherSkillComplex)) {"
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Menu_impl.inc,129,if (bWeatherSkillComplex)
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,277,const bool weatherFeatureEnabled = (bWeatherSkillSimple || bWeatherSkillComplex);
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,288,if (bWeatherSkillComplex) {
+bWeatherSkillComplex,bWeatherSkillComplex,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,295,if (bWeatherSkillComplex && weatherP && windP) {
+bDateAlways15,bDateAlways15,Internal DX11 Base/ConfigBase.inc,139,"{""bDateAlways15"", u8""전쟁: 전투 일자 15일 고정"", &bDateAlways15, nullptr, nullptr, false, true},"
+bDateAlways15,bDateAlways15,Internal DX11 Base/MenuState.cpp,74,bool bDateAlways15 = false;
+bDateAlways15,bDateAlways15,Internal DX11 Base/MenuState.h,78,extern bool bDateAlways15;
+bDateAlways15,bDateAlways15,Internal DX11 Base/Menu_impl.inc,74,"if (ImGui::Checkbox(u8""상시 15일"", &bDateAlways15)) {"
+bDateAlways15,bDateAlways15,Internal DX11 Base/Menu_impl.inc,75,if (bDateAlways15)
+bDateAlways15,bDateAlways15,Internal DX11 Base/Menu_impl.inc,145,bDateAlways15 = false;
+bDateAlways15,bDateAlways15,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,238,if (bDateAlways15) {
+bDateDynamic,bDateDynamic,Internal DX11 Base/BattleMonitor.cpp,829,if (bDateDynamic && !isUnitListValid) {
+bDateDynamic,bDateDynamic,Internal DX11 Base/ConfigBase.inc,140,"{""bDateDynamic"", u8""전쟁: 전투 일자 유동 조절"", &bDateDynamic, nullptr, nullptr, false, true},"
+bDateDynamic,bDateDynamic,Internal DX11 Base/MenuState.cpp,75,bool bDateDynamic = false;
+bDateDynamic,bDateDynamic,Internal DX11 Base/MenuState.h,79,extern bool bDateDynamic;
+bDateDynamic,bDateDynamic,Internal DX11 Base/Menu_impl.inc,76,bDateDynamic = false;
+bDateDynamic,bDateDynamic,Internal DX11 Base/Menu_impl.inc,143,"if (ImGui::Checkbox(u8""유동 조절"", &bDateDynamic)) {"
+bDateDynamic,bDateDynamic,Internal DX11 Base/Menu_impl.inc,144,if (bDateDynamic)
+bDateDynamic,bDateDynamic,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,240,} else if (bDateDynamic) {
+bSkipDaysEnabled,bSkipDaysEnabled,Internal DX11 Base/ConfigBase.inc,141,"{""bSkipDaysEnabled"", u8""전쟁: 시작 경과일 스킵 활성화"", &bSkipDaysEnabled, nullptr, nullptr, false, true},"
+bSkipDaysEnabled,bSkipDaysEnabled,Internal DX11 Base/MenuState.cpp,76,bool bSkipDaysEnabled = false;
+bSkipDaysEnabled,bSkipDaysEnabled,Internal DX11 Base/MenuState.h,80,extern bool bSkipDaysEnabled;
+bSkipDaysEnabled,bSkipDaysEnabled,Internal DX11 Base/Menu_impl.inc,156,"if (ImGui::Checkbox(u8""스킵 활성화"", &bSkipDaysEnabled)) {"
+bSkipDaysEnabled,bSkipDaysEnabled,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,252,if (bSkipDaysEnabled && nSkipDays > 0) {
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/ConfigBase.inc,142,"{""bTerrainAbilityAtkDef"", u8""전쟁: 지형 능력 공방만"", &bTerrainAbilityAtkDef, nullptr, nullptr, false, true},"
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/MenuState.cpp,78,bool bTerrainAbilityAtkDef = false;
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/MenuState.h,82,extern bool bTerrainAbilityAtkDef;
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/Menu_impl.inc,86,"if (ImGui::Checkbox(u8""공방만"", &bTerrainAbilityAtkDef)) {"
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/Menu_impl.inc,87,if (bTerrainAbilityAtkDef)
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/Menu_impl.inc,176,bTerrainAbilityAtkDef = false;
+bTerrainAbilityAtkDef,bTerrainAbilityAtkDef,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,396,if (bTerrainAbilityAtkDef || bTerrainAbilityAll) {
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/ConfigBase.inc,143,"{""bTerrainAbilityAll"", u8""전쟁: 지형 능력 전체"", &bTerrainAbilityAll, nullptr, nullptr, false, true},"
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/MenuState.cpp,79,bool bTerrainAbilityAll = false;
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/MenuState.h,83,extern bool bTerrainAbilityAll;
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/Menu_impl.inc,88,bTerrainAbilityAll = false;
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/Menu_impl.inc,174,"if (ImGui::Checkbox(u8""공방/무력/지력"", &bTerrainAbilityAll)) {"
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/Menu_impl.inc,175,if (bTerrainAbilityAll)
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,396,if (bTerrainAbilityAtkDef || bTerrainAbilityAll) {
+bTerrainAbilityAll,bTerrainAbilityAll,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,428,if (bTerrainAbilityAll) {
+bAllAggressive,bAllAggressive,Internal DX11 Base/ConfigBase.inc,144,"{""bAllAggressive"", u8""전쟁: 모든 무장 성향 적극"", &bAllAggressive, nullptr, nullptr, false, true},"
+bAllAggressive,bAllAggressive,Internal DX11 Base/MenuSectionsWar.cpp,86,"if (ImGui::Checkbox(u8""모든 무장 성향 적극"", &bAllAggressive)) {"
+bAllAggressive,bAllAggressive,Internal DX11 Base/MenuSectionsWar.cpp,87,"DX11Base::NotifyFeatureToggle(u8""모든 무장 성향 적극 자동 적용"", bAllAggressive);"
+bAllAggressive,bAllAggressive,Internal DX11 Base/MenuState.cpp,52,bool bAllAggressive = false;
+bAllAggressive,bAllAggressive,Internal DX11 Base/MenuState.h,56,extern bool bAllAggressive;
+bAllAggressive,bAllAggressive,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,143,bool currentEnable = bAllAggressive;
+bBattleUnit,bBattleUnit,Internal DX11 Base/ConfigBase.inc,145,"{""bBattleUnit"", u8""전쟁: 유닛 정보 캡처"", &bBattleUnit, &s_appBattleUnit, SetBattleUnitCapture, false, true},"
+bBattleUnit,bBattleUnit,Internal DX11 Base/MenuState.cpp,53,bool bBattleUnit = false;
+bBattleUnit,bBattleUnit,Internal DX11 Base/MenuState.h,57,extern bool bBattleUnit;
+bBattleUnit,bBattleUnit,Internal DX11 Base/MenuState.h,108,extern bool bBattleUnit;
+bBattleUnit,bBattleUnit,Internal DX11 Base/Menu_impl.inc,478,if (!bBattleUnit) {
+bBattleUnit,bBattleUnit,Internal DX11 Base/Menu_impl.inc,479,bBattleUnit = true;
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/ConfigBase.inc,146,"{""bBattleMapShuffle"", u8""기타: 평정 시 전투맵 셔플"", &bBattleMapShuffle, nullptr, nullptr, false, true},"
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuSectionsWar.cpp,126,"if (ImGui::Checkbox(u8""전투맵 랜덤(관문제외)"", &bBattleMapShuffle)) {"
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuSectionsWar.cpp,127,DX11Base::SetBattleMapShuffle(bBattleMapShuffle);
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuSectionsWar.cpp,128,"NotifyFeatureToggle(u8""전투맵 랜덤(관문제외)"", bBattleMapShuffle);"
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuState.cpp,54,bool bBattleMapShuffle = false;
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuState.h,58,extern bool bBattleMapShuffle;
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/MenuState.h,109,extern bool bBattleMapShuffle;
+bBattleMapShuffle,bBattleMapShuffle,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,423,if (!bBattleMapShuffle) {
+bRoadBlock,bRoadBlock,Internal DX11 Base/ConfigBase.inc,147,"{""bRoadBlock"", u8""전쟁: 진로 방해 무시 (건녕↔교지)"", &bRoadBlock, &s_appRoadBlock, SetRoadBlock, false, true},"
+bRoadBlock,bRoadBlock,Internal DX11 Base/MenuSectionsScenario.cpp,222,"if (ImGui::Checkbox(u8""교지 <-> 건녕 도로 차단"", &bRoadBlock)) {"
+bRoadBlock,bRoadBlock,Internal DX11 Base/MenuSectionsScenario.cpp,223,DX11Base::SetRoadBlock(bRoadBlock);
+bRoadBlock,bRoadBlock,Internal DX11 Base/MenuSectionsScenario.cpp,224,"NotifyFeatureToggle(u8""교지 <-> 건녕 도로 차단"", bRoadBlock);"
+bRoadBlock,bRoadBlock,Internal DX11 Base/MenuState.cpp,100,bool bRoadBlock = false;
+bRoadBlock,bRoadBlock,Internal DX11 Base/MenuState.h,111,extern bool bRoadBlock;
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/ConfigBase.inc,148,"{""bRoadBlock2"", u8""전쟁: 진로 방해 무시 (교지↔회계)"", &bRoadBlock2, &s_appRoadBlock2, SetRoadBlock2, false, true},"
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/MenuSectionsScenario.cpp,229,"if (ImGui::Checkbox(u8""교지 <-> 회계 도로 차단"", &bRoadBlock2)) {"
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/MenuSectionsScenario.cpp,230,DX11Base::SetRoadBlock2(bRoadBlock2);
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/MenuSectionsScenario.cpp,231,"NotifyFeatureToggle(u8""교지 <-> 회계 도로 차단"", bRoadBlock2);"
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/MenuState.cpp,101,bool bRoadBlock2 = false;
+bRoadBlock2,bRoadBlock2,Internal DX11 Base/MenuState.h,112,extern bool bRoadBlock2;
+bStartSetting,bStartSetting,Internal DX11 Base/ConfigBase.inc,149,"{""bStartSetting"", u8""시나리오 수정"", &bStartSetting, &s_appStartSetting, SetStartSetting, false, false},"
+bStartSetting,bStartSetting,Internal DX11 Base/MenuSectionsScenario.cpp,170,"if (ImGui::Checkbox(u8""시나리오 수정"", &bStartSetting)) {"
+bStartSetting,bStartSetting,Internal DX11 Base/MenuSectionsScenario.cpp,171,DX11Base::SetStartSetting(bStartSetting);
+bStartSetting,bStartSetting,Internal DX11 Base/MenuSectionsScenario.cpp,172,"NotifyFeatureToggle(u8""시나리오 수정"", bStartSetting);"
+bStartSetting,bStartSetting,Internal DX11 Base/MenuState.cpp,102,bool bStartSetting = false;
+bStartSetting,bStartSetting,Internal DX11 Base/MenuState.h,113,extern bool bStartSetting;
+bTechZero,bTechZero,Internal DX11 Base/ConfigBase.inc,150,"{""bTechZero"", u8""모든 세력 기술 초기화"", &bTechZero, &s_appTechZero, SetTechZero, false, false},"
+bTechZero,bTechZero,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,189,"if (ImGui::Checkbox(u8""모든 세력 기술 초기화"", &bTechZero)) {"
+bTechZero,bTechZero,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,190,DX11Base::SetTechZero(bTechZero);
+bTechZero,bTechZero,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,191,"NotifyFeatureToggle(u8""모든 세력 기술 초기화"", bTechZero);"
+bTechZero,bTechZero,Internal DX11 Base/MenuState.cpp,99,bool bTechZero = false;
+bTechZero,bTechZero,Internal DX11 Base/MenuState.h,110,extern bool bTechZero;
+bFileLog,bFileLog,Internal DX11 Base/ConfigBase.inc,151,"{""bFileLog"", u8""파일 로그출력"", &bFileLog, nullptr, nullptr, false, false},"
+bFileLog,bFileLog,Internal DX11 Base/ConfigBase.inc,204,"if (line.find(""\""bFileLog\"""") != std::string::npos && line.find(""true"") != std::string::npos) {"
+bFileLog,bFileLog,Internal DX11 Base/ConfigBase.inc,205,bFileLog = true;
+bFileLog,bFileLog,Internal DX11 Base/MenuState.cpp,205,bool bFileLog = false;
+bFileLog,bFileLog,Internal DX11 Base/MenuState.h,214,extern bool bFileLog;             // 파일 로그 출력 변수
+bFileLog,bFileLog,Internal DX11 Base/Menu_impl.inc,820,"if (ImGui::Checkbox(u8""파일 로그 출력"", &bFileLog)) {"
+bFileLog,bFileLog,Internal DX11 Base/PerformanceDiagnostics.h,16,extern bool bFileLog;
+bFileLog,bFileLog,Internal DX11 Base/PerformanceDiagnostics.h,75,if (bFileLog)
+bFileLog,bFileLog,Internal DX11 Base/showlog.cpp,250,if (!bShowDebug && !bFileLog)
+bFileLog,bFileLog,Internal DX11 Base/showlog.cpp,275,if (bFileLog) {
+bSkillCondition,bSkillCondition,Internal DX11 Base/ConfigBase.inc,152,"{""bSkillCondition"", u8""만병 습득 조건 해제"", &bSkillCondition, &s_appSkillCond, ApplySkillCondition, false, true},"
+bSkillCondition,bSkillCondition,Internal DX11 Base/CouncilCompactSectionBase.h,228,"if (ImGui::Checkbox(u8""만병 습득 조건 해제"", &bSkillCondition)) {"
+bSkillCondition,bSkillCondition,Internal DX11 Base/CouncilCompactSectionBase.h,229,DX11Base::ApplySkillCondition(bSkillCondition);
+bSkillCondition,bSkillCondition,Internal DX11 Base/CouncilCompactSectionBase.h,230,"NotifyFeatureToggle(u8""만병 습득 조건 해제"", bSkillCondition);"
+bSkillCondition,bSkillCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,237,"if (ImGui::Checkbox(u8""만병 습득 조건 해제"", &bSkillCondition)) {"
+bSkillCondition,bSkillCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,238,DX11Base::ApplySkillCondition(bSkillCondition);
+bSkillCondition,bSkillCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,239,"NotifyFeatureToggle(u8""만병 습득 조건 해제"", bSkillCondition);"
+bSkillCondition,bSkillCondition,Internal DX11 Base/MenuState.cpp,111,bool bSkillCondition = false;      // 만병 습득 조건 해제
+bSkillCondition,bSkillCondition,Internal DX11 Base/MenuState.h,122,extern bool bSkillCondition;      // 만병 습득 조건 해제
+bYumokCondition,bYumokCondition,Internal DX11 Base/ConfigBase.inc,153,"{""bYumokCondition"", u8""유목기병 습득 조건 해제"", &bYumokCondition, &s_appYumokCond, ApplyYumokCondition, false, true},"
+bYumokCondition,bYumokCondition,Internal DX11 Base/CouncilCompactSectionBase.h,257,"if (ImGui::Checkbox(u8""유목기병 습득 조건 해제"", &bYumokCondition)) {"
+bYumokCondition,bYumokCondition,Internal DX11 Base/CouncilCompactSectionBase.h,258,DX11Base::ApplyYumokCondition(bYumokCondition);
+bYumokCondition,bYumokCondition,Internal DX11 Base/CouncilCompactSectionBase.h,259,"NotifyFeatureToggle(u8""유목기병 습득 조건 해제"", bYumokCondition);"
+bYumokCondition,bYumokCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,262,"if (ImGui::Checkbox(u8""유목기병 습득 조건 해제"", &bYumokCondition)) {"
+bYumokCondition,bYumokCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,263,DX11Base::ApplyYumokCondition(bYumokCondition);
+bYumokCondition,bYumokCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,264,"NotifyFeatureToggle(u8""유목기병 습득 조건 해제"", bYumokCondition);"
+bYumokCondition,bYumokCondition,Internal DX11 Base/MenuState.cpp,112,bool bYumokCondition = false;      // 유목기병 습득 조건 해제
+bYumokCondition,bYumokCondition,Internal DX11 Base/MenuState.h,123,extern bool bYumokCondition;      // 유목기병 습득 조건 해제
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/ConfigBase.inc,154,"{""bSangbyeongCondition"", u8""상병 습득 조건 해제"", &bSangbyeongCondition, &s_appSangbyeongCond,"
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/CouncilCompactSectionBase.h,243,"if (ImGui::Checkbox(u8""상병 습득 조건 해제"", &bSangbyeongCondition)) {"
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/CouncilCompactSectionBase.h,244,DX11Base::ApplySangbyeongCondition(bSangbyeongCondition);
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/CouncilCompactSectionBase.h,245,"NotifyFeatureToggle(u8""상병 습득 조건 해제"", bSangbyeongCondition);"
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,250,"if (ImGui::Checkbox(u8""상병 습득 조건 해제"", &bSangbyeongCondition)) {"
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,251,DX11Base::ApplySangbyeongCondition(bSangbyeongCondition);
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/MenuSectionsCouncil.cpp,252,"NotifyFeatureToggle(u8""상병 습득 조건 해제"", bSangbyeongCondition);"
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/MenuState.cpp,113,bool bSangbyeongCondition = false; // 상병 습득 조건 해제
+bSangbyeongCondition,bSangbyeongCondition,Internal DX11 Base/MenuState.h,124,extern bool bSangbyeongCondition; // 상병 습득 조건 해제
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/ConfigBase.inc,156,"{""bFactionLordBonus"", u8""세력 군주 보너스 자동 배정"", &bFactionLordBonus, &s_appFactionLordBonus,"
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/MenuSectionsScenario.cpp,146,"if (ImGui::Checkbox(u8""세력 군주 보너스 자동 배정"", &bFactionLordBonus)) {"
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/MenuSectionsScenario.cpp,147,DX11Base::SetFactionLordBonus(bFactionLordBonus);
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/MenuSectionsScenario.cpp,148,"NotifyFeatureToggle(u8""세력 군주 보너스 자동 배정"", bFactionLordBonus);"
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/MenuState.cpp,114,bool bFactionLordBonus = false;    // 세력 군주 보너스 자동 배정
+bFactionLordBonus,bFactionLordBonus,Internal DX11 Base/MenuState.h,125,extern bool bFactionLordBonus;    // 세력 군주 보너스 자동 배정
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/ConfigBase.inc,158,"{""bMonitorRonin"", u8""재야장수 감시"", &bMonitorRonin, nullptr, nullptr, false, true},"
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/MenuSectionsInfo.cpp,93,"if (ImGui::Checkbox(u8""재야 장수 등장 알림"", &bMonitorRonin)) {"
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/MenuSectionsInfo.cpp,94,"NotifyFeatureToggle(u8""재야 장수 등장 알림"", bMonitorRonin);"
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/MenuState.cpp,103,bool bMonitorRonin = false;
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/MenuState.h,114,extern bool bMonitorRonin;
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,518,const bool anyMonitorEnabled = bMonitorRonin || bOfficerChangeNotify;
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,555,if (!bMonitorRonin)
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,563,if (bMonitorRonin && !s_initialized)
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,572,if (bMonitorRonin && !s_initialized)
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,585,if (bMonitorRonin)
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,626,if (bMonitorRonin) {
+bMonitorRonin,bMonitorRonin,Internal DX11 Base/Cheats/Officer/RoninMonitor.cpp,640,showRonin = bMonitorRonin && !roninSnap.empty();
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/ConfigBase.inc,159,"{""bAutoStatUp99"", u8""능력치 한계돌파"", &bAutoStatUp99, nullptr, nullptr, false, true},"
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/CouncilCompactSectionBase.h,275,"if (ImGui::Checkbox(u8""능력치 한계돌파"", &bAutoStatUp99)) {"
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/CouncilCompactSectionBase.h,276,"NotifyFeatureToggle(u8""능력치 한계돌파"", bAutoStatUp99);"
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/MenuSectionsCouncil.cpp,295,"if (ImGui::Checkbox(u8""능력치 한계돌파"", &bAutoStatUp99)) {"
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/MenuSectionsCouncil.cpp,296,"NotifyFeatureToggle(u8""능력치 한계돌파"", bAutoStatUp99);"
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/MenuState.cpp,105,bool bAutoStatUp99 = false;
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/MenuState.h,116,extern bool bAutoStatUp99;        // 능력치 99 -> 100 자동 보정
+bAutoStatUp99,bAutoStatUp99,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,59,if (!bAutoStatUp99) return;
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/ConfigBase.inc,160,"{""bAutoLoadMenu"", u8""시작 시 치트창 표시"", &bAutoLoadMenu, nullptr, nullptr, false, true},"
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/MenuState.cpp,129,bool bAutoLoadMenu = false;
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/MenuState.h,140,extern bool bAutoLoadMenu;
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/Menu_impl.inc,431,if (DX11Base::bAutoLoadMenu) {
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/Menu_impl.inc,636,if (bAutoLoadMenu) {
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/Menu_impl.inc,933,"if (ImGui::Checkbox(u8""시작 시 치트창 표시"", &DX11Base::bAutoLoadMenu)) {"
+bAutoLoadMenu,bAutoLoadMenu,Internal DX11 Base/Menu_impl.inc,934,"NotifyFeatureToggle(u8""시작 시 치트창 표시"", DX11Base::bAutoLoadMenu);"
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/ConfigBase.inc,161,"{""bZeroInfamy"", u8""매턴 악명 0"", &bZeroInfamy, nullptr, nullptr, false, true},"
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/Menu.cpp,277,// still sees the real bZeroInfamy variable before the temporary macro below.
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/Menu.cpp,279,#define bZeroInfamy false
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/Menu.cpp,292,#undef bZeroInfamy
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/MenuSectionsDomestic.cpp,282,"if (ImGui::Checkbox(u8""악명 항상 0 유지"", &bZeroInfamy)) {"
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/MenuSectionsDomestic.cpp,283,"NotifyFeatureToggle(u8""악명 항상 0 유지"", bZeroInfamy);"
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/MenuState.cpp,140,bool bZeroInfamy = false;
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/MenuState.h,29,extern bool bZeroInfamy;
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/MenuT04Maintenance.h,27,if (bZeroInfamy) {
+bZeroInfamy,bZeroInfamy,Internal DX11 Base/Menu_impl.inc,624,if (bZeroInfamy && p1 != 0) {
+bSpeedHack,bSpeedHack,Internal DX11 Base/ConfigBase.inc,162,"{""bSpeedHack"", u8""배속 기능"", &bSpeedHack, nullptr, nullptr, false, true},"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Menu_impl.inc,834,"if (ImGui::Checkbox(u8""배속"", &bSpeedHack)) {"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Menu_impl.inc,835,"NotifyFeatureToggle(u8""배속"", bSpeedHack);"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Menu_impl.inc,888,if (bSpeedHack)
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,15,bool bSpeedHack = false;
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,298,if (s_installed || !bSpeedHack)
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,336,"s_enabled.store(bSpeedHack, std::memory_order_release);"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,359,if (!bSpeedHack) {
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,366,bSpeedHack = false;
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,373,if (s_lastEnabled != bSpeedHack) {
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,376,s_lastEnabled = bSpeedHack;
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,379,float desired = bSpeedHack ? NormalizeMultiplier(g_speedMultiplier) : 1.0f;
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,380,if (bSpeedHack && g_speedMultiplier != desired)
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,390,"s_enabled.store(bSpeedHack, std::memory_order_release);"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.cpp,391,"PerfSetSpeedState(bSpeedHack, desired);"
+bSpeedHack,bSpeedHack,Internal DX11 Base/Cheats/System/SpeedHack.h,7,extern bool bSpeedHack;
+bInfTengi,bInfTengi,Internal DX11 Base/ConfigBase.inc,163,"{""bInfTengi"", u8""매 평정 새로운 전기 발생"", &bInfTengi, nullptr, nullptr, false, true},"
+bInfTengi,bInfTengi,Internal DX11 Base/CouncilCompactSectionBase.h,131,"if (ImGui::Checkbox(u8""매 평정 새로운 전기 발생"", &bInfTengi)) {"
+bInfTengi,bInfTengi,Internal DX11 Base/CouncilCompactSectionBase.h,132,"NotifyFeatureToggle(u8""매 평정 새로운 전기 발생"", bInfTengi);"
+bInfTengi,bInfTengi,Internal DX11 Base/MenuSectionsCouncil.cpp,140,"if (ImGui::Checkbox(u8""매 평정 새로운 전기 발생"", &bInfTengi)) {"
+bInfTengi,bInfTengi,Internal DX11 Base/MenuSectionsCouncil.cpp,141,"NotifyFeatureToggle(u8""매 평정 새로운 전기 발생"", bInfTengi);"
+bInfTengi,bInfTengi,Internal DX11 Base/MenuState.cpp,106,bool bInfTengi = false;            // 2026-04-05 무한 전기
+bInfTengi,bInfTengi,Internal DX11 Base/MenuState.h,117,extern bool bInfTengi;            // 2026-04-05 무한 전기
+bInfTengi,bInfTengi,Internal DX11 Base/Cheats/System/TengiCave.cpp,113,if (!bInfTengi) {
+bInfTengi,bInfTengi,Internal DX11 Base/Cheats/System/TengiCave.cpp,241,bInfTengi) {
+bInfTengi,bInfTengi,Internal DX11 Base/Cheats/System/TengiCave.cpp,828,if (bInfTengi && !unavailableLogged) {
+bInfTengi,bInfTengi,Internal DX11 Base/Cheats/System/TengiCave.cpp,846,if (bInfTengi && !unavailableLogged) {
+bInfTengi,bInfTengi,Internal DX11 Base/Cheats/System/TengiCave.cpp,886,if (!bInfTengi || snapshot.constructed || s_cycle.pending ||
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/ConfigBase.inc,164,"{""bShowWidgetNotif"", u8""위젯: 알림확인"", &bShowWidgetNotif, nullptr, nullptr, false, true},"
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/MenuState.cpp,131,// bool bShowWidgetNotif = false; // Already defined in NotificationManager.cpp
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/MenuState.h,144,extern bool bShowWidgetNotif;       // 위젯: 알림확인 표시 여부
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/Menu_impl.inc,779,"if (ImGui::Checkbox(u8""알림확인##FOOTER_WIDGET"", &DX11Base::bShowWidgetNotif)) {"
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/Menu_impl.inc,780,"NotifyFeatureToggle(u8""위젯: 알림확인"", DX11Base::bShowWidgetNotif);"
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/Menu_impl.inc,1053,if (DX11Base::bShowWidgetNotif) {
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/NotificationManager.cpp,20,bool bShowWidgetNotif = true;
+bShowWidgetNotif,bShowWidgetNotif,Internal DX11 Base/NotificationManager.h,22,extern bool bShowWidgetNotif;
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/ConfigBase.inc,165,"{""bShowWidgetHero"", u8""위젯: 주인공"", &bShowWidgetHero, nullptr, nullptr, false, true},"
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/MenuState.cpp,132,bool bShowWidgetHero = false;
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/MenuState.h,142,extern bool bShowWidgetHero;        // 위젯: 주인공 표시 여부
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/Menu_impl.inc,769,"if (ImGui::Checkbox(u8""주인공##FOOTER_WIDGET"", &DX11Base::bShowWidgetHero)) {"
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/Menu_impl.inc,770,"NotifyFeatureToggle(u8""위젯: 주인공"", DX11Base::bShowWidgetHero);"
+bShowWidgetHero,bShowWidgetHero,Internal DX11 Base/Menu_impl.inc,1045,if (DX11Base::bShowWidgetHero && p1 != 0) {
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/ConfigBase.inc,166,"{""bShowWidgetAllOfficers"", u8""위젯: 모든무장"", &bShowWidgetAllOfficers, nullptr, nullptr, false, true},"
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/MenuState.cpp,133,bool bShowWidgetAllOfficers = false;
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/MenuState.h,143,extern bool bShowWidgetAllOfficers; // 위젯: 모든무장 표시 여부
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/Menu_impl.inc,774,"if (ImGui::Checkbox(u8""모든무장##FOOTER_WIDGET"", &DX11Base::bShowWidgetAllOfficers)) {"
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/Menu_impl.inc,775,"NotifyFeatureToggle(u8""위젯: 모든 무장"", DX11Base::bShowWidgetAllOfficers);"
+bShowWidgetAllOfficers,bShowWidgetAllOfficers,Internal DX11 Base/Menu_impl.inc,1038,if (DX11Base::bShowWidgetAllOfficers && p1 != 0) {
+bDomestics,bDomestics,Internal DX11 Base/ConfigBase.inc,167,"{""bDomestics"", u8""내정 배율"", &bDomestics, &s_appDomestics, SetDomesticsMult, false, true},"
+bDomestics,bDomestics,Internal DX11 Base/MenuSectionsDomestic.cpp,215,"if (ImGui::Checkbox(u8""내정 배율 적용"", &bDomestics)) {"
+bDomestics,bDomestics,Internal DX11 Base/MenuSectionsDomestic.cpp,216,::DX11Base::SetDomesticsMult(bDomestics);
+bDomestics,bDomestics,Internal DX11 Base/MenuSectionsDomestic.cpp,217,"NotifyFeatureToggle(u8""내정 배율 적용"", bDomestics);"
+bDomestics,bDomestics,Internal DX11 Base/MenuSectionsDomestic.cpp,252,if (bDomestics) {
+bDomestics,bDomestics,Internal DX11 Base/MenuState.cpp,27,bool bDomestics = false;
+bDomestics,bDomestics,Internal DX11 Base/MenuState.h,31,extern bool bDomestics;        // 내정 배율
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Config.cpp,315,if (bUndiscoveredToRonin) {
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/ConfigBase.inc,168,"{""bUndiscoveredToRonin"", u8""모든 미발견 무장 재야로 변경"", &bUndiscoveredToRonin, &s_appUndiscovered, SetUndiscoveredToRonin, false, false},"
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,202,"if (ImGui::Checkbox(u8""모든 미발견 무장 재야로 변경"", &bUndiscoveredToRonin)) {"
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,203,DX11Base::SetUndiscoveredToRonin(bUndiscoveredToRonin);
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,204,"NotifyFeatureToggle(u8""모든 미발견 무장 재야로 변경"", bUndiscoveredToRonin);"
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/MenuState.cpp,104,bool bUndiscoveredToRonin = false;
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/MenuState.h,115,extern bool bUndiscoveredToRonin;
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,10,extern bool bUndiscoveredToRonin;
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,32,#define bUndiscoveredToRonin bUndiscoveredToRoninLegacyGuard
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,36,#undef bUndiscoveredToRonin
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,48,if (!bUndiscoveredToRonin)
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,59,if (!bUndiscoveredToRonin)
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,101,if (!bUndiscoveredToRonin)
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,147,if (!bUndiscoveredToRonin ||
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting.cpp,170,if (!bUndiscoveredToRonin)
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,344,extern bool bUndiscoveredToRonin;
+bUndiscoveredToRonin,bUndiscoveredToRonin,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,347,if (!IsStartSettingSessionActive(generation) || !bUndiscoveredToRonin)
+bHealLv1_Self,bHealLv1_Self,Internal DX11 Base/ConfigBase.inc,169,"{""bHealLv1_Self"", u8""치료Lv1 자기치료"", &bHealLv1_Self, nullptr, nullptr, false, true},"
+bHealLv1_Self,bHealLv1_Self,Internal DX11 Base/MenuState.cpp,155,bool bHealLv1_Self = true;
+bHealLv1_Self,bHealLv1_Self,Internal DX11 Base/MenuState.h,164,extern bool bHealLv1_Self;
+bHealLv1_Self,bHealLv1_Self,Internal DX11 Base/TacticsEditWindow.cpp,81,"ImGui::Checkbox(u8""자기치료 활성화##Lv1"", &bHealLv1_Self);"
+bHealLv1_Self,bHealLv1_Self,Internal DX11 Base/Cheats/War/Selfheal.cpp,63,*(uint16_t *)(p + 0x102B) = bHealLv1_Self ? 0x0100 : 0x0101;
+bHealLv2_Self,bHealLv2_Self,Internal DX11 Base/ConfigBase.inc,170,"{""bHealLv2_Self"", u8""치료Lv2 자기치료"", &bHealLv2_Self, nullptr, nullptr, false, true},"
+bHealLv2_Self,bHealLv2_Self,Internal DX11 Base/MenuState.cpp,157,bool bHealLv2_Self = true;
+bHealLv2_Self,bHealLv2_Self,Internal DX11 Base/MenuState.h,166,extern bool bHealLv2_Self;
+bHealLv2_Self,bHealLv2_Self,Internal DX11 Base/TacticsEditWindow.cpp,97,"ImGui::Checkbox(u8""자기치료 활성화##Lv2"", &bHealLv2_Self);"
+bHealLv2_Self,bHealLv2_Self,Internal DX11 Base/Cheats/War/Selfheal.cpp,67,*(uint16_t *)(p + 0x104D) = bHealLv2_Self ? 0x0100 : 0x0101;
+bHealLv3_Self,bHealLv3_Self,Internal DX11 Base/ConfigBase.inc,171,"{""bHealLv3_Self"", u8""치료Lv3 자기치료"", &bHealLv3_Self, nullptr, nullptr, false, true}};"
+bHealLv3_Self,bHealLv3_Self,Internal DX11 Base/MenuState.cpp,160,bool bHealLv3_Self = true;
+bHealLv3_Self,bHealLv3_Self,Internal DX11 Base/MenuState.h,169,extern bool bHealLv3_Self;
+bHealLv3_Self,bHealLv3_Self,Internal DX11 Base/TacticsEditWindow.cpp,152,"ImGui::Checkbox(u8""자기치료 활성화##Lv3"", &bHealLv3_Self);"
+bHealLv3_Self,bHealLv3_Self,Internal DX11 Base/Cheats/War/Selfheal.cpp,73,*(uint16_t *)(p + 0x106F) = bHealLv3_Self ? 0x0100 : 0x0101;

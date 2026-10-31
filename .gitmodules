@@ -1,0 +1,18 @@
+[submodule "reference/S8RPKCheats"]
+	path = reference/S8RPKCheats
+	url = https://github.com/29thnight/S8RPKCheats.git
+[submodule "reference/NightFyre"]
+	path = reference/NightFyre
+	url = https://github.com/NightFyre/DX11-ImGui-Internal-Hook.git
+[submodule "third_party/imgui_upstream"]
+	path = third_party/imgui_upstream
+	url = https://github.com/ocornut/imgui.git
+[submodule "third_party/minhook"]
+	path = third_party/minhook
+	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "third_party/nlohmann_json"]
+	path = third_party/nlohmann_json
+	url = https://github.com/nlohmann/json.git
+[submodule "third_party/stdexec"]
+	path = third_party/stdexec
+	url = https://github.com/NVIDIA/stdexec.git

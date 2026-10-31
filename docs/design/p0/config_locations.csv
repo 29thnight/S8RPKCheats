@@ -1,0 +1,320 @@
+﻿path,line,source
+Internal DX11 Base/ConfigBase.inc,59,struct ConfigEntry {
+Internal DX11 Base/ConfigBase.inc,107,static ConfigEntry g_Entries[] = {
+Internal DX11 Base/ConfigBase.inc,173,std::string GetConfigPath() {
+Internal DX11 Base/ConfigBase.inc,180,const std::string path = GetConfigPath();
+Internal DX11 Base/ConfigBase.inc,188,const std::string path = GetConfigPath();
+Internal DX11 Base/ConfigBase.inc,198,std::ifstream file(GetConfigPath());
+Internal DX11 Base/ConfigBase.inc,212,void SaveConfig() {
+Internal DX11 Base/ConfigBase.inc,218,std::ofstream file(GetConfigPath());
+Internal DX11 Base/ConfigBase.inc,224,"file << ""{\n"";"
+Internal DX11 Base/ConfigBase.inc,226,"file << ""  \"""" << g_Entries[i].key << ""\"": "" << (*g_Entries[i].flag ? ""true"" : ""false"");"
+Internal DX11 Base/ConfigBase.inc,227,"file << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,229,"file << ""  \""g_speedMultiplier\"": "" << g_speedMultiplier << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,230,"file << ""  \""g_notificationSpeed\"": "" << g_notificationSpeed << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,231,"file << ""  \""fDomesticsPlayer\"": "" << fDomesticsPlayer << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,232,"file << ""  \""fDomesticsForce\"": "" << fDomesticsForce << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,233,"file << ""  \""g_cityMaxGrainLimit\"": "" << g_cityMaxGrainLimit << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,234,"file << ""  \""g_cityKeepGrain\"": "" << g_cityKeepGrain << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,235,"file << ""  \""g_cityExchangeRate\"": "" << g_cityExchangeRate << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,236,"file << ""  \""g_cityAutoExchangeEnabled\"": "" << (g_cityAutoExchangeEnabled ? ""true"" : ""false"") << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,237,"file << ""  \""g_cityRevoltAlwaysZero\"": "" << (g_cityRevoltAlwaysZero ? ""true"" : ""false"") << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,238,"file << ""  \""nSkipDays\"": "" << nSkipDays << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,239,"file << ""  \""v_HealLv1_Amount\"": "" << v_HealLv1_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,240,"file << ""  \""v_HealLv2_Amount\"": "" << v_HealLv2_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,241,"file << ""  \""v_HealLv2_Range\"": "" << v_HealLv2_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,242,"file << ""  \""v_HealLv3_Amount\"": "" << v_HealLv3_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,243,"file << ""  \""v_HealLv3_Range\"": "" << v_HealLv3_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,244,"file << ""  \""v_DongtoLv3_Prob\"": "" << v_DongtoLv3_Prob << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,245,"file << ""  \""v_DongtoLv3_StateProb\"": "" << v_DongtoLv3_StateProb << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,246,"file << ""  \""v_CelestiaLv1_Prob\"": "" << v_CelestiaLv1_Prob << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,247,"file << ""  \""v_CelestiaLv1_Amount\"": "" << v_CelestiaLv1_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,248,"file << ""  \""v_CelestiaLv1_Range\"": "" << v_CelestiaLv1_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,249,"file << ""  \""v_CelestiaLv2_Prob\"": "" << v_CelestiaLv2_Prob << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,250,"file << ""  \""v_CelestiaLv2_Amount\"": "" << v_CelestiaLv2_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,251,"file << ""  \""v_CelestiaLv2_Range\"": "" << v_CelestiaLv2_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,252,"file << ""  \""v_CelestiaLv3_Prob\"": "" << v_CelestiaLv3_Prob << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,253,"file << ""  \""v_CelestiaLv3_Amount\"": "" << v_CelestiaLv3_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,254,"file << ""  \""v_CelestiaLv3_Range\"": "" << v_CelestiaLv3_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,255,"file << ""  \""v_Catapult_MinRange\"": "" << v_Catapult_MinRange << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,256,"file << ""  \""v_Catapult_MaxRange\"": "" << v_Catapult_MaxRange << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,257,"file << ""  \""v_Catapult_Amount\"": "" << v_Catapult_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,258,"file << ""  \""v_Catapult_Range\"": "" << v_Catapult_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,259,"file << ""  \""v_WaterLv1_Amount\"": "" << v_WaterLv1_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,260,"file << ""  \""v_WaterLv1_Range\"": "" << v_WaterLv1_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,261,"file << ""  \""v_WaterLv2_Amount\"": "" << v_WaterLv2_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,262,"file << ""  \""v_WaterLv2_Range\"": "" << v_WaterLv2_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,263,"file << ""  \""v_WaterLv3_Amount\"": "" << v_WaterLv3_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,264,"file << ""  \""v_WaterLv3_Range\"": "" << v_WaterLv3_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,265,"file << ""  \""v_StoneLv1_Amount\"": "" << v_StoneLv1_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,266,"file << ""  \""v_StoneLv1_Range\"": "" << v_StoneLv1_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,267,"file << ""  \""v_StoneLv2_Amount\"": "" << v_StoneLv2_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,268,"file << ""  \""v_StoneLv2_Range\"": "" << v_StoneLv2_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,269,"file << ""  \""v_StoneLv3_Amount\"": "" << v_StoneLv3_Amount << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,270,"file << ""  \""v_StoneLv3_Range\"": "" << v_StoneLv3_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,271,"file << ""  \""v_City_Dur\"": "" << v_City_Dur << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,272,"file << ""  \""v_City_Range\"": "" << v_City_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,273,"file << ""  \""v_City_Atk\"": "" << v_City_Atk << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,274,"file << ""  \""v_City_Sight\"": "" << v_City_Sight << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,275,"file << ""  \""v_Gate_Dur\"": "" << v_Gate_Dur << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,276,"file << ""  \""v_Gate_Range\"": "" << v_Gate_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,277,"file << ""  \""v_Gate_Atk\"": "" << v_Gate_Atk << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,278,"file << ""  \""v_Gate_Sight\"": "" << v_Gate_Sight << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,279,"file << ""  \""v_Tower_Dur\"": "" << v_Tower_Dur << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,280,"file << ""  \""v_Tower_Range\"": "" << v_Tower_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,281,"file << ""  \""v_Tower_Atk\"": "" << v_Tower_Atk << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,282,"file << ""  \""v_Tower_Sight\"": "" << v_Tower_Sight << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,283,"file << ""  \""v_WallCatapult_Dur\"": "" << v_WallCatapult_Dur << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,284,"file << ""  \""v_WallCatapult_Range\"": "" << v_WallCatapult_Range << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,285,"file << ""  \""v_WallCatapult_Atk\"": "" << v_WallCatapult_Atk << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,286,"file << ""  \""v_WallCatapult_Sight\"": "" << v_WallCatapult_Sight << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,287,"file << ""  \""v_Signal_Dur\"": "" << v_Signal_Dur << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,288,"file << ""  \""v_Signal_Spirit\"": "" << v_Signal_Spirit << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,289,"file << ""  \""v_Signal_Sight\"": "" << v_Signal_Sight << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,290,"file << ""  \""iSiegeHealRate\"": "" << iSiegeHealRate << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,297,"file << ""  \""TB_"" << i << ""_"" << tidx << ""\"": "" << g_TerrainBonusTable[i][tidx] << "",\n"";"
+Internal DX11 Base/ConfigBase.inc,300,"file << ""  \""config_end\"": true\n"";"
+Internal DX11 Base/ConfigBase.inc,301,"file << ""}"";"
+Internal DX11 Base/ConfigBase.inc,310,void LoadConfig() {
+Internal DX11 Base/ConfigBase.inc,311,std::ifstream file(GetConfigPath());
+Internal DX11 Base/ConfigBase.inc,683,"int gr = std::stoi(line.substr(secondUnderscore + 1, colonPos - secondUnderscore - 1));"
+Internal DX11 Base/ConfigBase.inc,717,void ResetAppliedStates() {
+Internal DX11 Base/ConfigBase.inc,735,"void ApplyStoredConfigs(uintptr_t p1, uintptr_t gameBase) {"
+Internal DX11 Base/ConfigBase.inc,741,ResetAppliedStates();
+Internal DX11 Base/ConfigBase.inc,828,bool IsConfigReady() {
+Internal DX11 Base/Config.cpp,1,#define SaveConfig SaveConfigBase
+Internal DX11 Base/Config.cpp,2,#define LoadConfig LoadConfigBase
+Internal DX11 Base/Config.cpp,4,#undef LoadConfig
+Internal DX11 Base/Config.cpp,5,#undef SaveConfig
+Internal DX11 Base/Config.cpp,27,"static void UpsertBoolConfigValue(const char *name, bool value) {"
+Internal DX11 Base/Config.cpp,28,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+Internal DX11 Base/Config.cpp,65,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+Internal DX11 Base/Config.cpp,71,out << data;
+Internal DX11 Base/Config.cpp,79,"static bool LoadBoolConfigValue(const char *name, bool &value) {"
+Internal DX11 Base/Config.cpp,80,std::ifstream file(GetConfigPath());
+Internal DX11 Base/Config.cpp,95,"static void UpsertIntConfigValue(const char *name, int value) {"
+Internal DX11 Base/Config.cpp,96,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+Internal DX11 Base/Config.cpp,133,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+Internal DX11 Base/Config.cpp,139,out << data;
+Internal DX11 Base/Config.cpp,147,"static bool LoadIntConfigValue(const char *name, int &value) {"
+Internal DX11 Base/Config.cpp,148,std::ifstream file(GetConfigPath());
+Internal DX11 Base/Config.cpp,172,"static void UpsertStringConfigValue(const char *name, const std::string &value) {"
+Internal DX11 Base/Config.cpp,173,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+Internal DX11 Base/Config.cpp,208,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+Internal DX11 Base/Config.cpp,213,out << data;
+Internal DX11 Base/Config.cpp,221,"static bool LoadStringConfigValue(const char *name, std::string &value) {"
+Internal DX11 Base/Config.cpp,222,std::ifstream file(GetConfigPath());
+Internal DX11 Base/Config.cpp,246,void SaveConfig() {
+Internal DX11 Base/Config.cpp,253,"UpsertBoolConfigValue(""bAIWarImprove"", bAIWarImprove);"
+Internal DX11 Base/Config.cpp,254,"UpsertBoolConfigValue(""bMissionCpuHeroExclusion"", bMissionCpuHeroExclusion);"
+Internal DX11 Base/Config.cpp,255,"UpsertBoolConfigValue(""bTechCityEditorVisible"", bTechCityEditorVisible);"
+Internal DX11 Base/Config.cpp,258,"UpsertBoolConfigValue((""tengiListAllow"" + suffix).c_str(), g_tengiListAllowed[i]);"
+Internal DX11 Base/Config.cpp,259,"UpsertIntConfigValue((""tengiListMonths"" + suffix).c_str(), g_tengiListDurationMonths[i]);"
+Internal DX11 Base/Config.cpp,260,"UpsertIntConfigValue((""tengiListCooldownYears"" + suffix).c_str(), GetTengiListCooldownYears(i));"
+Internal DX11 Base/Config.cpp,262,"UpsertBoolConfigValue(""bCouncilContinueAfterMove"", bCouncilContinueAfterMove);"
+Internal DX11 Base/Config.cpp,263,"UpsertBoolConfigValue(""bCouncilExecuteFreeOfficers"", bCouncilExecuteFreeOfficers);"
+Internal DX11 Base/Config.cpp,264,"UpsertBoolConfigValue(""bStratagemFiveEnabled"", bStratagemFiveEnabled);"
+Internal DX11 Base/Config.cpp,265,"UpsertBoolConfigValue(""bShortBattleCooldownEnabled"", bShortBattleCooldownEnabled);"
+Internal DX11 Base/Config.cpp,266,"UpsertIntConfigValue(""iShortBattleCooldownDays"", iShortBattleCooldownDays);"
+Internal DX11 Base/Config.cpp,267,"UpsertBoolConfigValue(""bTroopCountCombatScaling"", bTroopCountCombatScaling);"
+Internal DX11 Base/Config.cpp,268,"UpsertBoolConfigValue(""bPrisonerCaptureManagement"", bPrisonerCaptureManagement);"
+Internal DX11 Base/Config.cpp,269,"UpsertBoolConfigValue(""bIsolatedTerritoryMovement"", bIsolatedTerritoryMovement);"
+Internal DX11 Base/Config.cpp,270,"UpsertBoolConfigValue(""bGovernorPrisonerDisposal"", bGovernorPrisonerDisposal);"
+Internal DX11 Base/Config.cpp,271,"UpsertBoolConfigValue(""bGovernorPrisonerConsumePrivilege"", bGovernorPrisonerConsumePrivilege);"
+Internal DX11 Base/Config.cpp,272,"UpsertBoolConfigValue(""bReinforcementArrivalAction"", bReinforcementArrivalAction);"
+Internal DX11 Base/Config.cpp,273,"UpsertBoolConfigValue(""bReinforcementDefenderPlacement"", bReinforcementDefenderPlacement);"
+Internal DX11 Base/Config.cpp,274,"UpsertBoolConfigValue(""bMaxAttackStratagemGauge"", bMaxAttackStratagemGauge);"
+Internal DX11 Base/Config.cpp,275,"UpsertBoolConfigValue(""bMaxDefenseStratagemGauge"", bMaxDefenseStratagemGauge);"
+Internal DX11 Base/Config.cpp,278,"UpsertIntConfigValue(""iStratagem5Target"", s.target);"
+Internal DX11 Base/Config.cpp,279,"UpsertIntConfigValue(""iStratagem5Effect1"", s.effect1);"
+Internal DX11 Base/Config.cpp,280,"UpsertIntConfigValue(""iStratagem5Power1"", s.power1);"
+Internal DX11 Base/Config.cpp,281,"UpsertIntConfigValue(""iStratagem5Duration1"", s.duration1);"
+Internal DX11 Base/Config.cpp,282,"UpsertIntConfigValue(""iStratagem5Effect2"", s.effect2);"
+Internal DX11 Base/Config.cpp,283,"UpsertIntConfigValue(""iStratagem5Power2"", s.power2);"
+Internal DX11 Base/Config.cpp,284,"UpsertIntConfigValue(""iStratagem5Duration2"", s.duration2);"
+Internal DX11 Base/Config.cpp,285,"UpsertIntConfigValue(""iStratagem5Range"", s.range);"
+Internal DX11 Base/Config.cpp,286,"UpsertIntConfigValue(""iStratagem5HealAmount"", s.healAmount);"
+Internal DX11 Base/Config.cpp,288,"UpsertBoolConfigValue(""bOfficerChangeNotify"", bOfficerChangeNotify);"
+Internal DX11 Base/Config.cpp,289,"UpsertBoolConfigValue(""bAffinityDisplay"", bAffinityDisplay);"
+Internal DX11 Base/Config.cpp,290,"UpsertBoolConfigValue(""bAnnualSpecialAbilityAutoAssign"", bAnnualSpecialAbilityAutoAssign);"
+Internal DX11 Base/Config.cpp,291,"UpsertBoolConfigValue(""bAIOfficerAutoGrowth"", bAIOfficerAutoGrowth);"
+Internal DX11 Base/Config.cpp,292,"UpsertIntConfigValue(""iAIOfficerGrowthSpeed"", iAIOfficerGrowthSpeed);"
+Internal DX11 Base/Config.cpp,293,"UpsertBoolConfigValue(""bAIOfficerGrowthRestoreNone"", bAIOfficerGrowthRestoreNone);"
+Internal DX11 Base/Config.cpp,294,"UpsertBoolConfigValue(""bTraitViewer"", bTraitViewer);"
+Internal DX11 Base/Config.cpp,295,"UpsertBoolConfigValue(""bAllJewelsOpen"", IsAllJewelsOpenPreferred());"
+Internal DX11 Base/Config.cpp,296,"UpsertBoolConfigValue(""bAllSecondaryJewels"", IsAllSecondaryJewelsEnabled());"
+Internal DX11 Base/Config.cpp,297,"UpsertStringConfigValue(""secondaryJewelForceMask"", GetSecondaryJewelForceMaskHex());"
+Internal DX11 Base/Config.cpp,300,void LoadConfig() {
+Internal DX11 Base/Config.cpp,306,"if (LoadBoolConfigValue((""tengiListAllow"" + suffix).c_str(), allowed))"
+Internal DX11 Base/Config.cpp,308,"if (LoadIntConfigValue((""tengiListMonths"" + suffix).c_str(), months))"
+Internal DX11 Base/Config.cpp,311,"LoadIntConfigValue((""tengiListCooldownYears"" + suffix).c_str(), cooldownYears);"
+Internal DX11 Base/Config.cpp,320,bool savedAIWarImprove = false;
+Internal DX11 Base/Config.cpp,321,"if (LoadBoolConfigValue(""bAIWarImprove"", savedAIWarImprove)) {"
+Internal DX11 Base/Config.cpp,327,bool savedMissionCpuHeroExclusion = false;
+Internal DX11 Base/Config.cpp,328,"if (LoadBoolConfigValue(""bMissionCpuHeroExclusion"", savedMissionCpuHeroExclusion)) {"
+Internal DX11 Base/Config.cpp,336,bool savedTechCityEditorVisible = false;
+Internal DX11 Base/Config.cpp,337,"if (LoadBoolConfigValue(""bTechCityEditorVisible"", savedTechCityEditorVisible)) {"
+Internal DX11 Base/Config.cpp,345,bool savedCouncilContinueAfterMove = false;
+Internal DX11 Base/Config.cpp,346,"LoadBoolConfigValue(""bCouncilContinueAfterMove"", savedCouncilContinueAfterMove);"
+Internal DX11 Base/Config.cpp,353,bool savedCouncilExecuteFreeOfficers = false;
+Internal DX11 Base/Config.cpp,354,"LoadBoolConfigValue(""bCouncilExecuteFreeOfficers"", savedCouncilExecuteFreeOfficers);"
+Internal DX11 Base/Config.cpp,361,bool savedStratagemFiveEnabled = false;
+Internal DX11 Base/Config.cpp,362,"LoadBoolConfigValue(""bStratagemFiveEnabled"", savedStratagemFiveEnabled);"
+Internal DX11 Base/Config.cpp,369,bool savedIsolatedTerritoryMovement = true;
+Internal DX11 Base/Config.cpp,371,"LoadBoolConfigValue(""bIsolatedTerritoryMovement"","
+Internal DX11 Base/Config.cpp,380,bool savedPrisonerCaptureManagement = bPrisonerCaptureManagement;
+Internal DX11 Base/Config.cpp,381,"LoadBoolConfigValue(""bPrisonerCaptureManagement"","
+Internal DX11 Base/Config.cpp,390,bool savedGovernorPrisonerConsumePrivilege = false;
+Internal DX11 Base/Config.cpp,391,"if (LoadBoolConfigValue(""bGovernorPrisonerConsumePrivilege"","
+Internal DX11 Base/Config.cpp,396,bool savedGovernorPrisonerDisposal = false;
+Internal DX11 Base/Config.cpp,397,"if (LoadBoolConfigValue(""bGovernorPrisonerDisposal"","
+Internal DX11 Base/Config.cpp,408,bool savedReinforcementArrivalAction = false;
+Internal DX11 Base/Config.cpp,409,"if (LoadBoolConfigValue(""bReinforcementArrivalAction"","
+Internal DX11 Base/Config.cpp,419,bool savedMaxAttackStratagemGauge = false;
+Internal DX11 Base/Config.cpp,420,"LoadBoolConfigValue(""bMaxAttackStratagemGauge"", savedMaxAttackStratagemGauge);"
+Internal DX11 Base/Config.cpp,423,bool savedMaxDefenseStratagemGauge = false;
+Internal DX11 Base/Config.cpp,424,"LoadBoolConfigValue(""bMaxDefenseStratagemGauge"", savedMaxDefenseStratagemGauge);"
+Internal DX11 Base/Config.cpp,429,"LoadIntConfigValue(""iStratagem5Target"", s.target);"
+Internal DX11 Base/Config.cpp,430,"LoadIntConfigValue(""iStratagem5Effect1"", s.effect1);"
+Internal DX11 Base/Config.cpp,431,"LoadIntConfigValue(""iStratagem5Power1"", s.power1);"
+Internal DX11 Base/Config.cpp,432,"LoadIntConfigValue(""iStratagem5Duration1"", s.duration1);"
+Internal DX11 Base/Config.cpp,433,"LoadIntConfigValue(""iStratagem5Effect2"", s.effect2);"
+Internal DX11 Base/Config.cpp,434,"LoadIntConfigValue(""iStratagem5Power2"", s.power2);"
+Internal DX11 Base/Config.cpp,435,"LoadIntConfigValue(""iStratagem5Duration2"", s.duration2);"
+Internal DX11 Base/Config.cpp,436,"LoadIntConfigValue(""iStratagem5Range"", s.range);"
+Internal DX11 Base/Config.cpp,437,"LoadIntConfigValue(""iStratagem5HealAmount"", s.healAmount);"
+Internal DX11 Base/Config.cpp,459,bool savedOfficerChangeNotify = false;
+Internal DX11 Base/Config.cpp,460,"if (LoadBoolConfigValue(""bOfficerChangeNotify"", savedOfficerChangeNotify)) {"
+Internal DX11 Base/Config.cpp,466,bool savedAffinityDisplay = false;
+Internal DX11 Base/Config.cpp,467,"if (LoadBoolConfigValue(""bAffinityDisplay"", savedAffinityDisplay)) {"
+Internal DX11 Base/Config.cpp,475,bool savedAnnualSpecialAbilityAutoAssign = false;
+Internal DX11 Base/Config.cpp,476,"if (LoadBoolConfigValue(""bAnnualSpecialAbilityAutoAssign"","
+Internal DX11 Base/Config.cpp,483,bool savedAIOfficerAutoGrowth = false;
+Internal DX11 Base/Config.cpp,484,"if (LoadBoolConfigValue(""bAIOfficerAutoGrowth"", savedAIOfficerAutoGrowth))"
+Internal DX11 Base/Config.cpp,487,int savedAIOfficerGrowthSpeed = 2;
+Internal DX11 Base/Config.cpp,488,"if (LoadIntConfigValue(""iAIOfficerGrowthSpeed"", savedAIOfficerGrowthSpeed)) {"
+Internal DX11 Base/Config.cpp,494,bool savedAIOfficerGrowthRestoreNone = false;
+Internal DX11 Base/Config.cpp,495,"if (LoadBoolConfigValue(""bAIOfficerGrowthRestoreNone"","
+Internal DX11 Base/Config.cpp,510,bool savedReinforcementDefenderPlacement = false;
+Internal DX11 Base/Config.cpp,511,"if (LoadBoolConfigValue(""bReinforcementDefenderPlacement"","
+Internal DX11 Base/Config.cpp,522,int savedShortBattleCooldownDays = 3;
+Internal DX11 Base/Config.cpp,523,"if (LoadIntConfigValue(""iShortBattleCooldownDays"", savedShortBattleCooldownDays))"
+Internal DX11 Base/Config.cpp,526,bool savedShortBattleCooldownEnabled = false;
+Internal DX11 Base/Config.cpp,527,"if (LoadBoolConfigValue(""bShortBattleCooldownEnabled"", savedShortBattleCooldownEnabled)) {"
+Internal DX11 Base/Config.cpp,537,bool savedTroopCountCombatScaling = false;
+Internal DX11 Base/Config.cpp,538,"if (LoadBoolConfigValue(""bTroopCountCombatScaling"","
+Internal DX11 Base/Config.cpp,548,bool savedTraitViewer = true;
+Internal DX11 Base/Config.cpp,549,"const bool hasTraitViewerSetting = LoadBoolConfigValue(""bTraitViewer"", savedTraitViewer);"
+Internal DX11 Base/Config.cpp,556,bool savedAllJewelsOpen = false;
+Internal DX11 Base/Config.cpp,558,"LoadBoolConfigValue(""bAllJewelsOpen"", savedAllJewelsOpen);"
+Internal DX11 Base/Config.cpp,566,"LoadStringConfigValue(""secondaryJewelForceMask"", savedSecondaryJewelMask);"
+Internal DX11 Base/Config.cpp,575,bool savedAllSecondaryJewels = false;
+Internal DX11 Base/Config.cpp,577,"LoadBoolConfigValue(""bAllSecondaryJewels"", savedAllSecondaryJewels);"
+Internal DX11 Base/MenuState.cpp,17,bool bInfiniteAP = false;
+Internal DX11 Base/MenuState.cpp,18,bool bFastJewel = false;
+Internal DX11 Base/MenuState.cpp,19,bool bAutoFillSpecialties = false;
+Internal DX11 Base/MenuState.cpp,20,bool bInfiniteTavernRequests = false;
+Internal DX11 Base/MenuState.cpp,21,bool bBigCity = false;
+Internal DX11 Base/MenuState.cpp,22,bool bBangmokCity = false;
+Internal DX11 Base/MenuState.cpp,23,bool bNonggyeongCity = false;
+Internal DX11 Base/MenuState.cpp,24,bool bSangeopCity = false;
+Internal DX11 Base/MenuState.cpp,25,bool bAttitudeHack = false;
+Internal DX11 Base/MenuState.cpp,26,bool bInfiniteBanquet = false;
+Internal DX11 Base/MenuState.cpp,27,bool bDomestics = false;
+Internal DX11 Base/MenuState.cpp,28,float fDomesticsPlayer = 2.0f;
+Internal DX11 Base/MenuState.cpp,29,float fDomesticsForce = 1.25f;
+Internal DX11 Base/MenuState.cpp,32,bool bLoveCave = false;
+Internal DX11 Base/MenuState.cpp,33,bool bHateCave = false;
+Internal DX11 Base/MenuState.cpp,34,bool bLoyalty = false;
+Internal DX11 Base/MenuState.cpp,35,bool bResonance = false;
+Internal DX11 Base/MenuState.cpp,36,bool bInfiniteGift = false;
+Internal DX11 Base/MenuState.cpp,37,bool bInfiniteTalk = false;
+Internal DX11 Base/MenuState.cpp,38,bool bInfiniteDuel = false;
+Internal DX11 Base/MenuState.cpp,39,bool bInfiniteDebate = false;
+Internal DX11 Base/MenuState.cpp,40,bool bInfiniteMediation = false;
+Internal DX11 Base/MenuState.cpp,41,bool bFastRelationship = false;
+Internal DX11 Base/MenuState.cpp,42,bool bShowChildManagerWin = false;
+Internal DX11 Base/MenuState.cpp,45,bool bSelfHeal = false;
+Internal DX11 Base/MenuState.cpp,46,bool bDongto = false;
+Internal DX11 Base/MenuState.cpp,47,bool bTerrainIgnore = false;
+Internal DX11 Base/MenuState.cpp,48,bool bDefBuilding = false;
+Internal DX11 Base/MenuState.cpp,49,bool bCatapult = false;
+Internal DX11 Base/MenuState.cpp,50,bool bCelestial = false;
+Internal DX11 Base/MenuState.cpp,51,bool bSiegeWarfare = false;
+Internal DX11 Base/MenuState.cpp,52,bool bAllAggressive = false;
+Internal DX11 Base/MenuState.cpp,53,bool bBattleUnit = false;
+Internal DX11 Base/MenuState.cpp,54,bool bBattleMapShuffle = false;
+Internal DX11 Base/MenuState.cpp,55,bool bMaxAttackStratagemGauge = false;
+Internal DX11 Base/MenuState.cpp,56,bool bMaxDefenseStratagemGauge = false;
+Internal DX11 Base/MenuState.cpp,57,bool bPrisonerCaptureManagement = true;
+Internal DX11 Base/MenuState.cpp,58,bool bShortBattleCooldownEnabled = false;
+Internal DX11 Base/MenuState.cpp,59,int iShortBattleCooldownDays = 3;
+Internal DX11 Base/MenuState.cpp,60,bool bTroopCountCombatScaling = false;
+Internal DX11 Base/MenuState.cpp,61,bool bGovernorPrisonerDisposal = false;
+Internal DX11 Base/MenuState.cpp,62,bool bGovernorPrisonerConsumePrivilege = false;
+Internal DX11 Base/MenuState.cpp,63,bool bReinforcementArrivalAction = false;
+Internal DX11 Base/MenuState.cpp,64,bool bReinforcementDefenderPlacement = false;
+Internal DX11 Base/MenuState.cpp,65,bool bOfficerChangeNotify = false;
+Internal DX11 Base/MenuState.cpp,66,bool bAnnualSpecialAbilityAutoAssign = false;
+Internal DX11 Base/MenuState.cpp,67,bool bAIOfficerAutoGrowth = false;
+Internal DX11 Base/MenuState.cpp,68,int iAIOfficerGrowthSpeed = 2; // 기본: 보통
+Internal DX11 Base/MenuState.cpp,69,bool bAIOfficerGrowthRestoreNone = false;
+Internal DX11 Base/MenuState.cpp,72,bool bWeatherSkillSimple = false;
+Internal DX11 Base/MenuState.cpp,73,bool bWeatherSkillComplex = false;
+Internal DX11 Base/MenuState.cpp,74,bool bDateAlways15 = false;
+Internal DX11 Base/MenuState.cpp,75,bool bDateDynamic = false;
+Internal DX11 Base/MenuState.cpp,76,bool bSkipDaysEnabled = false;
+Internal DX11 Base/MenuState.cpp,78,bool bTerrainAbilityAtkDef = false;
+Internal DX11 Base/MenuState.cpp,79,bool bTerrainAbilityAll = false;
+Internal DX11 Base/MenuState.cpp,80,bool bSiegeWarfare2 = false;
+Internal DX11 Base/MenuState.cpp,81,int iSiegeHealRate = 10;
+Internal DX11 Base/MenuState.cpp,82,bool bShowBattleEnvWin = false;
+Internal DX11 Base/MenuState.cpp,85,bool bGunakdae        = false; // 군악대
+Internal DX11 Base/MenuState.cpp,86,bool bMusangBomyeong  = false; // 무쌍 보명
+Internal DX11 Base/MenuState.cpp,87,bool bFlameKnight     = false; // 불꽃기병
+Internal DX11 Base/MenuState.cpp,88,bool bRangedArcher    = false; // 원격 궁병
+Internal DX11 Base/MenuState.cpp,89,bool bRattanArmor     = false; // 등갑군
+Internal DX11 Base/MenuState.cpp,90,bool bGeneralissimo   = false; // 총사령관
+Internal DX11 Base/MenuState.cpp,91,bool bAmbushUnit      = false; // 기습부대
+Internal DX11 Base/MenuState.cpp,92,bool bGrandStrategist = false; // 대군사
+Internal DX11 Base/MenuState.cpp,99,bool bTechZero = false;
+Internal DX11 Base/MenuState.cpp,100,bool bRoadBlock = false;
+Internal DX11 Base/MenuState.cpp,101,bool bRoadBlock2 = false;
+Internal DX11 Base/MenuState.cpp,102,bool bStartSetting = false;
+Internal DX11 Base/MenuState.cpp,103,bool bMonitorRonin = false;
+Internal DX11 Base/MenuState.cpp,104,bool bUndiscoveredToRonin = false;
+Internal DX11 Base/MenuState.cpp,105,bool bAutoStatUp99 = false;
+Internal DX11 Base/MenuState.cpp,106,bool bInfTengi = false;            // 2026-04-05 무한 전기
+Internal DX11 Base/MenuState.cpp,111,bool bSkillCondition = false;      // 만병 습득 조건 해제
+Internal DX11 Base/MenuState.cpp,112,bool bYumokCondition = false;      // 유목기병 습득 조건 해제
+Internal DX11 Base/MenuState.cpp,113,bool bSangbyeongCondition = false; // 상병 습득 조건 해제
+Internal DX11 Base/MenuState.cpp,114,bool bFactionLordBonus = false;    // 세력 군주 보너스 자동 배정
+Internal DX11 Base/MenuState.cpp,115,bool bShowCityInfoWin = false;
+Internal DX11 Base/MenuState.cpp,116,bool bShowSelectedOfficerWin = false;
+Internal DX11 Base/MenuState.cpp,117,bool bShowOfficerListWin = false;
+Internal DX11 Base/MenuState.cpp,118,bool bShowSpouseListWin = false;
+Internal DX11 Base/MenuState.cpp,119,bool bShowSpecialtyInfoWin = false;
+Internal DX11 Base/MenuState.cpp,120,bool bTraitViewer = true;          // 기재 화면 보이기: 기본 ON
+Internal DX11 Base/MenuState.cpp,121,bool bShowMemoryNotepadWin = false;
+Internal DX11 Base/MenuState.cpp,122,bool bOfficerCapture = false;
+Internal DX11 Base/MenuState.cpp,125,bool bAllowGameClick = false;
+Internal DX11 Base/MenuState.cpp,126,bool bBlockClickInOfficerList = true;
+Internal DX11 Base/MenuState.cpp,127,bool bBlockClickInMemoryEditor = true;
+Internal DX11 Base/MenuState.cpp,128,bool bIsMenuCollapsed = false;
+Internal DX11 Base/MenuState.cpp,129,bool bAutoLoadMenu = false;
+Internal DX11 Base/MenuState.cpp,132,bool bShowWidgetHero = false;
+Internal DX11 Base/MenuState.cpp,133,bool bShowWidgetAllOfficers = false;
+Internal DX11 Base/MenuState.cpp,135,bool bForceCenterOfficerDetail = false;
+Internal DX11 Base/MenuState.cpp,136,bool bForceCenterSelectedOfficer = false;
+Internal DX11 Base/MenuState.cpp,137,bool bForceCenterOfficerList = false;
+Internal DX11 Base/MenuState.cpp,140,bool bZeroInfamy = false;
+Internal DX11 Base/MenuState.cpp,143,bool bSelectOfficerFirstInit = true;
+Internal DX11 Base/MenuState.cpp,145,bool bToggleMenuCollapseRequest = false;
+Internal DX11 Base/MenuState.cpp,147,bool bShowTacticsEditWin = false;
+Internal DX11 Base/MenuState.cpp,148,bool bShowBatchOfficerEditWin = false;
+Internal DX11 Base/MenuState.cpp,149,bool bShowFactionTechEditor = false;
+Internal DX11 Base/MenuState.cpp,155,bool bHealLv1_Self = true;
+Internal DX11 Base/MenuState.cpp,157,bool bHealLv2_Self = true;
+Internal DX11 Base/MenuState.cpp,160,bool bHealLv3_Self = true;
+Internal DX11 Base/MenuState.cpp,205,bool bFileLog = false;
+Internal DX11 Base/MenuState.cpp,223,bool bShowTerrainBonusWin = false;

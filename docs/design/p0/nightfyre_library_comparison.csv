@@ -1,0 +1,36 @@
+﻿component,file,comparison
+Framework,imconfig.h,content differs after normalization
+Framework,imgui.cpp,content differs after normalization
+Framework,imgui.h,content differs after normalization
+Framework,imgui_demo.cpp,content differs after normalization
+Framework,imgui_draw.cpp,content differs after normalization
+Framework,imgui_impl_dx11.cpp,content differs after normalization
+Framework,imgui_impl_dx11.h,BOM or line endings only
+Framework,imgui_impl_dx12.cpp,not in NightFyre
+Framework,imgui_impl_dx12.h,not in NightFyre
+Framework,imgui_impl_win32.cpp,content differs after normalization
+Framework,imgui_impl_win32.h,BOM or line endings only
+Framework,imgui_internal.h,content differs after normalization
+Framework,imgui_tables.cpp,content differs after normalization
+Framework,imgui_widgets.cpp,content differs after normalization
+Framework,imstb_rectpack.h,BOM or line endings only
+Framework,imstb_textedit.h,content differs after normalization
+Framework,imstb_truetype.h,content differs after normalization
+Hooking,buffer.c,content differs after normalization
+Hooking,buffer.h,BOM or line endings only
+Hooking,framework.h,BOM or line endings only
+Hooking,hde32.c,identical bytes
+Hooking,hde32.h,BOM or line endings only
+Hooking,hde64.c,identical bytes
+Hooking,hde64.h,BOM or line endings only
+Hooking,hook.c,identical bytes
+Hooking,hookmain.cpp,content differs after normalization
+Hooking,hookmain.h,BOM or line endings only
+Hooking,minhook.def,identical bytes
+Hooking,MinHook.h,BOM or line endings only
+Hooking,pstdint.h,BOM or line endings only
+Hooking,resource.h,BOM or line endings only
+Hooking,table32.h,BOM or line endings only
+Hooking,table64.h,BOM or line endings only
+Hooking,trampoline.c,identical bytes
+Hooking,trampoline.h,BOM or line endings only

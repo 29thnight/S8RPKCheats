@@ -1,0 +1,8 @@
+﻿feature,source,rva,section,expected,file_bytes,matches
+평정 재야 처단,CouncilExecuteFreeOfficers.cpp,0x018C9CA8,.text,E8 53 1B E9 FF,80 60 49 1F 68,False
+병력 공방,TroopCountCombatScaling.cpp,0x01E2D9FF,.text,3B FD 7E 57 80 7C 24 70 00 75 50,4F 79 ED C4 96 D9 CC CF 73 27 91,False
+고의리 항복,AIHighHonorSurrenderFix.cpp,0x0193CA30,.text,48 89 7D C0 48 89 5D C8 48 89 75 E8 48 8B 46 20,AF A0 E2 D3 01 E5 A9 CC 5E 6B 92 02 B4 F1 B6 8D,False
+원군 디스패치,ReinforcementArrivalAction.cpp,0x01D86D58,.text,13 6C D8 01 5B 6C D8 01,B9 CC 70 F7 12 E6 C9 84,False
+원군 턴 확인,ReinforcementArrivalAction.cpp,0x01D86585,.text,FF C8 83 F8 0E,22 F8 F4 3C 3F,False
+원군 도착,ReinforcementArrivalAction.cpp,0x01D86C51,.text,E8 5A AA 0B 00,7A F2 1A 96 AF,False
+원군 명령,ReinforcementArrivalAction.cpp,0x01D86C60,.text,E8 6B 66 0B 00,19 BF 1B 2A BF,False

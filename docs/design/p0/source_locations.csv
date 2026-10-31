@@ -1,0 +1,1211 @@
+﻿category,path,line,source
+patch,Internal DX11 Base/BattleMonitor.cpp,376,"if (VirtualProtect((LPVOID)(rec + 0x10), 1, PAGE_EXECUTE_READWRITE, &oldP)) {"
+patch,Internal DX11 Base/BattleMonitor.cpp,378,"VirtualProtect((LPVOID)(rec + 0x10), 1, oldP, &oldP);"
+thread,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,44,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID param) -> DWORD {"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,60,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,63,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,67,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,82,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,88,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/BangmokCity.cpp,102,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+thread,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,51,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID param) -> DWORD {"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,67,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,70,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,74,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,88,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,94,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/Bigcityconvert.cpp,108,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+file_io,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,23,#include <fstream>
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,122,"if (!VirtualProtect((LPVOID)addr, 1, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,127,"VirtualProtect((LPVOID)addr, 1, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,130,"VirtualProtect((LPVOID)addr, 1, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,135,"if (!VirtualProtect((LPVOID)addr, 2, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,140,"VirtualProtect((LPVOID)addr, 2, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,143,"VirtualProtect((LPVOID)addr, 2, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,148,"if (!VirtualProtect((LPVOID)addr, 4, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,153,"VirtualProtect((LPVOID)addr, 4, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,156,"VirtualProtect((LPVOID)addr, 4, old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,162,"if (!VirtualProtect((LPVOID)addr, sizeof(uintptr_t), PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,167,"VirtualProtect((LPVOID)addr, sizeof(uintptr_t), old, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,170,"VirtualProtect((LPVOID)addr, sizeof(uintptr_t), old, &dummy);"
+file_io,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,1321,"std::ofstream out(GetAutoSupportRoutePath(), std::ios::binary | std::ios::trunc);"
+file_io,Internal DX11 Base/Cheats/Civilian/CityInfoWindow.cpp,1350,"std::ifstream in(GetAutoSupportRoutePath(), std::ios::binary);"
+patch,Internal DX11 Base/Cheats/Civilian/DomesticRewardCondition.cpp,51,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/Civilian/DomesticRewardCondition.cpp,65,"VirtualProtect(reinterpret_cast<LPVOID>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Civilian/DomesticRewardCondition.cpp,67,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/Civilian/DomesticRewardCondition.cpp,204,"FlushInstructionCache(GetCurrentProcess(),"
+thread,Internal DX11 Base/Cheats/Civilian/DomesticsMult.cpp,186,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID) -> DWORD {"
+include_inc,Internal DX11 Base/Cheats/Civilian/JewelSettings.cpp,50,"#include ""JewelSettingsDefinitions.inc"""
+hook,Internal DX11 Base/Cheats/Civilian/JewelSettings.cpp,281,"MH_CreateHook(reinterpret_cast<LPVOID>(target),"
+hook,Internal DX11 Base/Cheats/Civilian/JewelSettings.cpp,290,const MH_STATUS enableStatus = MH_EnableHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Civilian/JewelSettings.cpp,292,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+patch,Internal DX11 Base/Cheats/Civilian/MissionAppointmentLimit.cpp,88,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/Civilian/MissionAppointmentLimit.cpp,102,"VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/Civilian/MissionCpuHeroExclusion.cpp,65,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/Civilian/MissionCpuHeroExclusion.cpp,81,"VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/Civilian/MissionCpuHeroExclusion.cpp,87,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/Civilian/MissionCpuHeroExclusion.cpp,222,"FlushInstructionCache(GetCurrentProcess(),"
+thread,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,43,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID param) -> DWORD {"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,59,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,62,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,66,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,79,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,85,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/NonggyeongCity.cpp,97,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+thread,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,44,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID param) -> DWORD {"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,60,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,67,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,71,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,87,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,93,"VirtualProtect((LPVOID)pCity, 0x80000, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/Civilian/SangeopCity.cpp,102,"VirtualProtect((LPVOID)pCity, 0x80000, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Civilian/TavernMonitor.cpp,181,"if (!VirtualProtect((LPVOID)nameAddr, sizeof(uintptr_t) * 2, PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Civilian/TavernMonitor.cpp,210,"VirtualProtect((LPVOID)nameAddr, sizeof(uintptr_t) * 2, oldProtect, &dummy);"
+patch,Internal DX11 Base/Cheats/Civilian/TechCityEditorVisibility.cpp,56,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/Civilian/TechCityEditorVisibility.cpp,70,"VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/Civilian/TechCityEditorVisibility.cpp,73,"FlushInstructionCache(GetCurrentProcess(),"
+thread,Internal DX11 Base/Cheats/Civilian/Techpointcave.cpp,70,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID) -> DWORD {"
+patch,Internal DX11 Base/Cheats/Civilian/Techzero.cpp,73,// 이미 모두 0이면 VirtualProtect/쓰기 자체를 생략합니다.
+patch,Internal DX11 Base/Cheats/Civilian/Techzero.cpp,78,"if (!VirtualProtect((LPVOID)addr, 5, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Civilian/Techzero.cpp,82,"VirtualProtect((LPVOID)addr, 5, old, &tmp);"
+thread,Internal DX11 Base/Cheats/Civilian/Techzero.cpp,182,"g_techZeroThread = CreateThread(nullptr, 0, TechZeroTimerThread, nullptr, 0, nullptr);"
+patch,Internal DX11 Base/Cheats/Officer/AffinityDisplay.h,83,"if (!VirtualProtect(reinterpret_cast<void*>(addr), size,"
+patch,Internal DX11 Base/Cheats/Officer/AffinityDisplay.h,88,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(addr), size);"
+patch,Internal DX11 Base/Cheats/Officer/AffinityDisplay.h,90,"VirtualProtect(reinterpret_cast<void*>(addr), size, oldProtect, &dummy);"
+patch,Internal DX11 Base/Cheats/Officer/AffinityDisplay.h,111,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(thunk),"
+patch,Internal DX11 Base/Cheats/Officer/AffinityDisplay.h,148,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(thunk), i);"
+patch,Internal DX11 Base/Cheats/Officer/AIOfficerGrowth.cpp,435,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/AIOfficerGrowth.cpp,472,VirtualProtect(
+file_io,Internal DX11 Base/Cheats/Officer/CustomTraitDisplay.h,8,#include <fstream>
+macro,Internal DX11 Base/Cheats/Officer/OfficerData.cpp,53,#define VirtualQuery T05OfficerDataVirtualQuery
+include_inc,Internal DX11 Base/Cheats/Officer/OfficerData.cpp,54,"#include ""OfficerData_impl.inc"""
+macro,Internal DX11 Base/Cheats/Officer/OfficerData.cpp,55,#undef VirtualQuery
+file_io,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,10,#include <fstream>
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,569,FlushInstructionCache(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,710,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,742,VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,781,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,796,VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,1430,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,1561,VirtualProtect(
+file_io,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,1760,std::ifstream file(jsonPath);
+file_io,Internal DX11 Base/Cheats/Officer/OfficerData_impl.inc,1821,"std::ofstream o(jsonPath, std::ios::binary | std::ios::trunc);"
+patch,Internal DX11 Base/Cheats/Officer/OfficerDetail.cpp,556,"if (!VirtualProtect(slotPtr, sizeof(uintptr_t), PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Officer/OfficerDetail.cpp,560,"VirtualProtect(slotPtr, sizeof(uintptr_t), old, &tmp);"
+macro,Internal DX11 Base/Cheats/Officer/OfficerDetail.h,2,#define DX11BASE_OFFICER_DETAIL_HEADER_INCLUDED 1
+macro,Internal DX11 Base/Cheats/Officer/OfficerDetail.h,13,#undef SetTraitID
+macro,Internal DX11 Base/Cheats/Officer/OfficerDetail.h,14,#define DX11BASE_RESTORE_FAST_SET_TRAIT_ID 1
+macro,Internal DX11 Base/Cheats/Officer/OfficerDetail.h,61,#undef DX11BASE_RESTORE_FAST_SET_TRAIT_ID
+macro,Internal DX11 Base/Cheats/Officer/OfficerDetail.h,62,#define SetTraitID SetTraitIDForOfficerUiFast
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.cpp,1,#define DrawBatchRandomTraitAssignmentWindow DrawBatchRandomTraitAssignmentWindowLegacyT05
+include_inc,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.cpp,2,"#include ""SelectOfficercapture_t05_base.inc"""
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.cpp,3,#undef DrawBatchRandomTraitAssignmentWindow
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.h,2,#define DX11BASE_SELECT_OFFICER_CAPTURE_HEADER_INCLUDED 1
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.h,131,#define SetTraitID SetTraitIDForOfficerUiFast
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture.h,174,#define TextColored CustomTraitAwareTextColored
+file_io,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,20,#include <fstream>
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,592,"if (VirtualProtect((LPVOID)(base + 0x20), 8, PAGE_READWRITE, &oldP)) {"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,594,"VirtualProtect((LPVOID)(base + 0x20), 8, oldP, &oldP);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,597,"AddLog(u8""[ERROR] [PatchStatus] 도시 패치 실패 (VirtualProtect 에러)"");"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,656,"if (VirtualProtect((LPVOID)(pGame + 0x20), 8, PAGE_READWRITE, &oldP)) {"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,658,"VirtualProtect((LPVOID)(pGame + 0x20), 8, oldP, &oldP);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,673,"if (VirtualProtect((LPVOID)(base + 0x20), 8, PAGE_READWRITE, &oldP2)) {"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,675,"VirtualProtect((LPVOID)(base + 0x20), 8, oldP2, &oldP2);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,678,"AddLog(u8""[ERROR] [PatchStatus(City)] 도시 패치 실패 (VirtualProtect 에러)"");"
+thread,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,999,std::thread([]() {
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2014,"if (VirtualProtect((LPVOID)s_stableArrayBase, 5102 * 0x3D0, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2024,"VirtualProtect((LPVOID)s_stableArrayBase, 5102 * 0x3D0, old, &old);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2050,"if (VirtualProtect((LPVOID)s_stableArrayBase, 5102 * 0x3D0, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2060,"VirtualProtect((LPVOID)s_stableArrayBase, 5102 * 0x3D0, old, &old);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2274,"if (VirtualProtect((LPVOID)s_stableArrayBase, kOfficerListActiveCount * 0x3D0, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2282,"VirtualProtect((LPVOID)s_stableArrayBase, kOfficerListActiveCount * 0x3D0, oldProt, &oldProt);"
+thread,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,2954,std::thread([heroAddr = g_savedHeroAddr]() {
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,3226,"bool s1 = VirtualProtect((LPVOID)e1.pointerAddr, 8, PAGE_READWRITE, &old1);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,3227,"bool s2 = VirtualProtect((LPVOID)e2.pointerAddr, 8, PAGE_READWRITE, &old2);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,3233,"VirtualProtect((LPVOID)e1.pointerAddr, 8, old1, &old1);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_impl.inc,3234,"VirtualProtect((LPVOID)e2.pointerAddr, 8, old2, &old2);"
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,12,#define StartSpouseScannerAsync StartSpouseScannerAsyncLegacy
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,13,#define DrawSpouseListWindow DrawSpouseListWindowLegacy
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,14,#define DrawOfficerListWindow DrawOfficerListWindowImpl
+include_inc,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,15,"#include ""SelectOfficercapture_impl.inc"""
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,16,#undef DrawOfficerListWindow
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,17,#undef DrawSpouseListWindow
+macro,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,18,#undef StartSpouseScannerAsync
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,570,"const bool s1 = VirtualProtect(reinterpret_cast<LPVOID>(e1.pointerAddr), 8, PAGE_READWRITE, &old1) != FALSE;"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,571,"const bool s2 = VirtualProtect(reinterpret_cast<LPVOID>(e2.pointerAddr), 8, PAGE_READWRITE, &old2) != FALSE;"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,578,"VirtualProtect(reinterpret_cast<LPVOID>(e1.pointerAddr), 8, old1, &tmp);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,579,"VirtualProtect(reinterpret_cast<LPVOID>(e2.pointerAddr), 8, old2, &tmp);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,586,"VirtualProtect(reinterpret_cast<LPVOID>(e1.pointerAddr), 8, old1, &tmp);"
+patch,Internal DX11 Base/Cheats/Officer/SelectOfficercapture_t05_base.inc,590,"VirtualProtect(reinterpret_cast<LPVOID>(e2.pointerAddr), 8, old2, &tmp);"
+thread,Internal DX11 Base/Cheats/Officer/SpecialAbilityAutoAssign.cpp,295,std::thread(
+file_io,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,14,#include <fstream>
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,128,"if (!VirtualProtect((LPVOID)addr, sizeof(uintptr_t), PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,138,"VirtualProtect((LPVOID)addr, sizeof(uintptr_t), old, &dummy);"
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,143,"if (!VirtualProtect((LPVOID)addr, sizeof(uint32_t), PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,153,"VirtualProtect((LPVOID)addr, sizeof(uint32_t), old, &dummy);"
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,500,"if (!VirtualProtect((LPVOID)protectBase, kSlotWriteSpan, PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/SpecialtyInfoWindow.cpp,536,"VirtualProtect((LPVOID)protectBase, kSlotWriteSpan, oldProtect, &dummy);"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,116,// 한 명의 무장에 대해 단 한 번만 VirtualProtect 호출 (성능 최적화)
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,118,"if (VirtualProtect((LPVOID)(targetBase + 0xAA), 8, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,124,"VirtualProtect((LPVOID)(targetBase + 0xAA), 8, old, &old);"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,212,"if (VirtualProtect((LPVOID)pTend, 1, PAGE_READWRITE, &oldP)) {"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,214,"VirtualProtect((LPVOID)pTend, 1, oldP, &tmp);"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,288,"if (VirtualProtect(pVal, 1, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,290,"VirtualProtect(pVal, 1, old, &old);"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,303,"if (VirtualProtect(pVal, 1, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/Officer/StatMonitor.cpp,305,"VirtualProtect(pVal, 1, old, &old);"
+macro,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime.cpp,6,#define TickTraitConfigRuntime TickTraitConfigRuntimeImpl
+include_inc,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime.cpp,7,"#include ""TraitConfigRuntime_impl.inc"""
+macro,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime.cpp,8,#undef TickTraitConfigRuntime
+file_io,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime.cpp,509,"std::ofstream file(path, std::ios::binary | std::ios::trunc);"
+file_io,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,15,#include <fstream>
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,231,"if (!VirtualProtect(dst, sizeof(value), PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,243,"VirtualProtect(dst, sizeof(value), oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,245,"FlushInstructionCache(GetCurrentProcess(), dst, sizeof(value));"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,255,"if (!VirtualProtect(dst, size, PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,267,"VirtualProtect(dst, size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,277,"if (!VirtualProtect(dst, sizeof(value), PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,289,"VirtualProtect(dst, sizeof(value), oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,291,"FlushInstructionCache(GetCurrentProcess(), dst, sizeof(value));"
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,512,const MH_STATUS initStatus = MH_Initialize();
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,524,"MH_CreateHook(reinterpret_cast<LPVOID>(target),"
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,538,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,549,MH_EnableHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,551,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,817,const MH_STATUS initStatus = MH_Initialize();
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,830,"MH_CreateHook(reinterpret_cast<LPVOID>(target),"
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,845,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,857,MH_EnableHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,860,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1057,const MH_STATUS initStatus = MH_Initialize();
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1070,MH_CreateHook(
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1086,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1098,MH_EnableHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1101,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1430,const MH_STATUS initStatus = MH_Initialize();
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1441,const MH_STATUS createStatus = MH_CreateHook(
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1454,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1464,MH_EnableHook(reinterpret_cast<LPVOID>(target));
+hook,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,1466,MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,2152,"if (!VirtualProtect(reinterpret_cast<void *>(firstRecord),"
+patch,Internal DX11 Base/Cheats/Officer/TraitConfigRuntime_impl.inc,2168,"VirtualProtect(reinterpret_cast<void *>(firstRecord),"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextDescHook.cpp,62,"if (!VirtualProtect(dst, size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextDescHook.cpp,74,"VirtualProtect(dst, size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextDescHook.cpp,76,"FlushInstructionCache(GetCurrentProcess(), dst, size);"
+file_io,Internal DX11 Base/Cheats/Officer/TraitTextEditorData.cpp,10,#include <fstream>
+file_io,Internal DX11 Base/Cheats/Officer/TraitTextEditorData.cpp,233,"std::ifstream file(path, std::ios::binary);"
+file_io,Internal DX11 Base/Cheats/Officer/TraitTextEditorData.cpp,264,"std::ofstream file(path, std::ios::binary | std::ios::trunc);"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,106,"if (!VirtualProtect(dst, sizeof(value), PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,118,"VirtualProtect(dst, sizeof(value), oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,120,"FlushInstructionCache(GetCurrentProcess(), dst, sizeof(value));"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,354,"if (!VirtualProtect(cave, kCaveSize, PAGE_EXECUTE_READ, &oldProtect)) {"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,360,"FlushInstructionCache(GetCurrentProcess(), cave, code.bytes.size());"
+hook,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,591,const MH_STATUS createStatus = MH_CreateHook(
+hook,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,600,const MH_STATUS enableStatus = MH_EnableHook(reinterpret_cast<LPVOID>(detour));
+hook,Internal DX11 Base/Cheats/Officer/TraitTextNameHook.cpp,602,MH_RemoveHook(reinterpret_cast<LPVOID>(detour));
+patch,Internal DX11 Base/Cheats/Officer/TraitTextSpecialDescHook.cpp,64,"if (!VirtualProtect(dst, size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextSpecialDescHook.cpp,76,"VirtualProtect(dst, size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitTextSpecialDescHook.cpp,78,"FlushInstructionCache(GetCurrentProcess(), dst, size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleInfo.cpp,27,"if (!VirtualProtect(reinterpret_cast<void *>(a), n, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleInfo.cpp,30,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(a), n);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleInfo.cpp,32,"VirtualProtect(reinterpret_cast<void *>(a), n, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleMap.cpp,33,"if (!VirtualProtect(reinterpret_cast<void *>(address), size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleMap.cpp,36,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(address), size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattleMap.cpp,38,"VirtualProtect(reinterpret_cast<void *>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattlePrep.cpp,24,"if (!VirtualProtect(reinterpret_cast<void *>(address), size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattlePrep.cpp,27,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(address), size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerBattlePrep.cpp,29,"VirtualProtect(reinterpret_cast<void *>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,84,"if(!VirtualProtect(reinterpret_cast<void*>(address),size,PAGE_EXECUTE_READWRITE,&old))return false;"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,86,"FlushInstructionCache(GetCurrentProcess(),reinterpret_cast<void*>(address),size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,88,"VirtualProtect(reinterpret_cast<void*>(address),size,old,&ignored);"
+include_inc,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,170,"#include ""TraitViewerKiraseData.inc"""
+include_inc,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,171,"#include ""TraitViewerInProgressData.inc"""
+include_inc,Internal DX11 Base/Cheats/Officer/TraitViewerNativeEditors.cpp,172,"#include ""TraitViewerBaseEditorData.inc"""
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerOfficerInfo.cpp,26,"if (!VirtualProtect(reinterpret_cast<void *>(address), size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerOfficerInfo.cpp,29,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(address), size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerOfficerInfo.cpp,31,"VirtualProtect(reinterpret_cast<void *>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerRoster.cpp,59,"if (!VirtualProtect(reinterpret_cast<void *>(address), size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerRoster.cpp,63,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(address), size);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerRoster.cpp,66,"VirtualProtect(reinterpret_cast<void *>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerWidths.cpp,36,"if (!VirtualProtect(dst, size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerWidths.cpp,48,"VirtualProtect(dst, size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/Officer/TraitViewerWidths.cpp,50,"FlushInstructionCache(GetCurrentProcess(), dst, size);"
+patch,Internal DX11 Base/Cheats/Social/ChildEarlyAppearance.cpp,208,"if (!VirtualProtect((LPVOID)(e.addr + 0x32), 4, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/Social/ChildEarlyAppearance.cpp,214,"VirtualProtect((LPVOID)(e.addr + 0x32), 4, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/Social/ChildEarlyAppearance.cpp,268,"if (!VirtualProtect((LPVOID)(e.addr + 0x32), 4, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/Social/ChildEarlyAppearance.cpp,273,"VirtualProtect((LPVOID)(e.addr + 0x32), 4, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/Social/Fastrelationship.cpp,42,"if (!VirtualProtect((LPVOID)address, size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/Social/Fastrelationship.cpp,46,"FlushInstructionCache(GetCurrentProcess(), (LPCVOID)address, size);"
+patch,Internal DX11 Base/Cheats/Social/Fastrelationship.cpp,49,"VirtualProtect((LPVOID)address, size, oldProtect, &dummy);"
+patch,Internal DX11 Base/Cheats/Social/Fastrelationship.cpp,98,"FlushInstructionCache(GetCurrentProcess(), (LPCVOID)g_fastIntimacyAddr,"
+patch,Internal DX11 Base/Cheats/Social/Infinitegift.cpp,41,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Social/Infinitegift.cpp,46,FlushInstructionCache(
+patch,Internal DX11 Base/Cheats/Social/Infinitegift.cpp,48,"VirtualProtect((LPVOID)g_giftHookAddr, 10, old, &tmp);"
+patch,Internal DX11 Base/Cheats/Social/Infinitetalk.cpp,261,FlushInstructionCache(
+thread,Internal DX11 Base/Cheats/Social/InstantLoveCave.cpp,192,"HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID) -> DWORD {"
+thread,Internal DX11 Base/Cheats/Social/Loyaltycave.cpp,75,HANDLE hThread = CreateThread(
+patch,Internal DX11 Base/Cheats/Social/PregnancyManager.cpp,609,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Social/PregnancyManager.cpp,627,VirtualProtect(
+patch,Internal DX11 Base/Cheats/Social/PregnancyManager.cpp,647,if (!VirtualProtect(
+patch,Internal DX11 Base/Cheats/Social/PregnancyManager.cpp,663,VirtualProtect(
+patch,Internal DX11 Base/Cheats/Social/Resonancecave.cpp,83,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/Social/Resonancecave.cpp,158,"FlushInstructionCache(GetCurrentProcess(),"
+thread,Internal DX11 Base/Cheats/Social/Resonancecave.cpp,203,std::thread([]() {
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,63,"if (!VirtualProtect((LPVOID)addr, 1, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,69,"VirtualProtect((LPVOID)addr, 1, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,90,"if (!VirtualProtect((LPVOID)addr, 1, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,96,"VirtualProtect((LPVOID)addr, 1, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,107,"if (!VirtualProtect((LPVOID)yearAddr, 2, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,113,"VirtualProtect((LPVOID)yearAddr, 2, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,126,"if (!VirtualProtect((LPVOID)monthAddr, 1, PAGE_READWRITE, &oldProt))"
+patch,Internal DX11 Base/Cheats/System/MonthCapture.cpp,132,"VirtualProtect((LPVOID)monthAddr, 1, oldProt, &tmp);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,42,"VirtualProtect((LPVOID)(p + 0x4BC732), 1, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,44,"VirtualProtect((LPVOID)(p + 0x4BC732), 1, old, &tmp);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,73,"VirtualProtect((LPVOID)(p + 0x4BC7DA), 1, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,75,"VirtualProtect((LPVOID)(p + 0x4BC7DA), 1, old, &tmp);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,104,"VirtualProtect((LPVOID)(p + 0x4BC95E), 1, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/System/SkillCondition.cpp,106,"VirtualProtect((LPVOID)(p + 0x4BC95E), 1, old, &tmp);"
+file_io,Internal DX11 Base/Cheats/System/SkillCountManager.cpp,7,#include <fstream>
+file_io,Internal DX11 Base/Cheats/System/SkillCountManager.cpp,45,"std::ofstream file(jsonPath, std::ios::trunc);"
+file_io,Internal DX11 Base/Cheats/System/SkillCountManager.cpp,119,std::ifstream file(jsonPath);
+link,Internal DX11 Base/Cheats/System/SpeedHack.cpp,10,"#pragma comment(lib, ""winmm.lib"")"
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,137,return target && MH_EnableHook(target) == MH_OK;
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,152,MH_DisableHook(target);
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,153,MH_RemoveHook(target);
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,304,"if (!HookCreated(MH_CreateHookApiEx(L""kernel32.dll"", ""QueryPerformanceCounter"","
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,308,"!HookCreated(MH_CreateHookApiEx(L""kernel32.dll"", ""GetTickCount"","
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,312,"!HookCreated(MH_CreateHookApiEx(L""kernel32.dll"", ""GetTickCount64"","
+hook,Internal DX11 Base/Cheats/System/SpeedHack.cpp,316,"!HookCreated(MH_CreateHookApiEx(L""winmm.dll"", ""timeGetTime"","
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,31,#define AddNotification StartSettingAddNotificationProxy
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,32,#define bUndiscoveredToRonin bUndiscoveredToRoninLegacyGuard
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,33,#define SetUndiscoveredToRonin LegacySetUndiscoveredToRonin
+include_inc,Internal DX11 Base/Cheats/System/StartSetting.cpp,34,"#include ""StartSetting_impl.inc"""
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,35,#undef SetUndiscoveredToRonin
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,36,#undef bUndiscoveredToRonin
+macro,Internal DX11 Base/Cheats/System/StartSetting.cpp,37,#undef AddNotification
+thread,Internal DX11 Base/Cheats/System/StartSetting.cpp,236,"CreateThread(nullptr, 0, UndiscoveredWatcherThread, nullptr, 0, nullptr);"
+patch,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,98,"if (!VirtualProtect((LPVOID)addr, 8, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,101,"VirtualProtect((LPVOID)addr, 8, old, &tmp);"
+patch,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,111,"if (!VirtualProtect((LPVOID)addr, 1, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,114,"VirtualProtect((LPVOID)addr, 1, old, &tmp);"
+thread,Internal DX11 Base/Cheats/System/StartSetting_impl.inc,552,"g_startSettingThread = CreateThread(nullptr, 0, StartSettingThread,"
+thread,Internal DX11 Base/Cheats/System/TengiCave.cpp,129,HANDLE hThread = CreateThread(
+patch,Internal DX11 Base/Cheats/System/TengiCave.cpp,298,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address),"
+patch,Internal DX11 Base/Cheats/System/TengiCave.cpp,307,"VirtualProtect(reinterpret_cast<LPVOID>(address),"
+hook,Internal DX11 Base/Cheats/System/TengiCave.cpp,636,const MH_STATUS init = MH_Initialize();
+hook,Internal DX11 Base/Cheats/System/TengiCave.cpp,650,"status = MH_CreateHook(reinterpret_cast<void *>(base + hook.rva),"
+hook,Internal DX11 Base/Cheats/System/TengiCave.cpp,662,status = MH_EnableHook(reinterpret_cast<void *>(base + hook.rva));
+hook,Internal DX11 Base/Cheats/System/TengiCave.cpp,674,const MH_STATUS disabled = MH_DisableHook(target);
+hook,Internal DX11 Base/Cheats/System/TengiCave.cpp,676,MH_RemoveHook(target);
+patch,Internal DX11 Base/Cheats/War/AIExecutionConditionChange.cpp,151,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIExecutionConditionChange.cpp,167,"VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIExecutionConditionChange.cpp,173,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/AIExecutionConditionChange.cpp,365,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/AIHighHonorSurrenderFix.cpp,93,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIHighHonorSurrenderFix.cpp,109,"VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIHighHonorSurrenderFix.cpp,115,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/AIHighHonorSurrenderFix.cpp,219,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/AIRefusalWarFix.cpp,169,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIRefusalWarFix.cpp,185,"VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/AIRefusalWarFix.cpp,191,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/AIRefusalWarFix.cpp,398,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,102,"if (VirtualProtect((LPVOID)addr, 1, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,104,"VirtualProtect((LPVOID)addr, 1, old, &old);"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,114,"if (VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,116,"VirtualProtect((LPVOID)addr, 5, old, &old);"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,131,"if (VirtualProtect((LPVOID)addr, 2, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/BattleEnvironment.cpp,133,"VirtualProtect((LPVOID)addr, 2, old, &old);"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,288,"if (!VirtualProtect((LPVOID)rangeStart, rangeSize, writeProtect, &oldProtect))"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,300,"VirtualProtect((LPVOID)rangeStart, rangeSize, oldProtect, &tmp);"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,327,"if (!VirtualProtect((LPVOID)rec.addr, 8, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,330,"VirtualProtect((LPVOID)rec.addr, 8, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,366,"if (!VirtualProtect((LPVOID)rec.addr, 8, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/War/BattleMapShuffle.cpp,369,"VirtualProtect((LPVOID)rec.addr, 8, old, &tmp);"
+thread,Internal DX11 Base/Cheats/War/Battleunitcapture.cpp,265,HANDLE hThread = CreateThread(
+patch,Internal DX11 Base/Cheats/War/Catapult.cpp,71,"VirtualProtect((LPVOID)target, 0x40, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/War/Catapult.cpp,88,"VirtualProtect((LPVOID)target, 0x40, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/Celestia.cpp,85,"VirtualProtect((LPVOID)target, 0x100, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/War/Celestia.cpp,136,"VirtualProtect((LPVOID)target, 0x100, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/CouncilContinueAfterMove.h,179,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address), size,"
+patch,Internal DX11 Base/Cheats/War/CouncilContinueAfterMove.h,192,"VirtualProtect(reinterpret_cast<LPVOID>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/CouncilContinueAfterMove.h,194,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<LPCVOID>(address), size);"
+patch,Internal DX11 Base/Cheats/War/CouncilContinueAfterMove.h,296,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<LPCVOID>(gCave), kCaveSize);"
+patch,Internal DX11 Base/Cheats/War/CouncilExecuteFreeOfficers.cpp,56,"if (!VirtualProtect(reinterpret_cast<void*>(address), size,"
+patch,Internal DX11 Base/Cheats/War/CouncilExecuteFreeOfficers.cpp,69,"VirtualProtect(reinterpret_cast<void*>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/CouncilExecuteFreeOfficers.cpp,71,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/CouncilExecuteFreeOfficers.cpp,276,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/CouncilExecuteFreeOfficers.cpp,283,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/Defbuildingboost.cpp,124,"if (VirtualProtect((LPVOID)p, 0x20BA0, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/Defbuildingboost.cpp,181,"VirtualProtect((LPVOID)p, 0x20BA0, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/DeputyCaptureFix.cpp,89,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr), size,"
+patch,Internal DX11 Base/Cheats/War/DeputyCaptureFix.cpp,102,"VirtualProtect(reinterpret_cast<LPVOID>(addr), size,"
+patch,Internal DX11 Base/Cheats/War/DeputyCaptureFix.cpp,106,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/DeputyCaptureFix.cpp,199,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/Dongto.cpp,61,"VirtualProtect((LPVOID)dp, 0x108B, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/War/Dongto.cpp,88,"VirtualProtect((LPVOID)dp, 0x108B, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,68,// 동일 값이면 VirtualProtect/쓰기 자체를 생략합니다.
+patch,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,74,"if (!VirtualProtect((LPVOID)addr, size, PAGE_READWRITE, &old)) return;"
+patch,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,76,"VirtualProtect((LPVOID)addr, size, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,84,"if (!VirtualProtect((LPVOID)addr, 8, PAGE_READWRITE, &old)) return;"
+patch,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,86,"VirtualProtect((LPVOID)addr, 8, old, &tmp);"
+thread,Internal DX11 Base/Cheats/War/FactionLordBonus.cpp,302,"g_factionLordBonusThread = CreateThread(nullptr, 0,"
+patch,Internal DX11 Base/Cheats/War/GovernorPrisonerDisposal.cpp,164,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr), size,"
+patch,Internal DX11 Base/Cheats/War/GovernorPrisonerDisposal.cpp,177,"VirtualProtect(reinterpret_cast<LPVOID>(addr), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/GovernorPrisonerDisposal.cpp,179,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/GovernorPrisonerDisposal.cpp,265,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/IsolatedCityCaptureFix.cpp,106,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/IsolatedCityCaptureFix.cpp,121,"VirtualProtect(reinterpret_cast<LPVOID>(addr),"
+patch,Internal DX11 Base/Cheats/War/IsolatedCityCaptureFix.cpp,127,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/IsolatedCityCaptureFix.cpp,258,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/IsolatedTerritoryMovement.h,103,"if (!VirtualProtect(reinterpret_cast<void*>(address), size,"
+patch,Internal DX11 Base/Cheats/War/IsolatedTerritoryMovement.h,116,"VirtualProtect(reinterpret_cast<void*>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/IsolatedTerritoryMovement.h,118,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(address), size);"
+patch,Internal DX11 Base/Cheats/War/IsolatedTerritoryMovement.h,438,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(memory), c.bytes.size());"
+macro,Internal DX11 Base/Cheats/War/IsolatedTerritoryMovementFeature.h,4,#undef max
+patch,Internal DX11 Base/Cheats/War/ReinforcementArrivalAction.cpp,56,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address), size,"
+patch,Internal DX11 Base/Cheats/War/ReinforcementArrivalAction.cpp,69,"VirtualProtect(reinterpret_cast<LPVOID>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/ReinforcementArrivalAction.cpp,71,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/ReinforcementDefenderPlacement.cpp,134,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address), size,"
+patch,Internal DX11 Base/Cheats/War/ReinforcementDefenderPlacement.cpp,147,"VirtualProtect(reinterpret_cast<LPVOID>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/ReinforcementDefenderPlacement.cpp,149,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,84,"if (!VirtualProtect((LPVOID)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,96,"VirtualProtect((LPVOID)addr, size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,98,"FlushInstructionCache(GetCurrentProcess(), (LPCVOID)addr, size);"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,318,"if (!VirtualProtect((LPVOID)addr, 8, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,321,"VirtualProtect((LPVOID)addr, 8, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,332,"if (!VirtualProtect((LPVOID)addr, 8, PAGE_READWRITE, &old))"
+patch,Internal DX11 Base/Cheats/War/Roadblock.cpp,335,"VirtualProtect((LPVOID)addr, 8, old, &tmp);"
+thread,Internal DX11 Base/Cheats/War/Roadblock.cpp,393,"g_roadThread = CreateThread(nullptr, 0, RoadBlockThread, nullptr, 0, nullptr);"
+file_io,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,7,#include <fstream>
+patch,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,42,"if (!VirtualProtect(reinterpret_cast<void*>(addr), size, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,45,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(addr), size);"
+patch,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,47,"VirtualProtect(reinterpret_cast<void*>(addr), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,115,"FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<const void*>(thunk), i);"
+file_io,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,125,std::ifstream file(GetConfigPath());
+file_io,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,184,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+file_io,Internal DX11 Base/Cheats/War/RulerTransferProposal.cpp,213,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+patch,Internal DX11 Base/Cheats/War/Selfheal.cpp,59,"VirtualProtect((LPVOID)p, 0x108B, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/War/Selfheal.cpp,96,"VirtualProtect((LPVOID)p, 0x108B, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/ShortBattleCooldown.cpp,36,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address), sizeof(value), PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/War/ShortBattleCooldown.cpp,48,"VirtualProtect(reinterpret_cast<LPVOID>(address), sizeof(value), oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,112,// [크래시 방지] 타일 테이블이 쓰기 보호된 경우 AV 크래시 방지용 VirtualProtect
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,114,"if (VirtualProtect((LPVOID)target, 8, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,116,"VirtualProtect((LPVOID)target, 8, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,373,// [크래시 방지] 타일 테이블이 쓰기 보호된 경우 AV 크래시 방지용 VirtualProtect
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,375,"if (VirtualProtect((LPVOID)target, 8, PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/SiegeWarfare.cpp,377,"VirtualProtect((LPVOID)target, 8, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/SpecialAbility.cpp,320,// 성능 최적화: 현재 값이 이미 목표값과 같으면 VirtualProtect 및 쓰기 건너뜀
+patch,Internal DX11 Base/Cheats/War/SpecialAbility.cpp,328,"if (VirtualProtect((LPVOID)targetAddr, 1, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/SpecialAbility.cpp,330,"VirtualProtect((LPVOID)targetAddr, 1, old, &old);"
+patch,Internal DX11 Base/Cheats/War/SpecialAbility.cpp,545,"if (VirtualProtect((LPVOID)limitAddr, 1, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats/War/SpecialAbility.cpp,547,"VirtualProtect((LPVOID)limitAddr, 1, old, &old);"
+patch,Internal DX11 Base/Cheats/War/Spell5HealProbe.cpp,191,"if (!VirtualProtect(reinterpret_cast<LPVOID>(addr), sizeof(SpellRecord), PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Cheats/War/Spell5HealProbe.cpp,195,"VirtualProtect(reinterpret_cast<LPVOID>(addr), sizeof(SpellRecord), oldProtect, &tmpProtect);"
+patch,Internal DX11 Base/Cheats/War/StratagemGaugeMax.cpp,104,"FlushInstructionCache(GetCurrentProcess(), cave, idx);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,638,"FlushInstructionCache(GetCurrentProcess(), c, i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,663,"if (!VirtualProtect(reinterpret_cast<LPVOID>(callSite), 5,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,676,"VirtualProtect(reinterpret_cast<LPVOID>(callSite), 5, oldProtect, &tmpProtect);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,685,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,687,"VirtualProtect(reinterpret_cast<LPVOID>(callSite), 5,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,757,"FlushInstructionCache(GetCurrentProcess(), cave, idx);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,856,"FlushInstructionCache(GetCurrentProcess(), cave, idx);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,999,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1309,"FlushInstructionCache(GetCurrentProcess(), cave, idx);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1321,"if (!VirtualProtect(reinterpret_cast<LPVOID>(cmpAddr + 2), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1329,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1331,"VirtualProtect(reinterpret_cast<LPVOID>(cmpAddr + 2), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1794,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1909,"if (!VirtualProtect(reinterpret_cast<LPVOID>(cmpImmAddr),1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1913,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,1915,"VirtualProtect(reinterpret_cast<LPVOID>(cmpImmAddr),1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2174,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2302,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2497,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2669,"FlushInstructionCache(GetCurrentProcess(),c,i);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2680,"if(!VirtualProtect(reinterpret_cast<LPVOID>(boundAddr+2),1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2684,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,2686,"VirtualProtect(reinterpret_cast<LPVOID>(boundAddr+2),1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,3663,"FlushInstructionCache(GetCurrentProcess(), cave, idx);"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,3898,"if (!VirtualProtect(reinterpret_cast<LPVOID>(slotAddr),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,3902,"VirtualProtect(reinterpret_cast<LPVOID>(slotAddr),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4309,"if (VirtualProtect(reinterpret_cast<LPVOID>(g_id5CountAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4313,"VirtualProtect(reinterpret_cast<LPVOID>(g_id5CountAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4446,"if (!VirtualProtect(reinterpret_cast<LPVOID>(availableAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4454,"VirtualProtect(reinterpret_cast<LPVOID>(availableAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4654,"if (!VirtualProtect(reinterpret_cast<LPVOID>(immAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4656,"AddLog(u8""[책략5루프DBG] VirtualProtect 실패: %p"","
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4663,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4665,"VirtualProtect(reinterpret_cast<LPVOID>(immAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4689,"if (VirtualProtect(reinterpret_cast<LPVOID>(g_fiveLoopImmAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4693,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4695,"VirtualProtect(reinterpret_cast<LPVOID>(g_fiveLoopImmAddr), 1,"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4762,"if (VirtualProtect(reinterpret_cast<LPVOID>(g_fiveRuntimeSlotAddr),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4766,"VirtualProtect(reinterpret_cast<LPVOID>(g_fiveRuntimeSlotAddr),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4961,"if (!VirtualProtect(reinterpret_cast<LPVOID>(matchedSlot),"
+patch,Internal DX11 Base/Cheats/War/StratagemSlotProbe.cpp,4969,"VirtualProtect(reinterpret_cast<LPVOID>(matchedSlot),"
+patch,Internal DX11 Base/Cheats/War/Terrainignore.cpp,126,"VirtualProtect((LPVOID)p, 0xD8C, PAGE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats/War/Terrainignore.cpp,202,"VirtualProtect((LPVOID)p, 0xD8C, old, &tmp);"
+patch,Internal DX11 Base/Cheats/War/TroopCountCombatScaling.cpp,49,"if (!VirtualProtect(reinterpret_cast<LPVOID>(address), size,"
+patch,Internal DX11 Base/Cheats/War/TroopCountCombatScaling.cpp,62,"VirtualProtect(reinterpret_cast<LPVOID>(address), size, oldProtect, &ignored);"
+patch,Internal DX11 Base/Cheats/War/TroopCountCombatScaling.cpp,64,"FlushInstructionCache(GetCurrentProcess(),"
+patch,Internal DX11 Base/Cheats.cpp,181,// 단일 항목 수정 (VirtualProtect 포함 - UI 버튼용)
+patch,Internal DX11 Base/Cheats.cpp,189,"if (VirtualProtect((LPVOID)targetAddr, size, PAGE_READWRITE, &oldProt)) {"
+patch,Internal DX11 Base/Cheats.cpp,191,"VirtualProtect((LPVOID)targetAddr, size, oldProt, &oldProt);"
+patch,Internal DX11 Base/Cheats.cpp,193,"AddLog(u8""[ERROR] VirtualProtect 실패 (Addr:%p, Size:%d)"", (void *)targetAddr, size);"
+patch,Internal DX11 Base/Cheats.cpp,203,// 초고속 수정 (VirtualProtect 제외 - 대량 처리 루프용)
+patch,Internal DX11 Base/Cheats.cpp,239,"if (VirtualProtect(s, sizeof(Stats), PAGE_READWRITE, &old)) {"
+patch,Internal DX11 Base/Cheats.cpp,245,"VirtualProtect(s, sizeof(Stats), old, &old);"
+patch,Internal DX11 Base/Cheats.cpp,263,"if (VirtualProtect((LPVOID)targetAddr, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) {"
+patch,Internal DX11 Base/Cheats.cpp,273,"VirtualProtect((LPVOID)targetAddr, 5, oldProtect, &oldProtect);"
+patch,Internal DX11 Base/Cheats.cpp,298,"VirtualProtect((LPVOID)addr, 8, PAGE_EXECUTE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats.cpp,302,"VirtualProtect((LPVOID)addr, 8, old, &old);"
+patch,Internal DX11 Base/Cheats.cpp,312,"VirtualProtect((LPVOID)addr, 8, PAGE_EXECUTE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats.cpp,316,"VirtualProtect((LPVOID)addr, 8, old, &old);"
+patch,Internal DX11 Base/Cheats.cpp,382,"VirtualProtect((LPVOID)marriageAddr, 2, PAGE_EXECUTE_READWRITE, &old);"
+patch,Internal DX11 Base/Cheats.cpp,394,"VirtualProtect((LPVOID)marriageAddr, 2, old, &old);"
+patch,Internal DX11 Base/Cheats.cpp,458,"if (!VirtualProtect((LPVOID)marriageAddr, 2,"
+patch,Internal DX11 Base/Cheats.cpp,460,"AddLog(""[Marriage] VirtualProtect failed: %p"","
+patch,Internal DX11 Base/Cheats.cpp,473,FlushInstructionCache(
+patch,Internal DX11 Base/Cheats.cpp,477,"VirtualProtect((LPVOID)marriageAddr, 2, old, &tmp);"
+hook,Internal DX11 Base/Cheats.cpp,501,if (targetAddr && MH_Initialize() == MH_OK) {
+hook,Internal DX11 Base/Cheats.cpp,502,"if (MH_CreateHook((LPVOID)targetAddr, &hkHeroLogic, (LPVOID *)&oGetHeroStats) == MH_OK) {"
+hook,Internal DX11 Base/Cheats.cpp,503,if (MH_EnableHook((LPVOID)targetAddr) == MH_OK) {
+macro,Internal DX11 Base/Config.cpp,1,#define SaveConfig SaveConfigBase
+macro,Internal DX11 Base/Config.cpp,2,#define LoadConfig LoadConfigBase
+include_inc,Internal DX11 Base/Config.cpp,3,"#include ""ConfigBase.inc"""
+macro,Internal DX11 Base/Config.cpp,4,#undef LoadConfig
+macro,Internal DX11 Base/Config.cpp,5,#undef SaveConfig
+file_io,Internal DX11 Base/Config.cpp,28,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+file_io,Internal DX11 Base/Config.cpp,65,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+file_io,Internal DX11 Base/Config.cpp,80,std::ifstream file(GetConfigPath());
+file_io,Internal DX11 Base/Config.cpp,96,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+file_io,Internal DX11 Base/Config.cpp,133,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+file_io,Internal DX11 Base/Config.cpp,148,std::ifstream file(GetConfigPath());
+file_io,Internal DX11 Base/Config.cpp,173,"std::ifstream in(GetConfigPath(), std::ios::binary);"
+file_io,Internal DX11 Base/Config.cpp,208,"std::ofstream out(GetConfigPath(), std::ios::binary | std::ios::trunc);"
+file_io,Internal DX11 Base/Config.cpp,222,std::ifstream file(GetConfigPath());
+file_io,Internal DX11 Base/ConfigBase.inc,11,#include <fstream>
+file_io,Internal DX11 Base/ConfigBase.inc,198,std::ifstream file(GetConfigPath());
+file_io,Internal DX11 Base/ConfigBase.inc,218,std::ofstream file(GetConfigPath());
+file_io,Internal DX11 Base/ConfigBase.inc,311,std::ifstream file(GetConfigPath());
+macro,Internal DX11 Base/CouncilCompactSection.h,52,#define Checkbox CouncilCheckboxWithIsolatedTerritory
+macro,Internal DX11 Base/CouncilCompactSection.h,53,#define IsItemHovered CouncilIsItemHoveredWithIsolatedTerritory
+macro,Internal DX11 Base/CouncilCompactSection.h,55,#undef IsItemHovered
+macro,Internal DX11 Base/CouncilCompactSection.h,56,#undef Checkbox
+macro,Internal DX11 Base/debug.cpp,1,#define NOMINMAX
+thread,Internal DX11 Base/debug.cpp,30,std::thread thread;
+thread,Internal DX11 Base/debug.cpp,106,"std::thread&& worker,"
+thread,Internal DX11 Base/debug.cpp,110,"// 기존 구현의 std::thread(...).detach()를 관리형 worker로 바꾸고,"
+thread,Internal DX11 Base/debug.cpp,135,"std::thread worker([task = std::move(task_), done]() mutable {"
+macro,Internal DX11 Base/debug.cpp,147,#define vector T05DebugVector
+macro,Internal DX11 Base/debug.cpp,148,#define thread T05ManagedThread
+macro,Internal DX11 Base/debug.cpp,149,#define debuging debugingLegacy
+include_inc,Internal DX11 Base/debug.cpp,150,"#include ""debug_impl.inc"""
+macro,Internal DX11 Base/debug.cpp,151,#undef debuging
+macro,Internal DX11 Base/debug.cpp,152,#undef thread
+macro,Internal DX11 Base/debug.cpp,153,#undef vector
+thread,Internal DX11 Base/debug.cpp,169,"std::thread&& worker,"
+macro,Internal DX11 Base/debug_impl.inc,1,#define NOMINMAX
+thread,Internal DX11 Base/debug_impl.inc,388,"std::thread(InternalFirstScan, s_scannerSettings).detach();"
+thread,Internal DX11 Base/debug_impl.inc,393,"std::thread(InternalNextScan, s_scannerSettings).detach();"
+link,Internal DX11 Base/dllmain.cpp,12,"#pragma comment(linker, ""/export:DirectInput8Create=C:\\Windows\\System32\\dinput8.DirectInput8Create"")"
+link,Internal DX11 Base/dllmain.cpp,13,"#pragma comment(linker, ""/export:DllCanUnloadNow=C:\\Windows\\System32\\dinput8.DllCanUnloadNow"")"
+link,Internal DX11 Base/dllmain.cpp,14,"#pragma comment(linker, ""/export:DllGetClassObject=C:\\Windows\\System32\\dinput8.DllGetClassObject"")"
+link,Internal DX11 Base/dllmain.cpp,15,"#pragma comment(linker, ""/export:DllRegisterServer=C:\\Windows\\System32\\dinput8.DllRegisterServer"")"
+link,Internal DX11 Base/dllmain.cpp,16,"#pragma comment(linker, ""/export:DllUnregisterServer=C:\\Windows\\System32\\dinput8.DllUnregisterServer"")"
+link,Internal DX11 Base/dllmain.cpp,17,"#pragma comment(linker, ""/export:GetdfDIJoystick=C:\\Windows\\System32\\dinput8.GetdfDIJoystick"")"
+thread,Internal DX11 Base/dllmain.cpp,28,"HANDLE hThread = CreateThread(nullptr, 0, MainThread_Initialize, DX11Base::g_hModule, 0, nullptr);"
+link,Internal DX11 Base/dllmain_dxgi.cpp,9,"#pragma comment(linker, ""/export:ApplyCompatResolution=C:\\Windows\\System32\\dxgi.ApplyCompatResolution"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,10,"#pragma comment(linker, ""/export:CompatString=C:\\Windows\\System32\\dxgi.CompatString"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,11,"#pragma comment(linker, ""/export:CompatValue=C:\\Windows\\System32\\dxgi.CompatValue"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,12,"#pragma comment(linker, ""/export:DXGIDeclareAdapterRemovalSupport=C:\\Windows\\System32\\dxgi.DXGIDeclareAdapterRemovalSupport"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,13,"#pragma comment(linker, ""/export:DXGIDumpJournal=C:\\Windows\\System32\\dxgi.DXGIDumpJournal"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,14,"#pragma comment(linker, ""/export:DXGIGetDebugInterface1=C:\\Windows\\System32\\dxgi.DXGIGetDebugInterface1"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,15,"#pragma comment(linker, ""/export:DXGIGetDebugInterface=C:\\Windows\\System32\\dxgi.DXGIGetDebugInterface"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,16,"#pragma comment(linker, ""/export:DXGIReportAdapterConfiguration=C:\\Windows\\System32\\dxgi.DXGIReportAdapterConfiguration"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,17,"#pragma comment(linker, ""/export:PIXBeginCapture=C:\\Windows\\System32\\dxgi.PIXBeginCapture"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,18,"#pragma comment(linker, ""/export:PIXEndCapture=C:\\Windows\\System32\\dxgi.PIXEndCapture"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,19,"#pragma comment(linker, ""/export:PIXGetCaptureState=C:\\Windows\\System32\\dxgi.PIXGetCaptureState"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,20,"#pragma comment(linker, ""/export:SetAppCompatString=C:\\Windows\\System32\\dxgi.SetAppCompatString"")"
+link,Internal DX11 Base/dllmain_dxgi.cpp,21,"#pragma comment(linker, ""/export:SetAppCompatValue=C:\\Windows\\System32\\dxgi.SetAppCompatValue"")"
+thread,Internal DX11 Base/dllmain_dxgi.cpp,39,"HANDLE hThread = CreateThread(nullptr, 0, MainThread_Initialize, DX11Base::g_hModule, 0, nullptr);"
+link,Internal DX11 Base/dllmain_hid.cpp,12,"#pragma comment(linker, ""/export:HidD_FlushQueue=C:\\Windows\\System32\\hid.HidD_FlushQueue"")"
+link,Internal DX11 Base/dllmain_hid.cpp,13,"#pragma comment(linker, ""/export:HidD_FreePreparsedData=C:\\Windows\\System32\\hid.HidD_FreePreparsedData"")"
+link,Internal DX11 Base/dllmain_hid.cpp,14,"#pragma comment(linker, ""/export:HidD_GetAttributes=C:\\Windows\\System32\\hid.HidD_GetAttributes"")"
+link,Internal DX11 Base/dllmain_hid.cpp,15,"#pragma comment(linker, ""/export:HidD_GetConfiguration=C:\\Windows\\System32\\hid.HidD_GetConfiguration"")"
+link,Internal DX11 Base/dllmain_hid.cpp,16,"#pragma comment(linker, ""/export:HidD_GetFeature=C:\\Windows\\System32\\hid.HidD_GetFeature"")"
+link,Internal DX11 Base/dllmain_hid.cpp,17,"#pragma comment(linker, ""/export:HidD_GetHidGuid=C:\\Windows\\System32\\hid.HidD_GetHidGuid"")"
+link,Internal DX11 Base/dllmain_hid.cpp,18,"#pragma comment(linker, ""/export:HidD_GetInputReport=C:\\Windows\\System32\\hid.HidD_GetInputReport"")"
+link,Internal DX11 Base/dllmain_hid.cpp,19,"#pragma comment(linker, ""/export:HidD_GetIndexedString=C:\\Windows\\System32\\hid.HidD_GetIndexedString"")"
+link,Internal DX11 Base/dllmain_hid.cpp,20,"#pragma comment(linker, ""/export:HidD_GetManufacturerString=C:\\Windows\\System32\\hid.HidD_GetManufacturerString"")"
+link,Internal DX11 Base/dllmain_hid.cpp,21,"#pragma comment(linker, ""/export:HidD_GetMsGenreDescriptor=C:\\Windows\\System32\\hid.HidD_GetMsGenreDescriptor"")"
+link,Internal DX11 Base/dllmain_hid.cpp,22,"#pragma comment(linker, ""/export:HidD_GetNumInputBuffers=C:\\Windows\\System32\\hid.HidD_GetNumInputBuffers"")"
+link,Internal DX11 Base/dllmain_hid.cpp,23,"#pragma comment(linker, ""/export:HidD_GetPhysicalDescriptor=C:\\Windows\\System32\\hid.HidD_GetPhysicalDescriptor"")"
+link,Internal DX11 Base/dllmain_hid.cpp,24,"#pragma comment(linker, ""/export:HidD_GetPreparsedData=C:\\Windows\\System32\\hid.HidD_GetPreparsedData"")"
+link,Internal DX11 Base/dllmain_hid.cpp,25,"#pragma comment(linker, ""/export:HidD_GetProductString=C:\\Windows\\System32\\hid.HidD_GetProductString"")"
+link,Internal DX11 Base/dllmain_hid.cpp,26,"#pragma comment(linker, ""/export:HidD_GetSerialNumberString=C:\\Windows\\System32\\hid.HidD_GetSerialNumberString"")"
+link,Internal DX11 Base/dllmain_hid.cpp,27,"#pragma comment(linker, ""/export:HidD_Hello=C:\\Windows\\System32\\hid.HidD_Hello"")"
+link,Internal DX11 Base/dllmain_hid.cpp,28,"#pragma comment(linker, ""/export:HidD_SetConfiguration=C:\\Windows\\System32\\hid.HidD_SetConfiguration"")"
+link,Internal DX11 Base/dllmain_hid.cpp,29,"#pragma comment(linker, ""/export:HidD_SetFeature=C:\\Windows\\System32\\hid.HidD_SetFeature"")"
+link,Internal DX11 Base/dllmain_hid.cpp,30,"#pragma comment(linker, ""/export:HidD_SetNumInputBuffers=C:\\Windows\\System32\\hid.HidD_SetNumInputBuffers"")"
+link,Internal DX11 Base/dllmain_hid.cpp,31,"#pragma comment(linker, ""/export:HidD_SetOutputReport=C:\\Windows\\System32\\hid.HidD_SetOutputReport"")"
+link,Internal DX11 Base/dllmain_hid.cpp,32,"#pragma comment(linker, ""/export:HidP_GetCaps=C:\\Windows\\System32\\hid.HidP_GetCaps"")"
+link,Internal DX11 Base/dllmain_hid.cpp,33,"#pragma comment(linker, ""/export:HidP_GetButtonCaps=C:\\Windows\\System32\\hid.HidP_GetButtonCaps"")"
+link,Internal DX11 Base/dllmain_hid.cpp,34,"#pragma comment(linker, ""/export:HidP_GetValueCaps=C:\\Windows\\System32\\hid.HidP_GetValueCaps"")"
+link,Internal DX11 Base/dllmain_hid.cpp,35,"#pragma comment(linker, ""/export:HidP_GetExtendedAttributes=C:\\Windows\\System32\\hid.HidP_GetExtendedAttributes"")"
+link,Internal DX11 Base/dllmain_hid.cpp,36,"#pragma comment(linker, ""/export:HidP_GetUsageValue=C:\\Windows\\System32\\hid.HidP_GetUsageValue"")"
+link,Internal DX11 Base/dllmain_hid.cpp,37,"#pragma comment(linker, ""/export:HidP_GetScaledUsageValue=C:\\Windows\\System32\\hid.HidP_GetScaledUsageValue"")"
+link,Internal DX11 Base/dllmain_hid.cpp,38,"#pragma comment(linker, ""/export:HidP_GetUsageValueArray=C:\\Windows\\System32\\hid.HidP_GetUsageValueArray"")"
+link,Internal DX11 Base/dllmain_hid.cpp,39,"#pragma comment(linker, ""/export:HidP_GetButtons=C:\\Windows\\System32\\hid.HidP_GetButtons"")"
+link,Internal DX11 Base/dllmain_hid.cpp,40,"#pragma comment(linker, ""/export:HidP_GetButtonsEx=C:\\Windows\\System32\\hid.HidP_GetButtonsEx"")"
+link,Internal DX11 Base/dllmain_hid.cpp,41,"#pragma comment(linker, ""/export:HidP_GetUsageAndPageList=C:\\Windows\\System32\\hid.HidP_GetUsageAndPageList"")"
+link,Internal DX11 Base/dllmain_hid.cpp,42,"#pragma comment(linker, ""/export:HidP_GetSpecificButtonCaps=C:\\Windows\\System32\\hid.HidP_GetSpecificButtonCaps"")"
+link,Internal DX11 Base/dllmain_hid.cpp,43,"#pragma comment(linker, ""/export:HidP_GetSpecificValueCaps=C:\\Windows\\System32\\hid.HidP_GetSpecificValueCaps"")"
+link,Internal DX11 Base/dllmain_hid.cpp,44,"#pragma comment(linker, ""/export:HidP_InitializeReportForID=C:\\Windows\\System32\\hid.HidP_InitializeReportForID"")"
+link,Internal DX11 Base/dllmain_hid.cpp,45,"#pragma comment(linker, ""/export:HidP_SetUsageValue=C:\\Windows\\System32\\hid.HidP_SetUsageValue"")"
+link,Internal DX11 Base/dllmain_hid.cpp,46,"#pragma comment(linker, ""/export:HidP_SetScaledUsageValue=C:\\Windows\\System32\\hid.HidP_SetScaledUsageValue"")"
+link,Internal DX11 Base/dllmain_hid.cpp,47,"#pragma comment(linker, ""/export:HidP_SetUsageValueArray=C:\\Windows\\System32\\hid.HidP_SetUsageValueArray"")"
+link,Internal DX11 Base/dllmain_hid.cpp,48,"#pragma comment(linker, ""/export:HidP_SetButtons=C:\\Windows\\System32\\hid.HidP_SetButtons"")"
+link,Internal DX11 Base/dllmain_hid.cpp,49,"#pragma comment(linker, ""/export:HidP_UnsetButtons=C:\\Windows\\System32\\hid.HidP_UnsetButtons"")"
+link,Internal DX11 Base/dllmain_hid.cpp,50,"#pragma comment(linker, ""/export:HidP_TranslateUsageAndPagesToI8042ScanCodes=C:\\Windows\\System32\\hid.HidP_TranslateUsageAndPagesToI8042ScanCodes"")"
+link,Internal DX11 Base/dllmain_hid.cpp,51,"#pragma comment(linker, ""/export:HidP_UsageListDifference=C:\\Windows\\System32\\hid.HidP_UsageListDifference"")"
+thread,Internal DX11 Base/dllmain_hid.cpp,62,"HANDLE hThread = CreateThread(nullptr, 0, MainThread_Initialize, DX11Base::g_hModule, 0, nullptr);"
+file_io,Internal DX11 Base/EmbeddedJsonResources.h,6,#include <fstream>
+file_io,Internal DX11 Base/EmbeddedJsonResources.h,63,"std::ifstream file(path, std::ios::binary);"
+hook,Internal DX11 Base/Engine.cpp,251,"SetWindowLongPtr(g_Engine->pGameWindow, GWLP_WNDPROC, (LONG_PTR)m_OldWndProc);"
+hook,Internal DX11 Base/Engine.cpp,254,MH_DisableHook(MH_ALL_HOOKS);
+hook,Internal DX11 Base/Engine.cpp,548,"m_OldWndProc = (WNDPROC)SetWindowLongPtr(g_Engine->pGameWindow, GWLP_WNDPROC, (LONG_PTR)WndProc);"
+hook,Internal DX11 Base/Engine.cpp,646,Hooking::Hooking() { MH_Initialize(); }
+hook,Internal DX11 Base/Engine.cpp,647,Hooking::~Hooking() { MH_Uninitialize(); }
+hook,Internal DX11 Base/Engine.cpp,648,void Hooking::Initialize() { MH_EnableHook(MH_ALL_HOOKS); }
+hook,Internal DX11 Base/Engine.cpp,649,void Hooking::Shutdown() { MH_DisableHook(MH_ALL_HOOKS); }
+hook,Internal DX11 Base/Engine.cpp,651,"if (MH_CreateHook(lpTarget, pDetour, pOrig) != MH_OK || MH_EnableHook(lpTarget) != MH_OK)"
+hook,Internal DX11 Base/Engine.cpp,655,void Hooking::EnableHook(LPVOID lpTarget) { MH_EnableHook(lpTarget); }
+hook,Internal DX11 Base/Engine.cpp,656,void Hooking::DisableHook(LPVOID lpTarget) { MH_DisableHook(lpTarget); }
+hook,Internal DX11 Base/Engine.cpp,657,void Hooking::RemoveHook(LPVOID lpTarget) { MH_RemoveHook(lpTarget); }
+file_io,Internal DX11 Base/Framework/imconfig.h,49,//#define IMGUI_DISABLE_DEFAULT_FILE_FUNCTIONS              // Don't implement ImFileOpen/ImFileClose/ImFileRead/ImFileWrite and ImFileHandle so you can implement them yourself if you don't want to link with fopen/fclose/fread/fwrite. This will also disable the LogToTTY() function.
+macro,Internal DX11 Base/Framework/imconfig.h,98,#define IM_VEC2_CLASS_EXTRA                                                     \
+macro,Internal DX11 Base/Framework/imconfig.h,102,#define IM_VEC4_CLASS_EXTRA                                                     \
+macro,Internal DX11 Base/Framework/imgui.cpp,1003,#define _CRT_SECURE_NO_WARNINGS
+macro,Internal DX11 Base/Framework/imgui.cpp,1007,#define IMGUI_DEFINE_MATH_OPERATORS
+macro,Internal DX11 Base/Framework/imgui.cpp,1020,#define IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui.cpp,1025,#define IMGUI_DISABLE_WIN32_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui.cpp,1029,#define WIN32_LEAN_AND_MEAN
+macro,Internal DX11 Base/Framework/imgui.cpp,1032,#define NOMINMAX
+file_io,Internal DX11 Base/Framework/imgui.cpp,1035,"#include <Windows.h>        // _wfopen, OpenClipboard"
+macro,Internal DX11 Base/Framework/imgui.cpp,1041,#define IMGUI_DISABLE_WIN32_DEFAULT_CLIPBOARD_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui.cpp,1042,#define IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui.cpp,1043,#define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+file_io,Internal DX11 Base/Framework/imgui.cpp,1055,"#pragma warning (disable: 4996)             // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen"
+macro,Internal DX11 Base/Framework/imgui.cpp,1096,#define IMGUI_DEBUG_NAV_SCORING     0   // Display navigation scoring preview when hovering items. Display last moving direction matches when holding CTRL
+macro,Internal DX11 Base/Framework/imgui.cpp,1097,#define IMGUI_DEBUG_NAV_RECTS       0   // Display the reference navigation rectangle for each window
+macro,Internal DX11 Base/Framework/imgui.cpp,2002,#define STB_SPRINTF_IMPLEMENTATION
+macro,Internal DX11 Base/Framework/imgui.cpp,2012,#define vsnprintf _vsnprintf
+file_io,Internal DX11 Base/Framework/imgui.cpp,2172,// We need a fopen() wrapper because MSVC/Windows fopen doesn't handle UTF-8 filenames.
+file_io,Internal DX11 Base/Framework/imgui.cpp,2187,"return ::_wfopen(filename_wbuf, mode_wbuf);"
+file_io,Internal DX11 Base/Framework/imgui.cpp,2189,"return fopen(filename, mode);"
+macro,Internal DX11 Base/Framework/imgui.cpp,2775,"#define va_copy(dest, src) __builtin_va_copy(dest, src)"
+macro,Internal DX11 Base/Framework/imgui.cpp,2777,"#define va_copy(dest, src) (dest = src)"
+macro,Internal DX11 Base/Framework/imgui.cpp,9214,"#define MAP_LEGACY_NAV_INPUT_TO_KEY1(_KEY, _NAV1)           do { io.KeysData[_KEY].Down = (io.NavInputs[_NAV1] > 0.0f); io.KeysData[_KEY].AnalogValue = io.NavInputs[_NAV1]; } while (0)"
+macro,Internal DX11 Base/Framework/imgui.cpp,9215,"#define MAP_LEGACY_NAV_INPUT_TO_KEY2(_KEY, _NAV1, _NAV2)    do { io.KeysData[_KEY].Down = (io.NavInputs[_NAV1] > 0.0f) || (io.NavInputs[_NAV2] > 0.0f); io.KeysData[_KEY].AnalogValue = ImMax(io.NavInputs[_NAV1], io.NavInputs[_NAV2]); } while (0)"
+macro,Internal DX11 Base/Framework/imgui.cpp,9230,#undef NAV_MAP_KEY
+link,Internal DX11 Base/Framework/imgui.cpp,14231,"#pragma comment(lib, ""user32"")"
+link,Internal DX11 Base/Framework/imgui.cpp,14232,"#pragma comment(lib, ""kernel32"")"
+macro,Internal DX11 Base/Framework/imgui.cpp,14358,#define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui.cpp,14362,#define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+link,Internal DX11 Base/Framework/imgui.cpp,14370,"#pragma comment(lib, ""shell32"")"
+link,Internal DX11 Base/Framework/imgui.cpp,14413,"#pragma comment(lib, ""imm32"")"
+macro,Internal DX11 Base/Framework/imgui.h,30,"#define IMGUI_VERSION       ""1.91.0 WIP"""
+macro,Internal DX11 Base/Framework/imgui.h,31,#define IMGUI_VERSION_NUM   19093
+macro,Internal DX11 Base/Framework/imgui.h,32,#define IMGUI_HAS_TABLE
+macro,Internal DX11 Base/Framework/imgui.h,80,#define IMGUI_API
+macro,Internal DX11 Base/Framework/imgui.h,83,#define IMGUI_IMPL_API              IMGUI_API
+macro,Internal DX11 Base/Framework/imgui.h,89,#define IM_ASSERT(_EXPR)            assert(_EXPR)                               // You can override the default assert handler by editing imconfig.h
+macro,Internal DX11 Base/Framework/imgui.h,91,#define IM_ARRAYSIZE(_ARR)          ((int)(sizeof(_ARR) / sizeof(*(_ARR))))     // Size of a static C-style array. Don't use on pointers!
+macro,Internal DX11 Base/Framework/imgui.h,92,"#define IM_UNUSED(_VAR)             ((void)(_VAR))                              // Used to silence ""unused variable warnings"". Often useful as asserts may be stripped out from final builds."
+macro,Internal DX11 Base/Framework/imgui.h,95,"#define IMGUI_CHECKVERSION()        ImGui::DebugCheckVersionAndDataLayout(IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2), sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))"
+macro,Internal DX11 Base/Framework/imgui.h,101,"#define IM_FMTARGS(FMT)             __attribute__((format(gnu_printf, FMT, FMT+1)))"
+macro,Internal DX11 Base/Framework/imgui.h,102,"#define IM_FMTLIST(FMT)             __attribute__((format(gnu_printf, FMT, 0)))"
+macro,Internal DX11 Base/Framework/imgui.h,104,"#define IM_FMTARGS(FMT)             __attribute__((format(printf, FMT, FMT+1)))"
+macro,Internal DX11 Base/Framework/imgui.h,105,"#define IM_FMTLIST(FMT)             __attribute__((format(printf, FMT, 0)))"
+macro,Internal DX11 Base/Framework/imgui.h,107,#define IM_FMTARGS(FMT)
+macro,Internal DX11 Base/Framework/imgui.h,108,#define IM_FMTLIST(FMT)
+macro,Internal DX11 Base/Framework/imgui.h,113,"#define IM_MSVC_RUNTIME_CHECKS_OFF      __pragma(runtime_checks("""",off))     __pragma(check_stack(off)) __pragma(strict_gs_check(push,off))"
+macro,Internal DX11 Base/Framework/imgui.h,114,"#define IM_MSVC_RUNTIME_CHECKS_RESTORE  __pragma(runtime_checks("""",restore)) __pragma(check_stack())    __pragma(strict_gs_check(pop))"
+macro,Internal DX11 Base/Framework/imgui.h,116,#define IM_MSVC_RUNTIME_CHECKS_OFF
+macro,Internal DX11 Base/Framework/imgui.h,117,#define IM_MSVC_RUNTIME_CHECKS_RESTORE
+macro,Internal DX11 Base/Framework/imgui.h,1326,"#define IMGUI_PAYLOAD_TYPE_COLOR_3F     ""_COL3F""    // float[3]: Standard type for colors, without alpha. User code may use this type."
+macro,Internal DX11 Base/Framework/imgui.h,1327,"#define IMGUI_PAYLOAD_TYPE_COLOR_4F     ""_COL4F""    // float[4]: Standard type for colors. User code may use this type."
+macro,Internal DX11 Base/Framework/imgui.h,1366,#define IMGUI_DISABLE_OBSOLETE_KEYIO
+macro,Internal DX11 Base/Framework/imgui.h,1979,#define IMGUI_DEBUG_LOG(...)        ImGui::DebugLog(__VA_ARGS__)
+macro,Internal DX11 Base/Framework/imgui.h,1981,#define IMGUI_DEBUG_LOG(...)        ((void)0)
+macro,Internal DX11 Base/Framework/imgui.h,1993,#define IM_ALLOC(_SIZE)                     ImGui::MemAlloc(_SIZE)
+macro,Internal DX11 Base/Framework/imgui.h,1994,#define IM_FREE(_PTR)                       ImGui::MemFree(_PTR)
+macro,Internal DX11 Base/Framework/imgui.h,1995,"#define IM_PLACEMENT_NEW(_PTR)              new(ImNewWrapper(), _PTR)"
+macro,Internal DX11 Base/Framework/imgui.h,1996,"#define IM_NEW(_TYPE)                       new(ImNewWrapper(), ImGui::MemAlloc(sizeof(_TYPE))) _TYPE"
+macro,Internal DX11 Base/Framework/imgui.h,2448,#define IM_UNICODE_CODEPOINT_INVALID 0xFFFD     // Invalid Unicode code point (standard value).
+macro,Internal DX11 Base/Framework/imgui.h,2450,#define IM_UNICODE_CODEPOINT_MAX     0x10FFFF   // Maximum Unicode code point supported by this build.
+macro,Internal DX11 Base/Framework/imgui.h,2452,#define IM_UNICODE_CODEPOINT_MAX     0xFFFF     // Maximum Unicode code point supported by this build.
+macro,Internal DX11 Base/Framework/imgui.h,2621,#define IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED
+macro,Internal DX11 Base/Framework/imgui.h,2650,#define IM_COL32_R_SHIFT    16
+macro,Internal DX11 Base/Framework/imgui.h,2651,#define IM_COL32_G_SHIFT    8
+macro,Internal DX11 Base/Framework/imgui.h,2652,#define IM_COL32_B_SHIFT    0
+macro,Internal DX11 Base/Framework/imgui.h,2653,#define IM_COL32_A_SHIFT    24
+macro,Internal DX11 Base/Framework/imgui.h,2654,#define IM_COL32_A_MASK     0xFF000000
+macro,Internal DX11 Base/Framework/imgui.h,2656,#define IM_COL32_R_SHIFT    0
+macro,Internal DX11 Base/Framework/imgui.h,2657,#define IM_COL32_G_SHIFT    8
+macro,Internal DX11 Base/Framework/imgui.h,2658,#define IM_COL32_B_SHIFT    16
+macro,Internal DX11 Base/Framework/imgui.h,2659,#define IM_COL32_A_SHIFT    24
+macro,Internal DX11 Base/Framework/imgui.h,2660,#define IM_COL32_A_MASK     0xFF000000
+macro,Internal DX11 Base/Framework/imgui.h,2663,"#define IM_COL32(R,G,B,A)    (((ImU32)(A)<<IM_COL32_A_SHIFT) | ((ImU32)(B)<<IM_COL32_B_SHIFT) | ((ImU32)(G)<<IM_COL32_G_SHIFT) | ((ImU32)(R)<<IM_COL32_R_SHIFT))"
+macro,Internal DX11 Base/Framework/imgui.h,2664,"#define IM_COL32_WHITE       IM_COL32(255,255,255,255)  // Opaque white = 0xFFFFFFFF"
+macro,Internal DX11 Base/Framework/imgui.h,2665,"#define IM_COL32_BLACK       IM_COL32(0,0,0,255)        // Opaque black"
+macro,Internal DX11 Base/Framework/imgui.h,2666,"#define IM_COL32_BLACK_TRANS IM_COL32(0,0,0,0)          // Transparent black = 0x00000000"
+macro,Internal DX11 Base/Framework/imgui.h,2696,#define IM_DRAWLIST_TEX_LINES_WIDTH_MAX     (63)
+macro,Internal DX11 Base/Framework/imgui.h,2714,#define ImDrawCallback_ResetRenderState     (ImDrawCallback)(-8)
+macro,Internal DX11 Base/Framework/imgui.h,3405,"#define IM_OFFSETOF(_TYPE,_MEMBER)  offsetof(_TYPE, _MEMBER)    // OBSOLETED IN 1.90 (now using C++11 standard version)"
+macro,Internal DX11 Base/Framework/imgui.h,3411,#define IMGUI_DISABLE_DEBUG_TOOLS
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,99,#define _CRT_SECURE_NO_WARNINGS
+file_io,Internal DX11 Base/Framework/imgui_demo.cpp,119,"#pragma warning (disable: 4996)     // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen"
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,151,"#define IM_NEWLINE  ""\r\n"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,153,"#define IM_NEWLINE  ""\n"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,158,#define snprintf    _snprintf
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,161,#define vsnprintf   _vsnprintf
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,166,"#define PRId64 ""I64d"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,167,"#define PRIu64 ""I64u"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,169,"#define PRId64 ""lld"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,170,"#define PRIu64 ""llu"""
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,177,"#define IM_MIN(A, B)            (((A) < (B)) ? (A) : (B))"
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,178,"#define IM_MAX(A, B)            (((A) >= (B)) ? (A) : (B))"
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,179,"#define IM_CLAMP(V, MN, MX)     ((V) < (MN) ? (MN) : (V) > (MX) ? (MX) : (V))"
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,185,#define IMGUI_CDECL __cdecl
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,187,#define IMGUI_CDECL
+macro,Internal DX11 Base/Framework/imgui_demo.cpp,246,"#define IMGUI_DEMO_MARKER(section)  do { if (GImGuiDemoMarkerCallback != NULL) GImGuiDemoMarkerCallback(__FILE__, __LINE__, section, GImGuiDemoMarkerCallbackUserData); } while (0)"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,27,#define _CRT_SECURE_NO_WARNINGS
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,31,#define IMGUI_DEFINE_MATH_OPERATORS
+file_io,Internal DX11 Base/Framework/imgui_draw.cpp,47,"#pragma warning (disable: 4996)     // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,118,#define STBRP_STATIC
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,119,#define STBRP_ASSERT(x)     do { IM_ASSERT(x); } while (0)
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,120,#define STBRP_SORT          ImQsort
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,121,#define STB_RECT_PACK_IMPLEMENTATION
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,133,"#define STBTT_malloc(x,u)   ((void)(u), IM_ALLOC(x))"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,134,"#define STBTT_free(x,u)     ((void)(u), IM_FREE(x))"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,135,#define STBTT_assert(x)     do { IM_ASSERT(x); } while(0)
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,136,"#define STBTT_fmod(x,y)     ImFmod(x,y)"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,137,#define STBTT_sqrt(x)       ImSqrt(x)
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,138,"#define STBTT_pow(x,y)      ImPow(x,y)"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,139,#define STBTT_fabs(x)       ImFabs(x)
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,140,#define STBTT_ifloor(x)     ((int)ImFloor(x))
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,141,#define STBTT_iceil(x)      ((int)ImCeil(x))
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,142,#define STBTT_STATIC
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,143,#define STB_TRUETYPE_IMPLEMENTATION
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,145,#define STBTT_DEF extern
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,490,"#define ImDrawCmd_HeaderSize                            (offsetof(ImDrawCmd, VtxOffset) + sizeof(unsigned int))"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,491,"#define ImDrawCmd_HeaderCompare(CMD_LHS, CMD_RHS)       (memcmp(CMD_LHS, CMD_RHS, ImDrawCmd_HeaderSize))    // Compare ClipRect, TextureId, VtxOffset"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,492,"#define ImDrawCmd_HeaderCopy(CMD_DST, CMD_SRC)          (memcpy(CMD_DST, CMD_SRC, ImDrawCmd_HeaderSize))    // Copy ClipRect, TextureId, VtxOffset"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,493,"#define ImDrawCmd_AreSequentialIdxOffset(CMD_0, CMD_1)  (CMD_0->IdxOffset + CMD_0->ElemCount == CMD_1->IdxOffset)"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,715,"#define IM_NORMALIZE2F_OVER_ZERO(VX,VY)     { float d2 = VX*VX + VY*VY; if (d2 > 0.0f) { float inv_len = ImRsqrt(d2); VX *= inv_len; VY *= inv_len; } } (void)0"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,716,"#define IM_FIXNORMAL2F_MAX_INVLEN2          100.0f // 500.0f (see #4053, #3366)"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,717,"#define IM_FIXNORMAL2F(VX,VY)               { float d2 = VX*VX + VY*VY; if (d2 > 0.000001f) { float inv_len2 = 1.0f / d2; if (inv_len2 > IM_FIXNORMAL2F_MAX_INVLEN2) inv_len2 = IM_FIXNORMAL2F_MAX_INVLEN2; VX *= inv_len2; VY *= inv_len2; } } (void)0"
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,4443,#define stb__in2(x)   ((i[x] << 8) + i[(x)+1])
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,4444,#define stb__in3(x)   ((i[x] << 16) + stb__in2((x)+1))
+macro,Internal DX11 Base/Framework/imgui_draw.cpp,4445,#define stb__in4(x)   ((i[x] << 24) + stb__in3((x)+1))
+link,Internal DX11 Base/Framework/imgui_impl_dx11.cpp,45,"#pragma comment(lib, ""d3dcompiler"") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below."
+link,Internal DX11 Base/Framework/imgui_impl_dx12.cpp,56,"#pragma comment(lib, ""d3dcompiler.lib"")"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,81,#define WIN32_LEAN_AND_MEAN
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,355,#define IM_SATURATE(V)                      (V < 0.0f ? 0.0f : V > 1.0f ? 1.0f : V)
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,356,"#define MAP_BUTTON(KEY_NO, BUTTON_ENUM)     { io.AddKeyEvent(KEY_NO, (gamepad.wButtons & BUTTON_ENUM) != 0); }"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,357,"#define MAP_ANALOG(KEY_NO, VALUE, V0, V1)   { float vn = (float)(VALUE - V0) / (float)(V1 - V0); io.AddKeyAnalogEvent(KEY_NO, vn > 0.10f, IM_SATURATE(vn)); }"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,382,#undef MAP_BUTTON
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,383,#undef MAP_ANALOG
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,423,#define IM_VK_KEYPAD_ENTER      (VK_RETURN + 256)
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,554,#define WM_MOUSEHWHEEL 0x020E
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,557,#define DBT_DEVNODES_CHANGED 0x0007
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,794,"#define _IsWindowsVistaOrGreater()   _IsWindowsVersionOrGreater(HIBYTE(0x0600), LOBYTE(0x0600), 0) // _WIN32_WINNT_VISTA"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,795,"#define _IsWindows8OrGreater()       _IsWindowsVersionOrGreater(HIBYTE(0x0602), LOBYTE(0x0602), 0) // _WIN32_WINNT_WIN8"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,796,"#define _IsWindows8Point1OrGreater() _IsWindowsVersionOrGreater(HIBYTE(0x0603), LOBYTE(0x0603), 0) // _WIN32_WINNT_WINBLUE"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,797,"#define _IsWindows10OrGreater()      _IsWindowsVersionOrGreater(HIBYTE(0x0A00), LOBYTE(0x0A00), 0) // _WIN32_WINNT_WINTHRESHOLD / _WIN32_WINNT_WIN10"
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,805,#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    (DPI_AWARENESS_CONTEXT)-3
+macro,Internal DX11 Base/Framework/imgui_impl_win32.cpp,808,#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (DPI_AWARENESS_CONTEXT)-4
+link,Internal DX11 Base/Framework/imgui_impl_win32.cpp,841,"#pragma comment(lib, ""gdi32"")   // Link with gdi32.lib for GetDeviceCaps(). MinGW will require linking with '-lgdi32'"
+link,Internal DX11 Base/Framework/imgui_impl_win32.cpp,881,"#pragma comment(lib, ""dwmapi"")  // Link with dwmapi.lib. MinGW will require linking with '-ldwmapi'"
+macro,Internal DX11 Base/Framework/imgui_internal.h,60,#define IMGUI_ENABLE_SSE
+macro,Internal DX11 Base/Framework/imgui_internal.h,115,#define IMGUI_ENABLE_STB_TRUETYPE
+macro,Internal DX11 Base/Framework/imgui_internal.h,204,#undef IMSTB_TEXTEDIT_STRING
+macro,Internal DX11 Base/Framework/imgui_internal.h,205,#undef IMSTB_TEXTEDIT_CHARTYPE
+macro,Internal DX11 Base/Framework/imgui_internal.h,206,#define IMSTB_TEXTEDIT_STRING             ImGuiInputTextState
+macro,Internal DX11 Base/Framework/imgui_internal.h,207,#define IMSTB_TEXTEDIT_CHARTYPE           ImWchar
+macro,Internal DX11 Base/Framework/imgui_internal.h,208,#define IMSTB_TEXTEDIT_GETWIDTH_NEWLINE   (-1.0f)
+macro,Internal DX11 Base/Framework/imgui_internal.h,209,#define IMSTB_TEXTEDIT_UNDOSTATECOUNT     99
+macro,Internal DX11 Base/Framework/imgui_internal.h,210,#define IMSTB_TEXTEDIT_UNDOCHARCOUNT      999
+macro,Internal DX11 Base/Framework/imgui_internal.h,223,"#define IMGUI_DEBUG_PRINTF(_FMT,...)    printf(_FMT, __VA_ARGS__)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,225,"#define IMGUI_DEBUG_PRINTF(_FMT,...)    ((void)0)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,231,#define IMGUI_DEBUG_LOG(...)            ImGui::DebugLog(__VA_ARGS__)
+macro,Internal DX11 Base/Framework/imgui_internal.h,233,#define IMGUI_DEBUG_LOG(...)            ((void)0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,235,#define IMGUI_DEBUG_LOG_ACTIVEID(...)   do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventActiveId)    IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,236,#define IMGUI_DEBUG_LOG_FOCUS(...)      do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventFocus)       IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,237,#define IMGUI_DEBUG_LOG_POPUP(...)      do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventPopup)       IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,238,#define IMGUI_DEBUG_LOG_NAV(...)        do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventNav)         IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,239,#define IMGUI_DEBUG_LOG_SELECTION(...)  do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventSelection)   IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,240,#define IMGUI_DEBUG_LOG_CLIPPER(...)    do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventClipper)     IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,241,#define IMGUI_DEBUG_LOG_IO(...)         do { if (g.DebugLogFlags & ImGuiDebugLogFlags_EventIO)          IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,242,#define IMGUI_DEBUG_LOG_INPUTROUTING(...) do{if (g.DebugLogFlags & ImGuiDebugLogFlags_EventInputRouting)IMGUI_DEBUG_LOG(__VA_ARGS__); } while (0)
+macro,Internal DX11 Base/Framework/imgui_internal.h,245,"#define IM_STATIC_ASSERT(_COND)         static_assert(_COND, """")"
+macro,Internal DX11 Base/Framework/imgui_internal.h,251,#define IM_ASSERT_PARANOID(_EXPR)       IM_ASSERT(_EXPR)
+macro,Internal DX11 Base/Framework/imgui_internal.h,253,#define IM_ASSERT_PARANOID(_EXPR)
+macro,Internal DX11 Base/Framework/imgui_internal.h,259,"#define IM_ASSERT_USER_ERROR(_EXP,_MSG) IM_ASSERT((_EXP) && _MSG)   // Recoverable User Error"
+macro,Internal DX11 Base/Framework/imgui_internal.h,263,#define IM_PI                           3.14159265358979323846f
+macro,Internal DX11 Base/Framework/imgui_internal.h,265,"#define IM_NEWLINE                      ""\r\n""   // Play it nice with Windows users (Update: since 2018-05, Notepad finally appears to support Unix-style carriage returns!)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,267,"#define IM_NEWLINE                      ""\n"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,270,#define IM_TABSIZE                      (4)
+macro,Internal DX11 Base/Framework/imgui_internal.h,272,"#define IM_MEMALIGN(_OFF,_ALIGN)        (((_OFF) + ((_ALIGN) - 1)) & ~((_ALIGN) - 1))           // Memory align e.g. IM_ALIGN(0,4)=0, IM_ALIGN(1,4)=4, IM_ALIGN(4,4)=4, IM_ALIGN(5,4)=8"
+macro,Internal DX11 Base/Framework/imgui_internal.h,273,"#define IM_F32_TO_INT8_UNBOUND(_VAL)    ((int)((_VAL) * 255.0f + ((_VAL)>=0 ? 0.5f : -0.5f)))   // Unsaturated, for display purpose"
+macro,Internal DX11 Base/Framework/imgui_internal.h,274,"#define IM_F32_TO_INT8_SAT(_VAL)        ((int)(ImSaturate(_VAL) * 255.0f + 0.5f))               // Saturated, always output 0..255"
+macro,Internal DX11 Base/Framework/imgui_internal.h,275,#define IM_TRUNC(_VAL)                  ((float)(int)(_VAL))                                    // ImTrunc() is not inlined in MSVC debug builds
+macro,Internal DX11 Base/Framework/imgui_internal.h,276,#define IM_ROUND(_VAL)                  ((float)(int)((_VAL) + 0.5f))                           //
+macro,Internal DX11 Base/Framework/imgui_internal.h,277,#define IM_STRINGIFY_HELPER(_X)         #_X
+macro,Internal DX11 Base/Framework/imgui_internal.h,278,#define IM_STRINGIFY(_X)                IM_STRINGIFY_HELPER(_X)                                 // Preprocessor idiom to stringify e.g. an integer.
+macro,Internal DX11 Base/Framework/imgui_internal.h,280,#define IM_FLOOR IM_TRUNC
+macro,Internal DX11 Base/Framework/imgui_internal.h,285,#define IMGUI_CDECL __cdecl
+macro,Internal DX11 Base/Framework/imgui_internal.h,287,#define IMGUI_CDECL
+macro,Internal DX11 Base/Framework/imgui_internal.h,292,#define IM_MSVC_WARNING_SUPPRESS(XXXX)  __pragma(warning(suppress: XXXX))
+macro,Internal DX11 Base/Framework/imgui_internal.h,294,#define IM_MSVC_WARNING_SUPPRESS(XXXX)
+macro,Internal DX11 Base/Framework/imgui_internal.h,302,#define IM_DEBUG_BREAK()    __debugbreak()
+macro,Internal DX11 Base/Framework/imgui_internal.h,304,#define IM_DEBUG_BREAK()    __builtin_debugtrap()
+macro,Internal DX11 Base/Framework/imgui_internal.h,306,"#define IM_DEBUG_BREAK()    __asm__ volatile(""int3;nop"")"
+macro,Internal DX11 Base/Framework/imgui_internal.h,308,"#define IM_DEBUG_BREAK()    __asm__ volatile("".inst 0xde01"")"
+macro,Internal DX11 Base/Framework/imgui_internal.h,310,"#define IM_DEBUG_BREAK()    __asm__ volatile("".inst 0xe7f001f0"")"
+macro,Internal DX11 Base/Framework/imgui_internal.h,312,#define IM_DEBUG_BREAK()    IM_ASSERT(0)    // It is expected that you define IM_DEBUG_BREAK() into something that will break nicely in a debugger!
+macro,Internal DX11 Base/Framework/imgui_internal.h,319,"#define IM_PRId64   ""I64d"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,320,"#define IM_PRIu64   ""I64u"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,321,"#define IM_PRIX64   ""I64X"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,323,"#define IM_PRId64   ""lld"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,324,"#define IM_PRIu64   ""llu"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,325,"#define IM_PRIX64   ""llX"""
+macro,Internal DX11 Base/Framework/imgui_internal.h,415,#define IMGUI_DISABLE_DEFAULT_FILE_FUNCTIONS
+macro,Internal DX11 Base/Framework/imgui_internal.h,431,"#define IMGUI_DISABLE_TTY_FUNCTIONS // Can't use stdout, fflush if we are not using default file functions"
+macro,Internal DX11 Base/Framework/imgui_internal.h,439,#define ImFabs(X)           fabsf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,440,#define ImSqrt(X)           sqrtf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,441,"#define ImFmod(X, Y)        fmodf((X), (Y))"
+macro,Internal DX11 Base/Framework/imgui_internal.h,442,#define ImCos(X)            cosf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,443,#define ImSin(X)            sinf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,444,#define ImAcos(X)           acosf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,445,"#define ImAtan2(Y, X)       atan2f((Y), (X))"
+macro,Internal DX11 Base/Framework/imgui_internal.h,446,#define ImAtof(STR)         atof(STR)
+macro,Internal DX11 Base/Framework/imgui_internal.h,447,#define ImCeil(X)           ceilf(X)
+macro,Internal DX11 Base/Framework/imgui_internal.h,568,"#define         IM_BITARRAY_TESTBIT(_ARRAY, _N)                 ((_ARRAY[(_N) >> 5] & ((ImU32)1 << ((_N) & 31))) != 0) // Macro version of ImBitArrayTestBit(): ensure args have side-effect or are costly!"
+macro,Internal DX11 Base/Framework/imgui_internal.h,569,"#define         IM_BITARRAY_CLEARBIT(_ARRAY, _N)                ((_ARRAY[(_N) >> 5] &= ~((ImU32)1 << ((_N) & 31))))    // Macro version of ImBitArrayClearBit(): ensure args have side-effect or are costly!"
+macro,Internal DX11 Base/Framework/imgui_internal.h,756,#define IM_ROUNDUP_TO_EVEN(_V)                                  ((((_V) + 1) / 2) * 2)
+macro,Internal DX11 Base/Framework/imgui_internal.h,757,#define IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_MIN                     4
+macro,Internal DX11 Base/Framework/imgui_internal.h,758,#define IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_MAX                     512
+macro,Internal DX11 Base/Framework/imgui_internal.h,759,"#define IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC(_RAD,_MAXERROR)    ImClamp(IM_ROUNDUP_TO_EVEN((int)ImCeil(IM_PI / ImAcos(1 - ImMin((_MAXERROR), (_RAD)) / (_RAD)))), IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_MIN, IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_MAX)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,762,"#define IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC_R(_N,_MAXERROR)    ((_MAXERROR) / (1 - ImCos(IM_PI / ImMax((float)(_N), IM_PI))))"
+macro,Internal DX11 Base/Framework/imgui_internal.h,763,"#define IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC_ERROR(_N,_RAD)     ((1 - ImCos(IM_PI / ImMax((float)(_N), IM_PI))) / (_RAD))"
+macro,Internal DX11 Base/Framework/imgui_internal.h,767,#define IM_DRAWLIST_ARCFAST_TABLE_SIZE                          48 // Number of samples in lookup table.
+macro,Internal DX11 Base/Framework/imgui_internal.h,769,#define IM_DRAWLIST_ARCFAST_SAMPLE_MAX                          IM_DRAWLIST_ARCFAST_TABLE_SIZE // Sample index _PathArcToFastEx() for 360 angle.
+macro,Internal DX11 Base/Framework/imgui_internal.h,1342,#define ImGuiKey_LegacyNativeKey_BEGIN  0
+macro,Internal DX11 Base/Framework/imgui_internal.h,1343,#define ImGuiKey_LegacyNativeKey_END    512
+macro,Internal DX11 Base/Framework/imgui_internal.h,1344,#define ImGuiKey_Keyboard_BEGIN         (ImGuiKey_NamedKey_BEGIN)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1345,#define ImGuiKey_Keyboard_END           (ImGuiKey_GamepadStart)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1346,#define ImGuiKey_Gamepad_BEGIN          (ImGuiKey_GamepadStart)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1347,#define ImGuiKey_Gamepad_END            (ImGuiKey_GamepadRStickDown + 1)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1348,#define ImGuiKey_Mouse_BEGIN            (ImGuiKey_MouseLeft)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1349,#define ImGuiKey_Mouse_END              (ImGuiKey_MouseWheelY + 1)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1350,#define ImGuiKey_Aliases_BEGIN          (ImGuiKey_Mouse_BEGIN)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1351,#define ImGuiKey_Aliases_END            (ImGuiKey_Mouse_END)
+macro,Internal DX11 Base/Framework/imgui_internal.h,1354,#define ImGuiKey_NavKeyboardTweakSlow   ImGuiMod_Ctrl
+macro,Internal DX11 Base/Framework/imgui_internal.h,1355,#define ImGuiKey_NavKeyboardTweakFast   ImGuiMod_Shift
+macro,Internal DX11 Base/Framework/imgui_internal.h,1356,#define ImGuiKey_NavGamepadTweakSlow    ImGuiKey_GamepadL1
+macro,Internal DX11 Base/Framework/imgui_internal.h,1357,#define ImGuiKey_NavGamepadTweakFast    ImGuiKey_GamepadR1
+macro,Internal DX11 Base/Framework/imgui_internal.h,1358,#define ImGuiKey_NavGamepadActivate     ImGuiKey_GamepadFaceDown
+macro,Internal DX11 Base/Framework/imgui_internal.h,1359,#define ImGuiKey_NavGamepadCancel       ImGuiKey_GamepadFaceRight
+macro,Internal DX11 Base/Framework/imgui_internal.h,1360,#define ImGuiKey_NavGamepadMenu         ImGuiKey_GamepadFaceLeft
+macro,Internal DX11 Base/Framework/imgui_internal.h,1361,#define ImGuiKey_NavGamepadInput        ImGuiKey_GamepadFaceUp
+macro,Internal DX11 Base/Framework/imgui_internal.h,1413,"#define ImGuiKeyOwner_Any           ((ImGuiID)0)    // Accept key that have an owner, UNLESS a call to SetKeyOwner() explicitly used ImGuiInputFlags_LockThisFrame or ImGuiInputFlags_LockUntilRelease."
+macro,Internal DX11 Base/Framework/imgui_internal.h,1414,#define ImGuiKeyOwner_NoOwner       ((ImGuiID)-1)   // Require key to have no owner.
+macro,Internal DX11 Base/Framework/imgui_internal.h,1716,#define ImGuiSelectionUserData_Invalid        ((ImGuiSelectionUserData)-1)
+macro,Internal DX11 Base/Framework/imgui_internal.h,2732,"#define IM_COL32_DISABLE                IM_COL32(0,0,0,1)   // Special sentinel code which cannot be used as a regular color."
+macro,Internal DX11 Base/Framework/imgui_internal.h,2733,#define IMGUI_TABLE_MAX_COLUMNS         512                 // May be further lifted
+macro,Internal DX11 Base/Framework/imgui_internal.h,3610,"#define IMGUI_TEST_ENGINE_ITEM_ADD(_ID,_BB,_ITEM_DATA)      if (g.TestEngineHookItems) ImGuiTestEngineHook_ItemAdd(&g, _ID, _BB, _ITEM_DATA)    // Register item bounding box"
+macro,Internal DX11 Base/Framework/imgui_internal.h,3611,"#define IMGUI_TEST_ENGINE_ITEM_INFO(_ID,_LABEL,_FLAGS)      if (g.TestEngineHookItems) ImGuiTestEngineHook_ItemInfo(&g, _ID, _LABEL, _FLAGS)    // Register item label and status flags (optional)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,3612,"#define IMGUI_TEST_ENGINE_LOG(_FMT,...)                     if (g.TestEngineHookItems) ImGuiTestEngineHook_Log(&g, _FMT, __VA_ARGS__)           // Custom log entry from user land into test log"
+macro,Internal DX11 Base/Framework/imgui_internal.h,3614,"#define IMGUI_TEST_ENGINE_ITEM_ADD(_BB,_ID)                 ((void)0)"
+macro,Internal DX11 Base/Framework/imgui_internal.h,3615,"#define IMGUI_TEST_ENGINE_ITEM_INFO(_ID,_LABEL,_FLAGS)      ((void)g)"
+macro,Internal DX11 Base/Framework/imgui_tables.cpp,191,#define _CRT_SECURE_NO_WARNINGS
+macro,Internal DX11 Base/Framework/imgui_tables.cpp,195,#define IMGUI_DEFINE_MATH_OPERATORS
+file_io,Internal DX11 Base/Framework/imgui_tables.cpp,208,"#pragma warning (disable: 4996)     // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen"
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,34,#define _CRT_SECURE_NO_WARNINGS
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,38,#define IMGUI_DEFINE_MATH_OPERATORS
+file_io,Internal DX11 Base/Framework/imgui_widgets.cpp,56,"#pragma warning (disable: 4996)     // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen"
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,3998,#define STB_TEXTEDIT_MOVEWORDLEFT   STB_TEXTEDIT_MOVEWORDLEFT_IMPL  // They need to be #define for stb_textedit.h
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,3999,#define STB_TEXTEDIT_MOVEWORDRIGHT  STB_TEXTEDIT_MOVEWORDRIGHT_IMPL
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4050,#define STB_TEXTEDIT_K_LEFT         0x200000 // keyboard input to move cursor left
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4051,#define STB_TEXTEDIT_K_RIGHT        0x200001 // keyboard input to move cursor right
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4052,#define STB_TEXTEDIT_K_UP           0x200002 // keyboard input to move cursor up
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4053,#define STB_TEXTEDIT_K_DOWN         0x200003 // keyboard input to move cursor down
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4054,#define STB_TEXTEDIT_K_LINESTART    0x200004 // keyboard input to move cursor to start of line
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4055,#define STB_TEXTEDIT_K_LINEEND      0x200005 // keyboard input to move cursor to end of line
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4056,#define STB_TEXTEDIT_K_TEXTSTART    0x200006 // keyboard input to move cursor to start of text
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4057,#define STB_TEXTEDIT_K_TEXTEND      0x200007 // keyboard input to move cursor to end of text
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4058,#define STB_TEXTEDIT_K_DELETE       0x200008 // keyboard input to delete selection or character under cursor
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4059,#define STB_TEXTEDIT_K_BACKSPACE    0x200009 // keyboard input to delete selection or character left of cursor
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4060,#define STB_TEXTEDIT_K_UNDO         0x20000A // keyboard input to perform undo
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4061,#define STB_TEXTEDIT_K_REDO         0x20000B // keyboard input to perform redo
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4062,#define STB_TEXTEDIT_K_WORDLEFT     0x20000C // keyboard input to move cursor left one word
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4063,#define STB_TEXTEDIT_K_WORDRIGHT    0x20000D // keyboard input to move cursor right one word
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4064,#define STB_TEXTEDIT_K_PGUP         0x20000E // keyboard input to move cursor up a page
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4065,#define STB_TEXTEDIT_K_PGDOWN       0x20000F // keyboard input to move cursor down a page
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4066,#define STB_TEXTEDIT_K_SHIFT        0x400000
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4068,#define IMSTB_TEXTEDIT_IMPLEMENTATION
+macro,Internal DX11 Base/Framework/imgui_widgets.cpp,4069,#define IMSTB_TEXTEDIT_memmove memmove
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,71,#define STB_INCLUDE_STB_RECT_PACK_H
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,73,#define STB_RECT_PACK_VERSION  1
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,76,#define STBRP_DEF static
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,78,#define STBRP_DEF extern
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,91,#define STBRP__MAXVAL  0x7fffffff
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,212,#define STBRP_SORT qsort
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,217,#define STBRP_ASSERT assert
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,221,#define STBRP__NOTUSED(v)  (void)(v)
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,222,#define STBRP__CDECL       __cdecl
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,224,#define STBRP__NOTUSED(v)  (void)sizeof(v)
+macro,Internal DX11 Base/Framework/imstb_rectpack.h,225,#define STBRP__CDECL
+macro,Internal DX11 Base/Framework/imstb_textedit.h,279,#define INCLUDE_IMSTB_TEXTEDIT_H
+macro,Internal DX11 Base/Framework/imstb_textedit.h,291,#define IMSTB_TEXTEDIT_UNDOSTATECOUNT   99
+macro,Internal DX11 Base/Framework/imstb_textedit.h,294,#define IMSTB_TEXTEDIT_UNDOCHARCOUNT   999
+macro,Internal DX11 Base/Framework/imstb_textedit.h,297,#define IMSTB_TEXTEDIT_CHARTYPE        int
+macro,Internal DX11 Base/Framework/imstb_textedit.h,300,#define IMSTB_TEXTEDIT_POSITIONTYPE    int
+macro,Internal DX11 Base/Framework/imstb_textedit.h,392,#define IMSTB_TEXTEDIT_memmove memmove
+macro,Internal DX11 Base/Framework/imstb_textedit.h,570,#define STB_TEXT_HAS_SELECTION(s)   ((s)->select_start != (s)->select_end)
+macro,Internal DX11 Base/Framework/imstb_textedit.h,661,#define STB_TEXTEDIT_MOVEWORDLEFT stb_textedit_move_to_word_previous
+macro,Internal DX11 Base/Framework/imstb_textedit.h,677,#define STB_TEXTEDIT_MOVEWORDRIGHT stb_textedit_move_to_word_next
+macro,Internal DX11 Base/Framework/imstb_textedit.h,720,#define STB_TEXTEDIT_KEYTYPE int
+macro,Internal DX11 Base/Framework/imstb_truetype.h,283,#define STB_TRUETYPE_IMPLEMENTATION  // force following include to generate implementation
+file_io,Internal DX11 Base/Framework/imstb_truetype.h,294,"fread(ttf_buffer, 1, 1<<20, fopen(""c:/windows/fonts/times.ttf"", ""rb""));"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,334,#define STB_TRUETYPE_IMPLEMENTATION  // force following include to generate implementation
+file_io,Internal DX11 Base/Framework/imstb_truetype.h,345,"fread(ttf_buffer, 1, 1<<25, fopen(argc > 3 ? argv[3] : ""c:/windows/fonts/arialbd.ttf"", ""rb""));"
+file_io,Internal DX11 Base/Framework/imstb_truetype.h,387,"fread(buffer, 1, 1000000, fopen(""c:/windows/fonts/arialbd.ttf"", ""rb""));"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,447,#define STBTT_ifloor(x)   ((int) floor(x))
+macro,Internal DX11 Base/Framework/imstb_truetype.h,448,#define STBTT_iceil(x)    ((int) ceil(x))
+macro,Internal DX11 Base/Framework/imstb_truetype.h,453,#define STBTT_sqrt(x)      sqrt(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,454,"#define STBTT_pow(x,y)     pow(x,y)"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,459,"#define STBTT_fmod(x,y)    fmod(x,y)"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,464,#define STBTT_cos(x)       cos(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,465,#define STBTT_acos(x)      acos(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,470,#define STBTT_fabs(x)      fabs(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,476,"#define STBTT_malloc(x,u)  ((void)(u),malloc(x))"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,477,"#define STBTT_free(x,u)    ((void)(u),free(x))"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,482,#define STBTT_assert(x)    assert(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,487,#define STBTT_strlen(x)    strlen(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,492,#define STBTT_memcpy       memcpy
+macro,Internal DX11 Base/Framework/imstb_truetype.h,493,#define STBTT_memset       memset
+macro,Internal DX11 Base/Framework/imstb_truetype.h,505,#define __STB_INCLUDE_STB_TRUETYPE_H__
+macro,Internal DX11 Base/Framework/imstb_truetype.h,508,#define STBTT_DEF static
+macro,Internal DX11 Base/Framework/imstb_truetype.h,510,#define STBTT_DEF extern
+macro,Internal DX11 Base/Framework/imstb_truetype.h,607,#define STBTT_POINT_SIZE(x)   (-(x))
+macro,Internal DX11 Base/Framework/imstb_truetype.h,839,#define stbtt_vertex_type short // can't use stbtt_int16 because that's not visible in the header file
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1031,#define STBTT_MACSTYLE_DONTCARE     0
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1032,#define STBTT_MACSTYLE_BOLD         1
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1033,#define STBTT_MACSTYLE_ITALIC       2
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1034,#define STBTT_MACSTYLE_UNDERSCORE   4
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1035,"#define STBTT_MACSTYLE_NONE         8   // <= not same as 0, this makes us check the bitfield is 0"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1114,#define STBTT_MAX_OVERSAMPLE   8
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1124,#define STBTT_RASTERIZER_VERSION 2
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1128,#define STBTT__NOTUSED(v)  (void)(v)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1130,#define STBTT__NOTUSED(v)  (void)sizeof(v)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1183,"#define stbtt__buf_get16(b)  stbtt__buf_get((b), 2)"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1184,"#define stbtt__buf_get32(b)  stbtt__buf_get((b), 4)"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1287,#define ttBYTE(p)     (* (stbtt_uint8 *) (p))
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1288,#define ttCHAR(p)     (* (stbtt_int8 *) (p))
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1289,#define ttFixed(p)    ttLONG(p)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1296,"#define stbtt_tag4(p,c0,c1,c2,c3) ((p)[0] == (c0) && (p)[1] == (c1) && (p)[2] == (c2) && (p)[3] == (c3))"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1297,"#define stbtt_tag(p,str)           stbtt_tag4(p,str[0],str[1],str[2],str[3])"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,1914,"#define STBTT__CSCTX_INIT(bounds) {bounds,0, 0,0, 0,0, 0,0,0,0, NULL, 0}"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2023,#define STBTT__CSERR(s) (0)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2271,#undef STBTT__CSERR
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2499,#define STBTT_GPOS_TODO_assert(x)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2836,#define STBTT_FIXSHIFT   10
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2837,#define STBTT_FIX        (1 << STBTT_FIXSHIFT)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,2838,#define STBTT_FIXMASK    (STBTT_FIX-1)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,3405,"#define STBTT__COMPARE(a,b)  ((a)->y0 < (b)->y0)"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,4018,#define STBTT__OVER_MASK  (STBTT_MAX_OVERSAMPLE-1)
+macro,Internal DX11 Base/Framework/imstb_truetype.h,4403,"#define STBTT_min(a,b)  ((a) < (b) ? (a) : (b))"
+macro,Internal DX11 Base/Framework/imstb_truetype.h,4404,"#define STBTT_max(a,b)  ((a) < (b) ? (b) : (a))"
+macro,Internal DX11 Base/framework.h,3,#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
+macro,Internal DX11 Base/helper.h,2,#define DEBUG 1
+macro,Internal DX11 Base/Hooking/buffer.c,33,#define MEMORY_BLOCK_SIZE 0x1000
+macro,Internal DX11 Base/Hooking/buffer.c,36,#define MAX_MEMORY_RANGE 0x40000000
+macro,Internal DX11 Base/Hooking/buffer.c,39,#define PAGE_EXECUTE_FLAGS \
+macro,Internal DX11 Base/Hooking/buffer.h,33,#define MEMORY_SLOT_SIZE 64
+macro,Internal DX11 Base/Hooking/buffer.h,35,#define MEMORY_SLOT_SIZE 32
+macro,Internal DX11 Base/Hooking/hde32.h,11,#define _HDE32_H_
+macro,Internal DX11 Base/Hooking/hde32.h,24,#define F_MODRM         0x00000001
+macro,Internal DX11 Base/Hooking/hde32.h,25,#define F_SIB           0x00000002
+macro,Internal DX11 Base/Hooking/hde32.h,26,#define F_IMM8          0x00000004
+macro,Internal DX11 Base/Hooking/hde32.h,27,#define F_IMM16         0x00000008
+macro,Internal DX11 Base/Hooking/hde32.h,28,#define F_IMM32         0x00000010
+macro,Internal DX11 Base/Hooking/hde32.h,29,#define F_DISP8         0x00000020
+macro,Internal DX11 Base/Hooking/hde32.h,30,#define F_DISP16        0x00000040
+macro,Internal DX11 Base/Hooking/hde32.h,31,#define F_DISP32        0x00000080
+macro,Internal DX11 Base/Hooking/hde32.h,32,#define F_RELATIVE      0x00000100
+macro,Internal DX11 Base/Hooking/hde32.h,33,#define F_2IMM16        0x00000800
+macro,Internal DX11 Base/Hooking/hde32.h,34,#define F_ERROR         0x00001000
+macro,Internal DX11 Base/Hooking/hde32.h,35,#define F_ERROR_OPCODE  0x00002000
+macro,Internal DX11 Base/Hooking/hde32.h,36,#define F_ERROR_LENGTH  0x00004000
+macro,Internal DX11 Base/Hooking/hde32.h,37,#define F_ERROR_LOCK    0x00008000
+macro,Internal DX11 Base/Hooking/hde32.h,38,#define F_ERROR_OPERAND 0x00010000
+macro,Internal DX11 Base/Hooking/hde32.h,39,#define F_PREFIX_REPNZ  0x01000000
+macro,Internal DX11 Base/Hooking/hde32.h,40,#define F_PREFIX_REPX   0x02000000
+macro,Internal DX11 Base/Hooking/hde32.h,41,#define F_PREFIX_REP    0x03000000
+macro,Internal DX11 Base/Hooking/hde32.h,42,#define F_PREFIX_66     0x04000000
+macro,Internal DX11 Base/Hooking/hde32.h,43,#define F_PREFIX_67     0x08000000
+macro,Internal DX11 Base/Hooking/hde32.h,44,#define F_PREFIX_LOCK   0x10000000
+macro,Internal DX11 Base/Hooking/hde32.h,45,#define F_PREFIX_SEG    0x20000000
+macro,Internal DX11 Base/Hooking/hde32.h,46,#define F_PREFIX_ANY    0x3f000000
+macro,Internal DX11 Base/Hooking/hde32.h,48,#define PREFIX_SEGMENT_CS   0x2e
+macro,Internal DX11 Base/Hooking/hde32.h,49,#define PREFIX_SEGMENT_SS   0x36
+macro,Internal DX11 Base/Hooking/hde32.h,50,#define PREFIX_SEGMENT_DS   0x3e
+macro,Internal DX11 Base/Hooking/hde32.h,51,#define PREFIX_SEGMENT_ES   0x26
+macro,Internal DX11 Base/Hooking/hde32.h,52,#define PREFIX_SEGMENT_FS   0x64
+macro,Internal DX11 Base/Hooking/hde32.h,53,#define PREFIX_SEGMENT_GS   0x65
+macro,Internal DX11 Base/Hooking/hde32.h,54,#define PREFIX_LOCK         0xf0
+macro,Internal DX11 Base/Hooking/hde32.h,55,#define PREFIX_REPNZ        0xf2
+macro,Internal DX11 Base/Hooking/hde32.h,56,#define PREFIX_REPX         0xf3
+macro,Internal DX11 Base/Hooking/hde32.h,57,#define PREFIX_OPERAND_SIZE 0x66
+macro,Internal DX11 Base/Hooking/hde32.h,58,#define PREFIX_ADDRESS_SIZE 0x67
+macro,Internal DX11 Base/Hooking/hde64.h,11,#define _HDE64_H_
+macro,Internal DX11 Base/Hooking/hde64.h,24,#define F_MODRM         0x00000001
+macro,Internal DX11 Base/Hooking/hde64.h,25,#define F_SIB           0x00000002
+macro,Internal DX11 Base/Hooking/hde64.h,26,#define F_IMM8          0x00000004
+macro,Internal DX11 Base/Hooking/hde64.h,27,#define F_IMM16         0x00000008
+macro,Internal DX11 Base/Hooking/hde64.h,28,#define F_IMM32         0x00000010
+macro,Internal DX11 Base/Hooking/hde64.h,29,#define F_IMM64         0x00000020
+macro,Internal DX11 Base/Hooking/hde64.h,30,#define F_DISP8         0x00000040
+macro,Internal DX11 Base/Hooking/hde64.h,31,#define F_DISP16        0x00000080
+macro,Internal DX11 Base/Hooking/hde64.h,32,#define F_DISP32        0x00000100
+macro,Internal DX11 Base/Hooking/hde64.h,33,#define F_RELATIVE      0x00000200
+macro,Internal DX11 Base/Hooking/hde64.h,34,#define F_ERROR         0x00001000
+macro,Internal DX11 Base/Hooking/hde64.h,35,#define F_ERROR_OPCODE  0x00002000
+macro,Internal DX11 Base/Hooking/hde64.h,36,#define F_ERROR_LENGTH  0x00004000
+macro,Internal DX11 Base/Hooking/hde64.h,37,#define F_ERROR_LOCK    0x00008000
+macro,Internal DX11 Base/Hooking/hde64.h,38,#define F_ERROR_OPERAND 0x00010000
+macro,Internal DX11 Base/Hooking/hde64.h,39,#define F_PREFIX_REPNZ  0x01000000
+macro,Internal DX11 Base/Hooking/hde64.h,40,#define F_PREFIX_REPX   0x02000000
+macro,Internal DX11 Base/Hooking/hde64.h,41,#define F_PREFIX_REP    0x03000000
+macro,Internal DX11 Base/Hooking/hde64.h,42,#define F_PREFIX_66     0x04000000
+macro,Internal DX11 Base/Hooking/hde64.h,43,#define F_PREFIX_67     0x08000000
+macro,Internal DX11 Base/Hooking/hde64.h,44,#define F_PREFIX_LOCK   0x10000000
+macro,Internal DX11 Base/Hooking/hde64.h,45,#define F_PREFIX_SEG    0x20000000
+macro,Internal DX11 Base/Hooking/hde64.h,46,#define F_PREFIX_REX    0x40000000
+macro,Internal DX11 Base/Hooking/hde64.h,47,#define F_PREFIX_ANY    0x7f000000
+macro,Internal DX11 Base/Hooking/hde64.h,49,#define PREFIX_SEGMENT_CS   0x2e
+macro,Internal DX11 Base/Hooking/hde64.h,50,#define PREFIX_SEGMENT_SS   0x36
+macro,Internal DX11 Base/Hooking/hde64.h,51,#define PREFIX_SEGMENT_DS   0x3e
+macro,Internal DX11 Base/Hooking/hde64.h,52,#define PREFIX_SEGMENT_ES   0x26
+macro,Internal DX11 Base/Hooking/hde64.h,53,#define PREFIX_SEGMENT_FS   0x64
+macro,Internal DX11 Base/Hooking/hde64.h,54,#define PREFIX_SEGMENT_GS   0x65
+macro,Internal DX11 Base/Hooking/hde64.h,55,#define PREFIX_LOCK         0xf0
+macro,Internal DX11 Base/Hooking/hde64.h,56,#define PREFIX_REPNZ        0xf2
+macro,Internal DX11 Base/Hooking/hde64.h,57,#define PREFIX_REPX         0xf3
+macro,Internal DX11 Base/Hooking/hde64.h,58,#define PREFIX_OPERAND_SIZE 0x66
+macro,Internal DX11 Base/Hooking/hde64.h,59,#define PREFIX_ADDRESS_SIZE 0x67
+macro,Internal DX11 Base/Hooking/hook.c,38,#define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
+macro,Internal DX11 Base/Hooking/hook.c,42,#define INITIAL_HOOK_CAPACITY   32
+macro,Internal DX11 Base/Hooking/hook.c,45,#define INITIAL_THREAD_CAPACITY 128
+macro,Internal DX11 Base/Hooking/hook.c,48,#define INVALID_HOOK_POS UINT_MAX
+macro,Internal DX11 Base/Hooking/hook.c,49,#define ALL_HOOKS_POS    UINT_MAX
+macro,Internal DX11 Base/Hooking/hook.c,52,#define ACTION_DISABLE      0
+macro,Internal DX11 Base/Hooking/hook.c,53,#define ACTION_ENABLE       1
+macro,Internal DX11 Base/Hooking/hook.c,54,#define ACTION_APPLY_QUEUED 2
+macro,Internal DX11 Base/Hooking/hook.c,57,#define THREAD_ACCESS \
+patch,Internal DX11 Base/Hooking/hook.c,364,"if (!VirtualProtect(pPatchTarget, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/Hooking/hook.c,388,"VirtualProtect(pPatchTarget, patchSize, oldProtect, &oldProtect);"
+patch,Internal DX11 Base/Hooking/hook.c,391,"FlushInstructionCache(GetCurrentProcess(), pPatchTarget, patchSize);"
+hook,Internal DX11 Base/Hooking/hook.c,466,MH_STATUS WINAPI MH_Initialize(VOID)
+hook,Internal DX11 Base/Hooking/hook.c,496,MH_STATUS WINAPI MH_Uninitialize(VOID)
+hook,Internal DX11 Base/Hooking/hook.c,535,"MH_STATUS WINAPI MH_CreateHook(LPVOID pTarget, LPVOID pDetour, LPVOID* ppOriginal)"
+hook,Internal DX11 Base/Hooking/hook.c,633,MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget)
+hook,Internal DX11 Base/Hooking/hook.c,724,MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget)
+hook,Internal DX11 Base/Hooking/hook.c,730,MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget)
+hook,Internal DX11 Base/Hooking/hook.c,834,MH_STATUS WINAPI MH_CreateHookApiEx(
+hook,Internal DX11 Base/Hooking/hook.c,852,"return MH_CreateHook(pTarget, pDetour, ppOriginal);"
+hook,Internal DX11 Base/Hooking/hook.c,856,MH_STATUS WINAPI MH_CreateHookApi(
+hook,Internal DX11 Base/Hooking/hook.c,859,"return MH_CreateHookApiEx(pszModule, pszProcName, pDetour, ppOriginal, NULL);"
+macro,Internal DX11 Base/Hooking/hook.c,865,#define MH_ST2STR(x)    \
+macro,Internal DX11 Base/Hooking/hook.c,886,#undef MH_ST2STR
+macro,Internal DX11 Base/Hooking/hookmain.cpp,39,# define KIERO_TEXT(text) L##text
+macro,Internal DX11 Base/Hooking/hookmain.cpp,41,# define KIERO_TEXT(text) text
+macro,Internal DX11 Base/Hooking/hookmain.cpp,44,#define KIERO_ARRAY_SIZE(arr) ((size_t)(sizeof(arr)/sizeof(arr[0])))
+hook,Internal DX11 Base/Hooking/hookmain.cpp,145,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,255,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,349,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,493,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,576,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,624,MH_Initialize();
+hook,Internal DX11 Base/Hooking/hookmain.cpp,673,MH_DisableHook(MH_ALL_HOOKS);
+hook,Internal DX11 Base/Hooking/hookmain.cpp,692,"if (MH_CreateHook(target, _function, _original) != MH_OK || MH_EnableHook(target) != MH_OK)"
+hook,Internal DX11 Base/Hooking/hookmain.cpp,711,MH_DisableHook((void*)g_methodsTable[_index]);
+macro,Internal DX11 Base/Hooking/hookmain.h,2,#define __KIERO_H__
+macro,Internal DX11 Base/Hooking/hookmain.h,6,"#define KIERO_VERSION ""1.2.6"""
+macro,Internal DX11 Base/Hooking/hookmain.h,8,#define KIERO_INCLUDE_D3D9   0 // 1 if you need D3D9 hook
+macro,Internal DX11 Base/Hooking/hookmain.h,9,#define KIERO_INCLUDE_D3D10  0 // 1 if you need D3D10 hook
+macro,Internal DX11 Base/Hooking/hookmain.h,10,#define KIERO_INCLUDE_D3D11  1 // 1 if you need D3D11 hook
+macro,Internal DX11 Base/Hooking/hookmain.h,11,#define KIERO_INCLUDE_D3D12  0 // 1 if you need D3D12 hook
+macro,Internal DX11 Base/Hooking/hookmain.h,12,#define KIERO_INCLUDE_OPENGL 0 // 1 if you need OpenGL hook
+macro,Internal DX11 Base/Hooking/hookmain.h,13,#define KIERO_INCLUDE_VULKAN 0 // 1 if you need Vulkan hook
+macro,Internal DX11 Base/Hooking/hookmain.h,14,#define KIERO_USE_MINHOOK    1 // 1 if you will use kiero::bind function
+macro,Internal DX11 Base/Hooking/hookmain.h,16,#define KIERO_ARCH_X64 0
+macro,Internal DX11 Base/Hooking/hookmain.h,17,#define KIERO_ARCH_X86 0
+macro,Internal DX11 Base/Hooking/hookmain.h,20,# undef  KIERO_ARCH_X64
+macro,Internal DX11 Base/Hooking/hookmain.h,21,# define KIERO_ARCH_X64 1
+macro,Internal DX11 Base/Hooking/hookmain.h,23,# undef  KIERO_ARCH_X86
+macro,Internal DX11 Base/Hooking/hookmain.h,24,# define KIERO_ARCH_X86 1
+hook,Internal DX11 Base/Hooking/MinHook.h,86,"// Can be passed as a parameter to MH_EnableHook, MH_DisableHook,"
+macro,Internal DX11 Base/Hooking/MinHook.h,88,#define MH_ALL_HOOKS NULL
+hook,Internal DX11 Base/Hooking/MinHook.h,96,MH_STATUS WINAPI MH_Initialize(VOID);
+hook,Internal DX11 Base/Hooking/MinHook.h,100,MH_STATUS WINAPI MH_Uninitialize(VOID);
+hook,Internal DX11 Base/Hooking/MinHook.h,111,"MH_STATUS WINAPI MH_CreateHook(LPVOID pTarget, LPVOID pDetour, LPVOID* ppOriginal);"
+hook,Internal DX11 Base/Hooking/MinHook.h,124,MH_STATUS WINAPI MH_CreateHookApi(
+hook,Internal DX11 Base/Hooking/MinHook.h,141,MH_STATUS WINAPI MH_CreateHookApiEx(
+hook,Internal DX11 Base/Hooking/MinHook.h,147,MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget);
+hook,Internal DX11 Base/Hooking/MinHook.h,154,MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget);
+hook,Internal DX11 Base/Hooking/MinHook.h,161,MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget);
+macro,Internal DX11 Base/Hooking/table32.h,8,#define C_NONE    0x00
+macro,Internal DX11 Base/Hooking/table32.h,9,#define C_MODRM   0x01
+macro,Internal DX11 Base/Hooking/table32.h,10,#define C_IMM8    0x02
+macro,Internal DX11 Base/Hooking/table32.h,11,#define C_IMM16   0x04
+macro,Internal DX11 Base/Hooking/table32.h,12,#define C_IMM_P66 0x10
+macro,Internal DX11 Base/Hooking/table32.h,13,#define C_REL8    0x20
+macro,Internal DX11 Base/Hooking/table32.h,14,#define C_REL32   0x40
+macro,Internal DX11 Base/Hooking/table32.h,15,#define C_GROUP   0x80
+macro,Internal DX11 Base/Hooking/table32.h,16,#define C_ERROR   0xff
+macro,Internal DX11 Base/Hooking/table32.h,18,#define PRE_ANY  0x00
+macro,Internal DX11 Base/Hooking/table32.h,19,#define PRE_NONE 0x01
+macro,Internal DX11 Base/Hooking/table32.h,20,#define PRE_F2   0x02
+macro,Internal DX11 Base/Hooking/table32.h,21,#define PRE_F3   0x04
+macro,Internal DX11 Base/Hooking/table32.h,22,#define PRE_66   0x08
+macro,Internal DX11 Base/Hooking/table32.h,23,#define PRE_67   0x10
+macro,Internal DX11 Base/Hooking/table32.h,24,#define PRE_LOCK 0x20
+macro,Internal DX11 Base/Hooking/table32.h,25,#define PRE_SEG  0x40
+macro,Internal DX11 Base/Hooking/table32.h,26,#define PRE_ALL  0xff
+macro,Internal DX11 Base/Hooking/table32.h,28,#define DELTA_OPCODES      0x4a
+macro,Internal DX11 Base/Hooking/table32.h,29,#define DELTA_FPU_REG      0xf1
+macro,Internal DX11 Base/Hooking/table32.h,30,#define DELTA_FPU_MODRM    0xf8
+macro,Internal DX11 Base/Hooking/table32.h,31,#define DELTA_PREFIXES     0x130
+macro,Internal DX11 Base/Hooking/table32.h,32,#define DELTA_OP_LOCK_OK   0x1a1
+macro,Internal DX11 Base/Hooking/table32.h,33,#define DELTA_OP2_LOCK_OK  0x1b9
+macro,Internal DX11 Base/Hooking/table32.h,34,#define DELTA_OP_ONLY_MEM  0x1cb
+macro,Internal DX11 Base/Hooking/table32.h,35,#define DELTA_OP2_ONLY_MEM 0x1da
+macro,Internal DX11 Base/Hooking/table64.h,8,#define C_NONE    0x00
+macro,Internal DX11 Base/Hooking/table64.h,9,#define C_MODRM   0x01
+macro,Internal DX11 Base/Hooking/table64.h,10,#define C_IMM8    0x02
+macro,Internal DX11 Base/Hooking/table64.h,11,#define C_IMM16   0x04
+macro,Internal DX11 Base/Hooking/table64.h,12,#define C_IMM_P66 0x10
+macro,Internal DX11 Base/Hooking/table64.h,13,#define C_REL8    0x20
+macro,Internal DX11 Base/Hooking/table64.h,14,#define C_REL32   0x40
+macro,Internal DX11 Base/Hooking/table64.h,15,#define C_GROUP   0x80
+macro,Internal DX11 Base/Hooking/table64.h,16,#define C_ERROR   0xff
+macro,Internal DX11 Base/Hooking/table64.h,18,#define PRE_ANY  0x00
+macro,Internal DX11 Base/Hooking/table64.h,19,#define PRE_NONE 0x01
+macro,Internal DX11 Base/Hooking/table64.h,20,#define PRE_F2   0x02
+macro,Internal DX11 Base/Hooking/table64.h,21,#define PRE_F3   0x04
+macro,Internal DX11 Base/Hooking/table64.h,22,#define PRE_66   0x08
+macro,Internal DX11 Base/Hooking/table64.h,23,#define PRE_67   0x10
+macro,Internal DX11 Base/Hooking/table64.h,24,#define PRE_LOCK 0x20
+macro,Internal DX11 Base/Hooking/table64.h,25,#define PRE_SEG  0x40
+macro,Internal DX11 Base/Hooking/table64.h,26,#define PRE_ALL  0xff
+macro,Internal DX11 Base/Hooking/table64.h,28,#define DELTA_OPCODES      0x4a
+macro,Internal DX11 Base/Hooking/table64.h,29,#define DELTA_FPU_REG      0xfd
+macro,Internal DX11 Base/Hooking/table64.h,30,#define DELTA_FPU_MODRM    0x104
+macro,Internal DX11 Base/Hooking/table64.h,31,#define DELTA_PREFIXES     0x13c
+macro,Internal DX11 Base/Hooking/table64.h,32,#define DELTA_OP_LOCK_OK   0x1ae
+macro,Internal DX11 Base/Hooking/table64.h,33,#define DELTA_OP2_LOCK_OK  0x1c6
+macro,Internal DX11 Base/Hooking/table64.h,34,#define DELTA_OP_ONLY_MEM  0x1d8
+macro,Internal DX11 Base/Hooking/table64.h,35,#define DELTA_OP2_ONLY_MEM 0x1e7
+macro,Internal DX11 Base/Hooking/trampoline.c,32,#define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
+macro,Internal DX11 Base/Hooking/trampoline.c,38,"#define HDE_DISASM(code, hs) hde64_disasm(code, hs)"
+macro,Internal DX11 Base/Hooking/trampoline.c,42,"#define HDE_DISASM(code, hs) hde32_disasm(code, hs)"
+macro,Internal DX11 Base/Hooking/trampoline.c,50,#define TRAMPOLINE_MAX_SIZE (MEMORY_SLOT_SIZE - sizeof(JMP_ABS))
+macro,Internal DX11 Base/Hooking/trampoline.c,52,#define TRAMPOLINE_MAX_SIZE MEMORY_SLOT_SIZE
+patch,Internal DX11 Base/MemoryUtils.cpp,120,"if (!VirtualProtect((LPVOID)hookAddr, hookSize, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/MemoryUtils.cpp,121,"AddLog(u8""[ERROR] ApplyJmp: VirtualProtect failed."");"
+patch,Internal DX11 Base/MemoryUtils.cpp,135,"VirtualProtect((LPVOID)hookAddr, hookSize, old, &tmp);"
+patch,Internal DX11 Base/MemoryUtils.cpp,141,"if (VirtualProtect((LPVOID)hookAddr, size, PAGE_EXECUTE_READWRITE, &old)) {"
+patch,Internal DX11 Base/MemoryUtils.cpp,143,"VirtualProtect((LPVOID)hookAddr, size, old, &tmp);"
+macro,Internal DX11 Base/Menu.cpp,278,#define RunCityRevoltAlwaysZero() ((void)0)
+macro,Internal DX11 Base/Menu.cpp,279,#define bZeroInfamy false
+macro,Internal DX11 Base/Menu.cpp,284,#define DrawMarqueeNotifications(scale) \
+macro,Internal DX11 Base/Menu.cpp,287,#define MonitorBattleStatus ProfiledMonitorBattleStatus
+include_inc,Internal DX11 Base/Menu.cpp,288,"#include ""Menu_impl.inc"""
+macro,Internal DX11 Base/Menu.cpp,289,#undef MonitorBattleStatus
+macro,Internal DX11 Base/Menu.cpp,291,#undef DrawMarqueeNotifications
+macro,Internal DX11 Base/Menu.cpp,292,#undef bZeroInfamy
+macro,Internal DX11 Base/Menu.cpp,293,#undef RunCityRevoltAlwaysZero
+link,Internal DX11 Base/Menu_impl.inc,2,"#pragma comment(lib, ""Shcore.lib"")"
+patch,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,131,"if (!VirtualProtect((LPVOID)addr, 1, PAGE_READWRITE, &oldProtect))"
+patch,Internal DX11 Base/MenuSectionsOfficerEdit.cpp,137,"VirtualProtect((LPVOID)addr, 1, oldProtect, &dummy);"
+patch,Internal DX11 Base/MenuSectionsScenario.cpp,197,"if (VirtualProtect((LPVOID)p1_ptr, 8, PAGE_READWRITE, &oldP)) {"
+patch,Internal DX11 Base/MenuSectionsScenario.cpp,199,"VirtualProtect((LPVOID)p1_ptr, 8, oldP, &oldP);"
+macro,Internal DX11 Base/MenuState.h,2,"#define SAM8_CHEAT_VERSION ""V0.880"""
+macro,Internal DX11 Base/pch.h,8,#define PCH_H
+link,Internal DX11 Base/pch.h,29,"#pragma comment(lib, ""d3d11.lib"")"
+link,Internal DX11 Base/pch.h,30,"#pragma comment(lib, ""d3d12.lib"")"
+link,Internal DX11 Base/pch.h,31,"#pragma comment(lib, ""dxgi.lib"")"
+link,Internal DX11 Base/pch.h,35,"#pragma comment(lib, ""XInput.lib"")"
+link,Internal DX11 Base/pch.h,39,"#pragma comment(lib, ""ws2_32.lib"")"
+link,Internal DX11 Base/pch.h,40,"#pragma comment(lib, ""wininet.lib"")"
+macro,Internal DX11 Base/resource.h,3,#define IDR_PNG_RANGE1  101
+macro,Internal DX11 Base/resource.h,4,#define IDR_PNG_RANGE2  102
+macro,Internal DX11 Base/resource.h,5,#define IDR_PNG_RANGE3  103
+macro,Internal DX11 Base/resource.h,6,#define IDR_PNG_RANGE4  104
+macro,Internal DX11 Base/resource.h,7,#define IDR_PNG_RANGE5  105
+macro,Internal DX11 Base/resource.h,8,#define IDR_PNG_RANGE6  106
+macro,Internal DX11 Base/resource.h,9,#define IDR_PNG_RANGE7  107
+macro,Internal DX11 Base/resource.h,10,#define IDR_PNG_RANGE8  108
+macro,Internal DX11 Base/resource.h,11,#define IDR_PNG_RANGE9  109
+macro,Internal DX11 Base/resource.h,12,#define IDR_PNG_RANGE10 110
+macro,Internal DX11 Base/resource.h,13,#define IDR_PNG_RANGE11 111
+macro,Internal DX11 Base/resource.h,15,#define IDR_JSON_TRAITS_DEFAULT        201
+macro,Internal DX11 Base/resource.h,16,#define IDR_JSON_EFFECT_DEFINITIONS    202
+macro,Internal DX11 Base/resource.h,17,#define IDR_JSON_CHEAT_CHAR            203
+macro,Internal DX11 Base/resource.h,18,#define IDR_JSON_SPECIALITY_DEFINITIONS 204
+file_io,Internal DX11 Base/showlog.cpp,20,#include <fstream>
+file_io,Internal DX11 Base/showlog.cpp,47,std::ofstream file;
+thread,Internal DX11 Base/showlog.cpp,120,"const uintptr_t thread = _beginthreadex(nullptr, 0, FileLogWriter,"
+file_io,Internal DX11 Base/showlog.cpp,390,"std::ofstream logFile(logPath, std::ios::app | std::ios::binary);"
+file_io,Internal DX11 Base/Source.cpp,13,#include <fstream>
+file_io,Internal DX11 Base/Source.cpp,23,std::ifstream file(GetConfigPath());
+macro,Internal DX11 Base/Source.cpp,147,#define LoadEarlyLogConfig T00LoadEarlyLogConfig
+macro,Internal DX11 Base/Source.cpp,148,#define PrepareStratagemFiveUiBridge T00PrepareStratagemFiveUiBridge
+macro,Internal DX11 Base/Source.cpp,149,#define SetStratagemFiveFeature T01SetStratagemFiveFeature
+macro,Internal DX11 Base/Source.cpp,150,#define InitCheats T00InitCheats
+macro,Internal DX11 Base/Source.cpp,151,#define AddLog T01AddLog
+macro,Internal DX11 Base/Source.cpp,152,#define Sleep T01StartupSleep
+macro,Internal DX11 Base/Source.cpp,153,#define FreeLibraryAndExitThread T05FreeLibraryAndExitThread
+include_inc,Internal DX11 Base/Source.cpp,154,"#include ""Source_impl.inc"""
+macro,Internal DX11 Base/Source.cpp,155,#undef FreeLibraryAndExitThread
+macro,Internal DX11 Base/Source.cpp,156,#undef Sleep
+macro,Internal DX11 Base/Source.cpp,157,#undef AddLog
+macro,Internal DX11 Base/Source.cpp,158,#undef InitCheats
+macro,Internal DX11 Base/Source.cpp,159,#undef SetStratagemFiveFeature
+macro,Internal DX11 Base/Source.cpp,160,#undef PrepareStratagemFiveUiBridge
+macro,Internal DX11 Base/Source.cpp,161,#undef LoadEarlyLogConfig
+link,Internal DX11 Base/Source_impl.inc,20,"#pragma comment(lib, ""Shcore.lib"")"
+macro,Internal DX11 Base/Source_impl.inc,22,#define TRAITS_PTR_OFFSET 0x57A4B8
+macro,Internal DX11 Base/Source_impl.inc,25,#define WM_IME_FIRST 0x0281
+macro,Internal DX11 Base/Source_impl.inc,28,#define WM_IME_LAST 0x0288
+hook,Internal DX11 Base/Source_impl.inc,255,MH_DisableHook(MH_ALL_HOOKS);
+hook,Internal DX11 Base/Source_impl.inc,259,"SetWindowLongPtr(g_Engine->pGameWindow, GWLP_WNDPROC, (LONG_PTR)g_RenderManager->m_OldWndProc);"
+hook,Internal DX11 Base/Source_impl.inc,267,MH_DisableHook(MH_ALL_HOOKS);
+hook,Internal DX11 Base/Source_impl.inc,268,MH_Uninitialize();
+thread,Internal DX11 Base/Source_impl.inc,331,std::thread initRetryThread([]() {
+hook,Internal DX11 Base/Source_impl.inc,350,// [����] MH_EnableHook�� IAT ����(&GetCursorPos ��)�� ���� �ѱ��
+hook,Internal DX11 Base/Source_impl.inc,351,//        �Ϻ� PC���� �浹 �߻�. MH_CreateHookApi ��� �� MH_ALL_HOOKS��
+hook,Internal DX11 Base/Source_impl.inc,354,"MH_CreateHookApi(L""user32.dll"", ""GetCursorPos"", &hkGetCursorPos, (LPVOID *)&oGetCursorPos);"
+hook,Internal DX11 Base/Source_impl.inc,355,"MH_CreateHookApi(L""user32.dll"", ""GetAsyncKeyState"", &hkGetAsyncKeyState, (LPVOID *)&oGetAsyncKeyState);"
+hook,Internal DX11 Base/Source_impl.inc,356,"MH_CreateHookApi(L""user32.dll"", ""GetKeyState"", &hkGetKeyState, (LPVOID *)&oGetKeyState);"
+hook,Internal DX11 Base/Source_impl.inc,357,"MH_CreateHookApi(L""user32.dll"", ""GetKeyboardState"", &hkGetKeyboardState, (LPVOID *)&oGetKeyboardState);"
+hook,Internal DX11 Base/Source_impl.inc,358,"MH_CreateHookApi(L""user32.dll"", ""PeekMessageW"", &hkPeekMessageW, (LPVOID *)&oPeekMessageW);"
+hook,Internal DX11 Base/Source_impl.inc,359,"MH_CreateHookApi(L""user32.dll"", ""PeekMessageA"", &hkPeekMessageA, (LPVOID *)&oPeekMessageA);"
+hook,Internal DX11 Base/Source_impl.inc,362,MH_EnableHook(MH_ALL_HOOKS);
+thread,Internal DX11 Base/Source_impl.inc,366,std::thread WCMUpdate(ClientBGThread);
+link,Internal DX11 Base/TextureLoader.cpp,8,"#pragma comment(lib, ""Windowscodecs.lib"")"

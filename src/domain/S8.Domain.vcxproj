@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{0EA2D584-8408-44F9-9AA0-D6B5EF1E3E62}</ProjectGuid>
+    <RootNamespace>S8Domain</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(MSBuildThisFileDirectory)..\..\build\S8.Cpp23.props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="domain.cpp" />
+    <ClCompile Include="stratagem5.cpp" />
+    <ClCompile Include="feature_flags.cpp" />
+    <ClCompile Include="secondary_jewel.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="error.h" />
+    <ClInclude Include="ids.h" />
+    <ClInclude Include="stratagem5.h" />
+    <ClInclude Include="feature_flags.h" />
+    <ClInclude Include="commands.h" />
+    <ClInclude Include="config_snapshot.h" />
+    <ClInclude Include="self_heal.h" />
+    <ClInclude Include="dongto.h" />
+    <ClInclude Include="celestial.h" />
+    <ClInclude Include="catapult.h" />
+    <ClInclude Include="terrain_tactics.h" />
+    <ClInclude Include="def_building.h" />
+    <ClInclude Include="terrain_bonus.h" />
+    <ClInclude Include="named_specialties.h" />
+    <ClInclude Include="secondary_jewel.h" />
+    <ClInclude Include="secondary_jewel_ids.h" />
+    <ClInclude Include="secondary_jewel_definitions.h" />
+    <ClInclude Include="domestics.h" />
+    <ClInclude Include="domestic_reward.h" />
+    <ClInclude Include="skill_counts.h" />
+    <ClInclude Include="officer_basic.h" />
+    <ClInclude Include="officer_roster.h" />
+    <ClInclude Include="trait.h" />
+    <ClInclude Include="auto_affinity.h" />
+  </ItemGroup>
+  <ItemGroup><ClCompile Include="auto_affinity.cpp" /></ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

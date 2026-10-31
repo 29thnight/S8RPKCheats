@@ -1,0 +1,15 @@
+﻿file,upstream_directives,reference_directives,change_groups,differences
+buffer.c,20,20,0,
+buffer.h,6,6,0,
+hde32.c,7,7,0,
+hde32.h,44,44,0,
+hde64.c,7,7,0,
+hde64.h,45,45,0,
+hook.c,27,27,1,"#include""../include/MinHook.h"" => #include""MinHook.h"""
+MinHook.h,10,10,0,
+pstdint.h,2,2,0,
+table32.h,26,26,0,
+table64.h,26,26,0,
+trampoline.c,45,45,2,"#include""./hde/hde64.h"" => #include""hde64.h"" | #include""./hde/hde32.h"" => #include""hde32.h"""
+trampoline.h,5,5,0,
+minhook.def,0,0,0,

@@ -1,0 +1,7 @@
+"Configuration","ProxyType","TargetName","IntDir","Toolset","SDK","VcpkgEnabled","VcpkgTriplet","CompileDeclared","CompileActive","ResourceCount","PCH","Language","Runtime","Options","EntryPoints"
+"Debug","hid","hid","hid\Debug\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDebugDll",,"dllmain_hid.cpp"
+"Debug","dinput8","hid","hid\Debug\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDebugDll",,"dllmain.cpp"
+"Debug","dxgi","hid","hid\Debug\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDebugDll",,"dllmain_dxgi.cpp"
+"Release","hid","hid","hid\Release\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDll",,"dllmain_hid.cpp"
+"Release","dinput8","hid","hid\Release\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDll",,"dllmain.cpp"
+"Release","dxgi","hid","hid\Release\","v145","10.0","true","x86-windows","128","126","1","Use","Default","MultiThreadedDll",,"dllmain_dxgi.cpp"

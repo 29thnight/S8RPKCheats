@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{CE7ED1A1-6788-4BD9-A7FC-AE33B45C02A4}</ProjectGuid>
+    <RootNamespace>S8Runtime</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets"><Import Project="$(MSBuildThisFileDirectory)..\..\build\S8.Cpp23.props" /></ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemGroup><ClCompile Include="runtime.cpp" /><ClCompile Include="stratagem5_lifecycle.cpp" /><ClCompile Include="game_loop.cpp" /><ClCompile Include="command_commit.cpp" /><ClCompile Include="overlay_lifecycle.cpp" /><ClCompile Include="runtime_services.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="runtime.h" /><ClInclude Include="stratagem5_lifecycle.h" /><ClInclude Include="game_loop.h" /><ClInclude Include="command_commit.h" /><ClInclude Include="overlay_lifecycle.h" /><ClInclude Include="runtime_services.h" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\game\S8.Game.vcxproj"><Project>{4F3DF21B-E391-431B-8CDE-2AC3C9A9E7D6}</Project></ProjectReference>
+    <ProjectReference Include="..\services\S8.Services.vcxproj"><Project>{56C82CE2-A8CE-4326-BBCE-9B688F3C327B}</Project></ProjectReference>
+    <ProjectReference Include="..\overlay\S8.Overlay.vcxproj"><Project>{603D6FAD-59C6-4AA8-8B99-D847867FF2C2}</Project></ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

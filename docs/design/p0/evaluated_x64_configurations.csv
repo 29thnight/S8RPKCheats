@@ -1,0 +1,7 @@
+"Configuration","ProxyType","TargetName","Declared","Active","Entry","Toolset","SDK","Runtime","Language","PCH","PchCpp","Options","Vcpkg","Triplet"
+"Debug","hid","hid","128","126","dllmain_hid","v145","10.0","MultiThreadedDebugDll","Default","Use","Create",,"true","x64-windows"
+"Debug","dinput8","hid","128","126","dllmain","v145","10.0","MultiThreadedDebugDll","Default","Use","Create",,"true","x64-windows"
+"Debug","dxgi","hid","128","126","dllmain_dxgi","v145","10.0","MultiThreadedDebugDll","Default","Use","Create",,"true","x64-windows"
+"Release","hid","hid","128","126","dllmain_hid","v145","10.0","MultiThreadedDll","stdcpp20","NotUsing","Create","/utf-8 /Zc:char8_t- /FS ","true","x64-windows"
+"Release","dinput8","hid","128","126","dllmain","v145","10.0","MultiThreadedDll","stdcpp20","NotUsing","Create","/utf-8 /Zc:char8_t- /FS ","true","x64-windows"
+"Release","dxgi","hid","128","126","dllmain_dxgi","v145","10.0","MultiThreadedDll","stdcpp20","NotUsing","Create","/utf-8 /Zc:char8_t- /FS ","true","x64-windows"

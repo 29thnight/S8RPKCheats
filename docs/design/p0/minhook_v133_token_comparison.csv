@@ -1,0 +1,15 @@
+﻿file,upstream_tokens,reference_tokens,change_groups,differences
+buffer.c,1056,1056,0,
+buffer.h,59,59,0,
+hde32.c,1713,1713,0,
+hde32.h,274,274,0,
+hde64.c,1769,1769,0,
+hde64.h,296,296,0,
+hook.c,3196,3196,1,"""../include/MinHook.h"" => ""MinHook.h"""
+MinHook.h,230,230,0,
+pstdint.h,42,42,0,
+table32.h,1144,1144,0,
+table64.h,1170,1170,0,
+trampoline.c,1436,1436,2,"""./hde/hde64.h"" => ""hde64.h"" | ""./hde/hde32.h"" => ""hde32.h"""
+trampoline.h,199,199,0,
+minhook.def,13,13,0,

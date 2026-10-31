@@ -1,0 +1,780 @@
+#include "command_commit.h"
+#include "../platform/windows/process_memory.h"
+#include "../game/game_base.h"
+
+#include <type_traits>
+#include <utility>
+#include <variant>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
+namespace s8::runtime {
+
+std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
+                            std::uintptr_t game_module, std::size_t max_commands,
+                            std::chrono::steady_clock::duration time_budget,
+                            services::UiBridge* ui) {
+    const auto deadline = std::chrono::steady_clock::now() + time_budget;
+    std::size_t processed = 0;
+    std::array<bool, 5103> ronin_changes{};
+    bool ronin_changed = false;
+    std::array<services::CompletionToken, services::CommandMailbox::CAPACITY> ronin_completions{};
+    std::size_t ronin_completion_count = 0;
+    while (processed < max_commands && std::chrono::steady_clock::now() < deadline) {
+        auto accepted = mailbox.pop();
+        if (!accepted) {
+            break;
+        }
+        domain::Result<void> result;
+        bool settings_changed_on_failure = false;
+        bool save_config = true;
+        if (accepted->command.epoch != runtime.epoch) {
+            result = std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+        } else {
+            result = std::visit([&](const auto& command) -> domain::Result<void> {
+                using T = std::decay_t<decltype(command)>;
+                if constexpr (std::is_same_v<T, domain::SetFeature>) {
+                    switch (command.feature) {
+                    case domain::FeatureId::InfiniteAp:
+                        runtime.recurring_features.infinite_action_points = command.enabled;
+                        break;
+                    case domain::FeatureId::FastJewel:
+                        runtime.recurring_features.infinite_jewel_changes = command.enabled;
+                        break;
+                    case domain::FeatureId::InfiniteBanquet:
+                        runtime.recurring_features.infinite_banquet = command.enabled;
+                        break;
+                    case domain::FeatureId::InfiniteMediation:
+                        runtime.recurring_features.infinite_mediation = command.enabled;
+                        break;
+                    case domain::FeatureId::DateAlways15:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::DateDynamic, false);
+                        }
+                        break;
+                    case domain::FeatureId::DateDynamic:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::DateAlways15, false);
+                        }
+                        break;
+                    case domain::FeatureId::SkipDaysEnabled:
+                    case domain::FeatureId::AutoStatUp99:
+                    case domain::FeatureId::AllAggressive:
+                    case domain::FeatureId::ZeroInfamy:
+                    case domain::FeatureId::InfiniteTavernRequests:
+                    case domain::FeatureId::AutoFillSpecialties:
+                    case domain::FeatureId::Loyalty:
+                    case domain::FeatureId::HateCave:
+                    case domain::FeatureId::Resonance:
+                    case domain::FeatureId::AutoLoadMenu:
+                    case domain::FeatureId::ShowWidgetNotif:
+                    case domain::FeatureId::ShowWidgetHero:
+                    case domain::FeatureId::ShowWidgetAllOfficers:
+                        break;
+                    case domain::FeatureId::AutoAffinityGrowth:
+                        runtime.auto_affinity = {};
+                        break;
+                    case domain::FeatureId::Domestics:
+                        runtime.domestics_manual_request = command.enabled;
+                        break;
+                    case domain::FeatureId::UndiscoveredToRonin:
+                        if (!command.enabled) {
+                            runtime.undiscovered_ronin = {};
+                        }
+                        break;
+                    case domain::FeatureId::BattleMapShuffle:
+                        if (!command.enabled) {
+                            game::disable_battle_map_shuffle(runtime.battle_map_shuffle);
+                        }
+                        break;
+                    case domain::FeatureId::FactionLordBonus:
+                        game::set_faction_lord_bonus(runtime.faction_lord_bonus, game_module, command.enabled);
+                        break;
+                    case domain::FeatureId::SiegeWarfare:
+                    case domain::FeatureId::SiegeWarfare2: {
+                        const bool wide = command.feature == domain::FeatureId::SiegeWarfare2;
+                        if (command.enabled) {
+                            game::disable_siege(runtime.siege[!wide], game_module);
+                            runtime.features.set(wide ? domain::FeatureId::SiegeWarfare : domain::FeatureId::SiegeWarfare2, false);
+                        } else {
+                            game::disable_siege(runtime.siege[wide], game_module);
+                        }
+                        break;
+                    }
+                    case domain::FeatureId::WeatherSkillSimple:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::WeatherSkillComplex, false);
+                        }
+                        break;
+                    case domain::FeatureId::WeatherSkillComplex:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::WeatherSkillSimple, false);
+                        }
+                        break;
+                    case domain::FeatureId::TerrainAbilityAtkDef:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::TerrainAbilityAll, false);
+                        }
+                        break;
+                    case domain::FeatureId::TerrainAbilityAll:
+                        if (command.enabled) {
+                            runtime.features.set(domain::FeatureId::TerrainAbilityAtkDef, false);
+                        }
+                        break;
+                    case domain::FeatureId::BigCity:
+                    case domain::FeatureId::BangmokCity:
+                    case domain::FeatureId::NonggyeongCity:
+                    case domain::FeatureId::SangeopCity:
+                        break;
+                    case domain::FeatureId::AttitudeHack:
+                        runtime.instant_attitude_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::FastRelationship:
+                        runtime.fast_relationship_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::MarriageApplied:
+                        runtime.marriage_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::TechZero:
+                        game::set_tech_zero(runtime.tech_zero, command.enabled);
+                        break;
+                    case domain::FeatureId::SelfHeal:
+                        if (!game::set_self_heal(game_module, command.enabled, runtime.self_heal_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::Dongto:
+                        if (!game::set_dongto(game_module, command.enabled, runtime.dongto_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::Celestial:
+                        if (!game::set_celestial(game_module, command.enabled, runtime.celestial_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::Catapult:
+                        if (!game::set_catapult(game_module, command.enabled, runtime.catapult_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::TerrainIgnore:
+                        if (!game::set_terrain_tactics(game_module, command.enabled, runtime.terrain_tactics_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::DefBuilding:
+                        if (!game::set_def_building(game_module, command.enabled, runtime.def_building_settings)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    case domain::FeatureId::RoadBlock:
+                    case domain::FeatureId::RoadBlock2: {
+                        const bool second = command.feature == domain::FeatureId::RoadBlock2;
+                        if (!game::set_road_block(runtime.road_blocks[second], game_module, second, command.enabled)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        break;
+                    }
+                    case domain::FeatureId::SkillCondition:
+                    case domain::FeatureId::YumokCondition:
+                    case domain::FeatureId::SangbyeongCondition: {
+                        const auto index = command.feature == domain::FeatureId::SkillCondition ? 0u
+                            : command.feature == domain::FeatureId::YumokCondition ? 1u : 2u;
+                        if (!game::set_skill_condition(game_module, static_cast<game::SkillConditionKind>(index), command.enabled)) {
+                            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                        }
+                        runtime.skill_condition_applied[index] = command.enabled;
+                        break;
+                    }
+                    case domain::FeatureId::InfiniteGift:
+                        runtime.infinite_gift_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::InfiniteTalk:
+                        runtime.infinite_talk_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::InfiniteDuel:
+                        runtime.infinite_duel_enabled = command.enabled;
+                        break;
+                    case domain::FeatureId::InfiniteDebate:
+                        runtime.infinite_debate_enabled = command.enabled;
+                        break;
+                    default:
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    runtime.features.set(command.feature, command.enabled);
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetShortBattleCooldown>) {
+                    if ((command.enabled || runtime.short_battle_cooldown.applied) &&
+                        !set_short_battle_cooldown(runtime, game_module, command.enabled, command.days)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    runtime.short_battle_cooldown_enabled = command.enabled;
+                    runtime.short_battle_cooldown_days = command.days;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetTroopCountCombat>) {
+                    if (!set_troop_count_combat(runtime, game_module, command.enabled)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetReinforcementArrival>) {
+                    if (!set_reinforcement_arrival(runtime, game_module, command.enabled)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetTechCityVisibility>) {
+                    if (!set_tech_city_visibility(runtime, game_module, command.enabled)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetStratagem5Enabled>) {
+                    request_stratagem5(runtime, command.enabled);
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetStratagem5Settings>) {
+                    const auto status = set_stratagem5_settings(runtime, command.settings);
+                    if (status == game::Stratagem5SettingsResult::write_failed) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSelfHealSettings>) {
+                    runtime.self_heal_settings = command.settings;
+                    constexpr std::array IDS{domain::FeatureId::HealLv1Self, domain::FeatureId::HealLv2Self,
+                                             domain::FeatureId::HealLv3Self};
+                    for (std::size_t i = 0; i < IDS.size(); ++i) {
+                        runtime.features.set(IDS[i], command.settings.self[i]);
+                    }
+                    if (!game::set_self_heal(game_module, runtime.features.get(domain::FeatureId::SelfHeal),
+                                             runtime.self_heal_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetDongtoSettings>) {
+                    runtime.dongto_settings = command.settings;
+                    if (!game::set_dongto(game_module, runtime.features.get(domain::FeatureId::Dongto),
+                                          runtime.dongto_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetCelestialSettings>) {
+                    runtime.celestial_settings = command.settings;
+                    if (!game::set_celestial(game_module, runtime.features.get(domain::FeatureId::Celestial),
+                                             runtime.celestial_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetCatapultSettings>) {
+                    runtime.catapult_settings = command.settings;
+                    if (!game::set_catapult(game_module, runtime.features.get(domain::FeatureId::Catapult),
+                                            runtime.catapult_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetTerrainTacticsSettings>) {
+                    runtime.terrain_tactics_settings = command.settings;
+                    if (!game::set_terrain_tactics(game_module, runtime.features.get(domain::FeatureId::TerrainIgnore),
+                                                   runtime.terrain_tactics_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetDefBuildingSettings>) {
+                    runtime.def_building_settings = command.settings;
+                    if (!game::set_def_building(game_module, runtime.features.get(domain::FeatureId::DefBuilding),
+                                                 runtime.def_building_settings)) {
+                        settings_changed_on_failure = true;
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSkipDays>) {
+                    runtime.skip_days = command.days;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetTerrainBonus>) {
+                    runtime.terrain_bonus = command.table;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSiegeHealRate>) {
+                    runtime.siege_heal_rate = command.rate;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetAllJewelsOpen>) {
+                    if (!game::set_all_jewels_open(runtime.jewel_open, runtime.cached_game_base, command.enabled)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSecondaryJewels>) {
+                    if (!game::set_secondary_jewels(command.mask, game_module, runtime.game_base_pointer)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    runtime.secondary_jewels = command.mask;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetDomesticsMultipliers>) {
+                    runtime.domestics = command.multipliers;
+                    runtime.domestics_patch.multipliers = command.multipliers;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetMissionAppointmentLimit>) {
+                    save_config = false;
+                    const bool applied = game::set_mission_appointment_limit(runtime.mission_appointment_limit,
+                                                                              game_module, command.value);
+                    runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
+                    if (!applied) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::RestoreMissionAppointmentLimit>) {
+                    save_config = false;
+                    const bool restored = game::restore_mission_appointment_limit(runtime.mission_appointment_limit,
+                                                                                   game_module);
+                    runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
+                    if (!restored) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetNotificationSpeed>) {
+                    runtime.notification_speed = command.speed;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetDomesticRewardMode>) {
+                    save_config = false;
+                    if (!game::set_domestic_reward(runtime.domestic_reward, game_module, command.mode)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetSkillCount>) {
+                    save_config = false;
+                    if (!runtime.skill_counts) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    auto& counts = *runtime.skill_counts;
+                    bool changed = false;
+                    if (command.count > 0) {
+                        auto& skills = counts[command.officer_id];
+                        const auto previous = skills.find(command.offset);
+                        if (previous == skills.end() || previous->second != command.count) {
+                            skills[command.offset] = command.count;
+                            changed = true;
+                        }
+                    } else if (const auto officer = counts.find(command.officer_id); officer != counts.end()) {
+                        changed = officer->second.erase(command.offset) != 0;
+                        if (officer->second.empty()) {
+                            counts.erase(officer);
+                        }
+                    }
+                    if (ui && changed) {
+                        ui->publish_skill_counts_view(counts);
+                        ui->request_skill_counts_save(counts);
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetProtagonistTacticLevel>) {
+                    save_config = false;
+                    const auto player = game::read_player(game::read_game_base(runtime.game_base_pointer));
+                    std::uint16_t officer_id = 0;
+                    if (command.index >= 35 || command.level > 3 || !player ||
+                        !platform::windows::read_memory(player + 8, std::as_writable_bytes(std::span(&officer_id, 1))) ||
+                        officer_id != command.officer_id ||
+                        !platform::windows::write_data_memory(player + 0x139 + command.index,
+                            std::as_bytes(std::span(&command.level, 1)))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.protagonist_tactic_levels && runtime.protagonist_id == officer_id) {
+                        (*runtime.protagonist_tactic_levels)[command.index] = command.level;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetProtagonistTraining>) {
+                    save_config = false;
+                    const auto player = game::read_player(game::read_game_base(runtime.game_base_pointer));
+                    std::uint16_t officer_id = 0;
+                    const bool valid = command.aptitude ? command.index < 11 : command.index < 24 && command.value <= 3;
+                    const auto offset = (command.aptitude ? 0xc4 : 0x1d0) + command.index;
+                    if (!valid || !player ||
+                        !platform::windows::read_memory(player + 8, std::as_writable_bytes(std::span(&officer_id, 1))) ||
+                        officer_id != command.officer_id || !platform::windows::write_data_memory(player + offset,
+                            std::as_bytes(std::span(&command.value, 1)))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.protagonist_id == officer_id) {
+                        if (command.aptitude && runtime.protagonist_aptitudes) {
+                            (*runtime.protagonist_aptitudes)[command.index] = command.value;
+                        } else if (!command.aptitude && runtime.protagonist_skill_levels) {
+                            (*runtime.protagonist_skill_levels)[command.index] = command.value;
+                        }
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetProtagonistGender>) {
+                    save_config = false;
+                    const auto player = game::read_player(game::read_game_base(runtime.game_base_pointer));
+                    std::uint16_t officer_id = 0;
+                    if (command.gender > 1 || !player ||
+                        !platform::windows::read_memory(player + 8, std::as_writable_bytes(std::span(&officer_id, 1))) ||
+                        officer_id != command.officer_id ||
+                        !platform::windows::write_data_memory(player + 0x30, std::as_bytes(std::span(&command.gender, 1)))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    runtime.protagonist_gender = command.gender;
+                    if (game::write_roster_officer_gender(runtime.officer_roster, game_module, officer_id, command.gender) &&
+                        runtime.selected_officer && runtime.selected_officer->id == officer_id) {
+                        runtime.selected_officer->gender = command.gender;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetProtagonistBasic>) {
+                    save_config = false;
+                    const auto player = game::read_player(game::read_game_base(runtime.game_base_pointer));
+                    std::uint16_t officer_id = 0;
+                    if (command.index >= domain::officer_basic_fields.size() || !player ||
+                        !platform::windows::read_memory(player + 8, std::as_writable_bytes(std::span(&officer_id, 1))) ||
+                        officer_id != command.officer_id) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    const auto field = domain::officer_basic_fields[command.index];
+                    if (!platform::windows::write_data_memory(player + field.offset,
+                            std::as_bytes(std::span(&command.value, 1)).first(field.size))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.protagonist_basic && runtime.protagonist_id == officer_id) {
+                        (*runtime.protagonist_basic)[command.index] = field.size == 1 ? command.value & 0xff
+                            : field.size == 2 ? command.value & 0xffff : command.value;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::RefreshOfficerRoster>) {
+                    save_config = false;
+                    runtime.officer_roster = {};
+                    runtime.selected_officer.reset();
+                    runtime.officer_roster.requested = true;
+                    if (ui) {
+                        ui->publish_officer_roster({runtime.epoch, {}, true});
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SelectRosterOfficer>) {
+                    save_config = false;
+                    const auto detail = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
+                    if (!detail) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    runtime.selected_officer = *detail;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerGender>) {
+                    save_config = false;
+                    if (!game::write_roster_officer_gender(runtime.officer_roster, game_module,
+                                                           command.officer_id, command.gender)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer->gender = command.gender;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerVoice>) {
+                    save_config = false;
+                    if (!game::write_roster_officer_voice(runtime.officer_roster, game_module,
+                                                          command.officer_id, command.voice)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer->voice = command.voice;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerRonin>) {
+                    save_config = false;
+                    if (!game::set_roster_officer_ronin(runtime.officer_roster, game_module,
+                                                         command.officer_id, command.undiscovered_only)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer->status = 0x58;
+                    }
+                    ronin_changes[command.officer_id] = true;
+                    ronin_changed = true;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::ReviveRosterOfficer>) {
+                    save_config = false;
+                    const auto player = game::read_player(game::read_game_base(runtime.game_base_pointer));
+                    if (!game::revive_roster_officer(runtime.officer_roster, game_module, player,
+                                                      command.officer_id, command.city)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
+                    }
+                    ronin_changes[command.officer_id] = true;
+                    ronin_changed = true;
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::MoveRosterOfficer>) {
+                    save_config = false;
+                    if (!game::move_roster_officer(runtime.officer_roster, game_module, command.officer_id, command.city)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerTrait>) {
+                    save_config = false;
+                    const auto base = game::read_game_base(runtime.game_base_pointer);
+                    const auto player = command.protagonist ? game::read_player(base) : 0;
+                    const auto target = command.protagonist && !player ? 0 : game::resolve_trait_target(
+                        runtime.officer_roster, game_module, command.officer_id, player);
+                    if (game::set_officer_trait_direct(target, base, command.slot, command.trait_id)) {
+                        runtime.pending_trait_change.reset();
+                        if (command.protagonist) {
+                            runtime.protagonist_traits = game::read_officer_traits(target);
+                        }
+                        if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                            runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
+                        }
+                        return {};
+                    }
+                    const auto vtable = game::resolve_officer_trait_vtable(target, base);
+                    if (!vtable || command.slot >= 3 || !command.trait_id) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    runtime.pending_trait_change = PendingTraitChange{
+                        game::TraitObjectSearch{.vtable = vtable, .trait_id = command.trait_id},
+                        base, command.officer_id, command.slot, target, command.protagonist};
+                    if (ui) {
+                        ui->publish_notice("기재 객체를 검색하고 있습니다.");
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerBasic>) {
+                    save_config = false;
+                    if (!game::write_roster_officer_basic(runtime.officer_roster, game_module,
+                                                          command.officer_id, command.index, command.value)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        const auto field = domain::officer_basic_fields[command.index];
+                        runtime.selected_officer->basic[command.index] = field.size == 1 ? command.value & 0xff
+                            : field.size == 2 ? command.value & 0xffff : command.value;
+                    }
+                    return {};
+                } else {
+                    save_config = false;
+                    if (!game::write_roster_officer_training(runtime.officer_roster, game_module,
+                            command.officer_id, command.kind, command.index, command.value)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        switch (command.kind) {
+                        case domain::OfficerTrainingKind::Tactic:
+                            runtime.selected_officer->tactic_levels[command.index] = command.value;
+                            break;
+                        case domain::OfficerTrainingKind::Skill:
+                            runtime.selected_officer->skill_levels[command.index] = command.value;
+                            break;
+                        case domain::OfficerTrainingKind::Aptitude:
+                            runtime.selected_officer->aptitudes[command.index] = command.value;
+                            break;
+                        }
+                    }
+                    return {};
+                }
+            }, accepted->command.payload);
+        }
+        if (result && runtime.selected_officer &&
+            (std::holds_alternative<domain::SetProtagonistBasic>(accepted->command.payload) ||
+             std::holds_alternative<domain::SetProtagonistGender>(accepted->command.payload) ||
+             std::holds_alternative<domain::SetProtagonistTacticLevel>(accepted->command.payload) ||
+             std::holds_alternative<domain::SetProtagonistTraining>(accepted->command.payload)) &&
+            runtime.protagonist_id == runtime.selected_officer->id) {
+            if (auto detail = game::read_roster_officer(runtime.officer_roster, game_module, runtime.selected_officer->id)) {
+                runtime.selected_officer = std::move(*detail);
+            }
+        }
+        if (ui) {
+            const auto snapshot = config_snapshot(runtime);
+            ui->publish({runtime.epoch, snapshot});
+            if (save_config && (result || settings_changed_on_failure)) {
+                ui->request_config_save(snapshot);
+            }
+        }
+        if (result && (std::holds_alternative<domain::SetRosterOfficerRonin>(accepted->command.payload) ||
+                       std::holds_alternative<domain::ReviveRosterOfficer>(accepted->command.payload))) {
+            ronin_completions[ronin_completion_count++] = accepted->completion;
+        } else {
+            mailbox.complete(accepted->completion, std::move(result));
+        }
+        ++processed;
+    }
+    if (ronin_changed) {
+        for (auto& entry : runtime.officer_roster.entries) {
+            if (ronin_changes[entry.id]) {
+                entry.status = 0x58;
+            }
+        }
+        if (ui) {
+            if (const auto current = ui->officer_roster_view(); current && current->epoch == runtime.epoch) {
+                auto roster = *current;
+                for (auto& entry : roster.entries) {
+                    if (ronin_changes[entry.id]) {
+                        entry.status = 0x58;
+                    }
+                }
+                ui->publish_officer_roster(std::move(roster));
+            }
+        }
+    }
+    for (std::size_t i = 0; i < ronin_completion_count; ++i) {
+        mailbox.complete(ronin_completions[i], {});
+    }
+    return processed;
+}
+
+std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
+                               std::uintptr_t game_module, std::size_t max_commands,
+                               std::chrono::steady_clock::duration time_budget) {
+    if (runtime.pending_trait_change) {
+        auto& pending = *runtime.pending_trait_change;
+        const auto player = pending.protagonist ? game::read_player(pending.game_base) : 0;
+        const auto target = pending.protagonist && !player ? 0 : game::resolve_trait_target(
+            runtime.officer_roster, game_module, pending.officer_id, player);
+        if (game::read_game_base(runtime.game_base_pointer) != pending.game_base ||
+            !target || target != pending.target) {
+            runtime.pending_trait_change.reset();
+            ui.publish_notice("게임 상태가 바뀌어 기재 검색을 중단했습니다.");
+        } else {
+            game::scan_trait_object(pending.search, 2 * 1024 * 1024);
+            if (pending.search.complete) {
+                const bool applied = pending.search.result && game::set_officer_trait_object(
+                    target, pending.slot, pending.search.trait_id, pending.search.result, pending.search.vtable);
+                if (applied && pending.protagonist) {
+                    runtime.protagonist_traits = game::read_officer_traits(target);
+                }
+                if (applied && runtime.selected_officer && runtime.selected_officer->id == pending.officer_id) {
+                    runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, pending.officer_id);
+                }
+                ui.publish_notice(applied ? "기재를 변경했습니다." : "기재 객체를 찾지 못했거나 적용하지 못했습니다.");
+                runtime.pending_trait_change.reset();
+            }
+        }
+    }
+    ui.officer_roster_scan_cursor.store(runtime.officer_roster.requested
+        ? static_cast<int>(runtime.officer_roster.cursor) : -1);
+    if (runtime.auto_affinity.report) {
+        const auto report = *runtime.auto_affinity.report;
+        switch (report.outcome) {
+        case game::AutoAffinityOutcome::Completed:
+            ui.publish_notice("AI 친밀도 자동 성장: " + std::to_string(report.applied) + "쌍 적용, " +
+                              std::to_string(report.stale) + "쌍 변경됨, " + std::to_string(report.failed) + "쌍 실패");
+            break;
+        case game::AutoAffinityOutcome::InsufficientCandidates:
+            ui.publish_notice("AI 친밀도 자동 성장: 대상 무장이 부족합니다.");
+            break;
+        case game::AutoAffinityOutcome::NoRelationTable:
+            ui.publish_notice("AI 친밀도 자동 성장: 관계 테이블을 찾지 못했습니다.");
+            break;
+        case game::AutoAffinityOutcome::DateChanged:
+            ui.publish_notice("AI 친밀도 자동 성장: 날짜가 바뀌어 중단했습니다. 적용 " +
+                              std::to_string(report.applied) + "쌍");
+            break;
+        }
+        runtime.auto_affinity.report.reset();
+    }
+    if (runtime.loop_game_base_ready && !runtime.config_loaded) {
+        if (auto config = ui.take_config_load()) {
+            apply_config(runtime, std::move(*config), game_module);
+            runtime.config_loaded = true;
+        }
+    }
+    runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
+    if (runtime.officer_roster.completed) {
+        ui.publish_officer_roster({runtime.epoch, std::move(runtime.officer_roster.entries), false});
+        runtime.officer_roster.completed = false;
+    } else if (runtime.officer_roster.requested && runtime.officer_roster.cursor > 0 &&
+               (runtime.officer_roster.published_base != runtime.officer_roster.base ||
+                runtime.officer_roster.published_size != runtime.officer_roster.entries.size())) {
+        ui.publish_officer_roster({runtime.epoch, runtime.officer_roster.entries, true});
+        runtime.officer_roster.published_base = runtime.officer_roster.base;
+        runtime.officer_roster.published_size = runtime.officer_roster.entries.size();
+    }
+    std::uint16_t protagonist_id = 0;
+    if (runtime.loop_player_ready && platform::windows::read_memory(runtime.loop_player + 8,
+            std::as_writable_bytes(std::span(&protagonist_id, 1))) && protagonist_id) {
+        runtime.protagonist_id = protagonist_id;
+        runtime.protagonist_traits = game::read_officer_traits(runtime.loop_player);
+        std::uint8_t gender = 0;
+        if (platform::windows::read_memory(runtime.loop_player + 0x30, std::as_writable_bytes(std::span(&gender, 1)))) {
+            runtime.protagonist_gender = gender;
+        } else {
+            runtime.protagonist_gender.reset();
+        }
+        std::array<std::uint8_t, 35> levels{};
+        if (platform::windows::read_memory(runtime.loop_player + 0x139, std::as_writable_bytes(std::span(levels)))) {
+            runtime.protagonist_tactic_levels = levels;
+        } else {
+            runtime.protagonist_tactic_levels.reset();
+        }
+        std::array<std::uint8_t, 24> skills{};
+        if (platform::windows::read_memory(runtime.loop_player + 0x1d0, std::as_writable_bytes(std::span(skills)))) {
+            runtime.protagonist_skill_levels = skills;
+        } else {
+            runtime.protagonist_skill_levels.reset();
+        }
+        std::array<std::uint8_t, 11> aptitudes{};
+        if (platform::windows::read_memory(runtime.loop_player + 0xc4, std::as_writable_bytes(std::span(aptitudes)))) {
+            runtime.protagonist_aptitudes = aptitudes;
+        } else {
+            runtime.protagonist_aptitudes.reset();
+        }
+        domain::OfficerBasicValues basic{};
+        bool basic_read = true;
+        for (std::size_t i = 0; i < basic.size(); ++i) {
+            const auto field = domain::officer_basic_fields[i];
+            if (!platform::windows::read_memory(runtime.loop_player + field.offset,
+                    std::as_writable_bytes(std::span(&basic[i], 1)).first(field.size))) {
+                basic_read = false;
+                break;
+            }
+        }
+        if (basic_read) {
+            runtime.protagonist_basic = basic;
+        } else {
+            runtime.protagonist_basic.reset();
+        }
+    } else {
+        runtime.protagonist_id.reset();
+        runtime.protagonist_traits.reset();
+        runtime.protagonist_gender.reset();
+        runtime.protagonist_tactic_levels.reset();
+        runtime.protagonist_skill_levels.reset();
+        runtime.protagonist_aptitudes.reset();
+        runtime.protagonist_basic.reset();
+    }
+    if (runtime.pending_battle_days_remaining) {
+        ui.publish_notice("남은 전투 일자 : " + std::to_string(*runtime.pending_battle_days_remaining) + " 일");
+        runtime.pending_battle_days_remaining.reset();
+    }
+    if (runtime.undiscovered_ronin.completed_modified) {
+        ui.publish_notice(std::to_string(*runtime.undiscovered_ronin.completed_modified) +
+                          "명의 미발견 무장이 재야로 변경되었습니다.");
+        runtime.undiscovered_ronin.completed_modified.reset();
+    }
+    if (auto definitions = ui.take_named_specialties()) {
+        runtime.named_specialties = std::move(definitions->first);
+        runtime.specialty_random.seed(definitions->second);
+    }
+    if (auto counts = ui.take_skill_counts()) {
+        runtime.skill_counts = std::move(*counts);
+        ui.publish_skill_counts_view(*runtime.skill_counts);
+        runtime.ship_weaponization.last_active_unit = 0;
+    }
+    if (ui.ui_rendered.exchange(false)) {
+        game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
+                                 runtime.features.get(domain::FeatureId::ZeroInfamy));
+    }
+    if (runtime.config_loaded && !runtime.config_baseline_published) {
+        ui.publish_config_baseline({runtime.config_baseline});
+        runtime.config_baseline_published = true;
+    }
+    if (ui.officer_detail_visible.exchange(false) && runtime.selected_officer &&
+        game::roster_traits_changed(runtime.officer_roster, game_module, *runtime.selected_officer)) {
+        if (auto detail = game::read_roster_officer(runtime.officer_roster, game_module, runtime.selected_officer->id)) {
+            runtime.selected_officer = std::move(*detail);
+        }
+    }
+    ui.publish({runtime.epoch, config_snapshot(runtime)});
+    return commit_commands(runtime, ui.commands, game_module, max_commands, time_budget, &ui);
+}
+
+} // namespace s8::runtime

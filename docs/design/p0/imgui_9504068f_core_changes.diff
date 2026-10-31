@@ -1,0 +1,196 @@
+--- upstream/imgui.h
++++ reference/imgui.h
+@@ -537,6 +537,7 @@
+     IMGUI_API bool          InvisibleButton(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags = 0); // flexible button behavior without the visuals, frequently useful to build custom behaviors using the public api (along with IsItemActive, IsItemHovered, etc.)
+     IMGUI_API bool          ArrowButton(const char* str_id, ImGuiDir dir);                  // square button with an arrow shape
+     IMGUI_API bool          Checkbox(const char* label, bool* v);
++    IMGUI_API bool          SmallCheckbox(const char* label, bool* v);                      //Custom Smaller Checkbox
+     IMGUI_API bool          CheckboxFlags(const char* label, int* flags, int flags_value);
+     IMGUI_API bool          CheckboxFlags(const char* label, unsigned int* flags, unsigned int flags_value);
+     IMGUI_API bool          RadioButton(const char* label, bool active);                    // use with e.g. if (RadioButton("one", my_value==1)) { my_value = 1; }
+@@ -602,7 +603,9 @@
+     IMGUI_API bool          SliderInt2(const char* label, int v[2], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
+     IMGUI_API bool          SliderInt3(const char* label, int v[3], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
+     IMGUI_API bool          SliderInt4(const char* label, int v[4], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
++    IMGUI_API bool          CustomSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, ImGuiSliderFlags flags);
+     IMGUI_API bool          SliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format = NULL, ImGuiSliderFlags flags = 0);
++    IMGUI_API bool          CustomSliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags);
+     IMGUI_API bool          SliderScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, const void* p_min, const void* p_max, const char* format = NULL, ImGuiSliderFlags flags = 0);
+     IMGUI_API bool          VSliderFloat(const char* label, const ImVec2& size, float* v, float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
+     IMGUI_API bool          VSliderInt(const char* label, const ImVec2& size, int* v, int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
+@@ -2286,7 +2289,7 @@
+     // (when reading from the io.WantCaptureMouse, io.WantCaptureKeyboard flags to dispatch your inputs, it is
+     //  generally easier and more correct to use their state BEFORE calling NewFrame(). See FAQ for details!)
+     //------------------------------------------------------------------
+-
++    void*       ImeWindowHandle; 
+     bool        WantCaptureMouse;                   // Set when Dear ImGui will use mouse inputs, in this case do not dispatch them to your main game/application (either way, always pass on mouse inputs to imgui). (e.g. unclicked mouse is hovering over an imgui window, widget is active, mouse was clicked over an imgui window, etc.).
+     bool        WantCaptureKeyboard;                // Set when Dear ImGui will use keyboard inputs, in this case do not dispatch them to your main game/application (either way, always pass keyboard inputs to imgui). (e.g. InputText active, or an imgui window is focused and navigation is enabled, etc.).
+     bool        WantTextInput;                      // Mobile/console: when set, you may display an on-screen keyboard. This is set by Dear ImGui when it wants textual keyboard input to happen (e.g. when a InputText widget is active).
+--- upstream/imgui_widgets.cpp
++++ reference/imgui_widgets.cpp
+@@ -44,6 +44,7 @@
+ 
+ // System includes
+ #include <stdint.h>     // intptr_t
++#include <map>
+ 
+ //-------------------------------------------------------------------------
+ // Warnings
+@@ -725,7 +726,17 @@
+ 
+     if (g.LogEnabled)
+         LogSetNextTextDecoration("[", "]");
++
++    // [커스텀] 호버/활성화 상태일 때 텍스트 색상을 다크 브론즈로 변경 (기본 텍스트 색상과 대비)
++    // 비활성(Disabled) 상태일 때는 변경하지 않도록 하여 헤더 등의 가독성을 유지함.
++    bool push_color = (hovered || held) && !(g.CurrentItemFlags & ImGuiItemFlags_Disabled);
++    if (push_color)
++        PushStyleColor(ImGuiCol_Text, IM_COL32(51, 38, 12, 255));
++
+     RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, NULL, &label_size, style.ButtonTextAlign, &bb);
++
++    if (push_color)
++        PopStyleColor();
+ 
+     // Automatically close popups
+     //if (pressed && !(flags & ImGuiButtonFlags_DontClosePopups) && (window->Flags & ImGuiWindowFlags_Popup))
+@@ -1202,6 +1213,16 @@
+         else
+             *flags &= ~flags_value;
+     }
++    return pressed;
++}
++
++bool ImGui::SmallCheckbox(const char* label, bool* v)
++{
++    ImGuiContext& g = *GImGui;
++    float backup_padding_y = g.Style.FramePadding.y;
++    g.Style.FramePadding.y = 0.0f;
++    bool pressed = Checkbox(label, v);
++    g.Style.FramePadding.y = backup_padding_y;
+     return pressed;
+ }
+ 
+@@ -3253,6 +3274,83 @@
+     EndGroup();
+     return value_changed;
+ }
++struct slider_element {
++    float opacity;
++};
++bool ImGui::CustomSliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags)
++{
++    ImGuiWindow* window = GetCurrentWindow();
++    if (window->SkipItems)
++        return false;
++
++    ImGuiContext& g = *GImGui;
++    const ImGuiStyle& style = g.Style;
++    const ImGuiID id = window->GetID(label);
++    const float w = CalcItemWidth();
++
++    const ImVec2 label_size = CalcTextSize(label, NULL, true);
++    const ImRect total_bb((window->DC.CursorPos + ImVec2(10, -10)), window->DC.CursorPos + ImVec2(w, label_size.y + 16));
++    const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, label_size.y - 12));
++    //const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f));
++
++    ItemSize(total_bb, style.FramePadding.y);
++    if (!ItemAdd(total_bb, id, &frame_bb))
++        return false;
++
++    // Default format string when passing NULL
++    if (format == NULL)
++        format = DataTypeGetInfo(data_type)->PrintFmt;
++    //  else if (data_type == ImGuiDataType_S32 && strcmp(format, "%d") != 0) // (FIXME-LEGACY: Patch old "%.0f" format string to use "%d", read function more details.)
++    //      format = PatchFormatStringFloatToInt(format);
++
++      // Tabbing or CTRL-clicking on Slider turns it into an input box
++    const bool hovered = ItemHoverable(frame_bb, id, 0);
++    const bool clicked = (hovered && g.IO.MouseClicked[0]);
++    if (clicked)
++    {
++        SetActiveID(id, window);
++        SetFocusID(id, window);
++        FocusWindow(window);
++        g.ActiveIdUsingNavDirMask |= (1 << ImGuiDir_Left) | (1 << ImGuiDir_Right);
++    }
++
++    static std::map <ImGuiID, slider_element> anim;
++    auto it_anim = anim.find(id);
++    if (it_anim == anim.end())
++    {
++        anim.insert({ id, { 0.0f } });
++        it_anim = anim.find(id);
++    }
++
++    it_anim->second.opacity = ImLerp(it_anim->second.opacity, IsItemActive() ? 1.0f : 0.4f, 0.08f * (1.0f - ImGui::GetIO().DeltaTime));
++
++    ImRect grab_bb;
++    const bool value_changed = SliderBehavior(frame_bb, id, data_type, p_data, p_min, p_max, format, flags, &grab_bb);
++    if (value_changed)
++        MarkItemEdited(id);
++
++    char value_buf[64];
++    const char* value_buf_end = value_buf + DataTypeFormatString(value_buf, IM_ARRAYSIZE(value_buf), data_type, p_data, format);
++
++    window->DrawList->AddRectFilled(frame_bb.Min, frame_bb.Max, ImColor(15, 15, 16), 5.0f);
++    window->DrawList->AddRectFilled(frame_bb.Min, ImVec2(grab_bb.Min.x + 3, frame_bb.Max.y), ImColor(219, 219, 219), 5.0f);
++    window->DrawList->AddCircleFilled(ImVec2(grab_bb.Min.x, grab_bb.Min.y), 5.5f, ImColor(1.0f, 1.0f, 1.0f), 30);
++
++    RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, (frame_bb.Min.y - 10) + style.FramePadding.y), value_buf);
++
++    PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, it_anim->second.opacity)); {
++        //Might Remove or Change Later
++       // RenderTextClipped(total_bb.Min, total_bb.Max, value_buf, value_buf_end, NULL, ImVec2(1.f, 0.f));
++    } PopStyleColor();
++
++    IMGUI_TEST_ENGINE_ITEM_INFO(id, label, window->DC.ItemFlags);
++    return value_changed;
++}
++
++bool ImGui::CustomSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, ImGuiSliderFlags flags)
++{
++    return CustomSliderScalar(label, ImGuiDataType_S32, v, &v_min, &v_max, format, flags);
++}
+ 
+ bool ImGui::SliderFloat(const char* label, float* v, float v_min, float v_max, const char* format, ImGuiSliderFlags flags)
+ {
+@@ -6821,7 +6919,16 @@
+             PopColumnsBackground();
+     }
+ 
++    // [커스텀] 호버/선택 상태일 때 텍스트 색상을 다크 브론즈로 변경 (기본 텍스트 색상과 대비)
++    // 비활성(Disabled) 상태일 때는 변경하지 않도록 하여 카테고리 헤더 등의 가독성을 유지함.
++    bool push_color = (hovered || selected || held) && !disabled_item && !disabled_global;
++    if (push_color)
++        PushStyleColor(ImGuiCol_Text, IM_COL32(51, 38, 12, 255));
++
+     RenderTextClipped(text_min, text_max, label, NULL, &label_size, style.SelectableTextAlign, &bb);
++
++    if (push_color)
++        PopStyleColor();
+ 
+     // Automatically close popups
+     if (pressed && (window->Flags & ImGuiWindowFlags_Popup) && !(flags & ImGuiSelectableFlags_DontClosePopups) && !(g.LastItemData.InFlags & ImGuiItemFlags_SelectableDontClosePopup))
+@@ -8964,11 +9071,20 @@
+     if (tab_bar->Flags & ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)
+         flags |= ImGuiTabItemFlags_NoCloseWithMiddleMouseButton;
+ 
++    // [커스텀] 호버/선택 상태일 때 텍스트 색상을 다크 브론즈로 변경 (기본 텍스트 색상과 대비)
++    // 비활성(Disabled) 상태일 때는 변경하지 않음.
++    bool push_color = (hovered || tab_contents_visible || held) && !(g.CurrentItemFlags & ImGuiItemFlags_Disabled);
++    if (push_color)
++        PushStyleColor(ImGuiCol_Text, IM_COL32(51, 38, 12, 255));
++
+     // Render tab label, process close button
+     const ImGuiID close_button_id = p_open ? GetIDWithSeed("#CLOSE", NULL, id) : 0;
+     bool just_closed;
+     bool text_clipped;
+     TabItemLabelAndCloseButton(display_draw_list, bb, tab_just_unsaved ? (flags & ~ImGuiTabItemFlags_UnsavedDocument) : flags, tab_bar->FramePadding, label, id, close_button_id, tab_contents_visible, &just_closed, &text_clipped);
++    
++    if (push_color)
++        PopStyleColor();
+     if (just_closed && p_open != NULL)
+     {
+         *p_open = false;

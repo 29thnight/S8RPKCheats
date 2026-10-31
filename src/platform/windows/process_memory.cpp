@@ -1,0 +1,98 @@
+#include "process_memory.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
+namespace s8::platform::windows {
+
+bool is_committed_memory(std::uintptr_t address, std::size_t size) {
+    if (!address || !size || address + size - 1 < address)
+        return false;
+    const auto end = address + size - 1;
+    MEMORY_BASIC_INFORMATION first{};
+    if (VirtualQuery(reinterpret_cast<const void*>(address), &first, sizeof(first)) != sizeof(first) ||
+        first.State != MEM_COMMIT || (first.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
+        return false;
+    const auto region_start = reinterpret_cast<std::uintptr_t>(first.BaseAddress);
+    const auto region_end = region_start + first.RegionSize - 1;
+    if (region_end >= region_start && end <= region_end)
+        return true;
+    MEMORY_BASIC_INFORMATION last{};
+    return VirtualQuery(reinterpret_cast<const void*>(end), &last, sizeof(last)) == sizeof(last) &&
+           last.State == MEM_COMMIT && !(last.Protect & (PAGE_NOACCESS | PAGE_GUARD));
+}
+
+bool read_memory(std::uintptr_t address, std::span<std::byte> bytes) {
+    SIZE_T count = 0;
+    return ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void*>(address),
+                             bytes.data(), bytes.size(), &count) && count == bytes.size();
+}
+
+bool write_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
+    SIZE_T count = 0;
+    return WriteProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(address),
+                              bytes.data(), bytes.size(), &count) && count == bytes.size();
+}
+
+bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
+    auto* target = reinterpret_cast<void*>(address);
+    DWORD old_protection = 0;
+    if (!VirtualProtect(target, bytes.size(), PAGE_READWRITE, &old_protection))
+        return false;
+
+    SIZE_T count = 0;
+    const bool written = WriteProcessMemory(GetCurrentProcess(), target, bytes.data(), bytes.size(), &count) &&
+                         count == bytes.size();
+    DWORD ignored = 0;
+    VirtualProtect(target, bytes.size(), old_protection, &ignored);
+    return written;
+}
+
+bool write_code_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
+    auto* target = reinterpret_cast<void*>(address);
+    DWORD old_protection = 0;
+    if (!VirtualProtect(target, bytes.size(), PAGE_EXECUTE_READWRITE, &old_protection))
+        return false;
+    const bool written = write_memory(address, bytes);
+    DWORD ignored = 0;
+    VirtualProtect(target, bytes.size(), old_protection, &ignored);
+    if (written)
+        FlushInstructionCache(GetCurrentProcess(), target, bytes.size());
+    return written;
+}
+
+bool write_specialty_slot(std::uintptr_t slot, std::uintptr_t object) {
+    DWORD old_protection = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(slot - 8), 0x14, PAGE_READWRITE, &old_protection)) {
+        return false;
+    }
+    std::uint32_t old_enabled = 0, old_bought = 0;
+    std::uintptr_t old_object = 0;
+    const bool read = read_memory(slot - 8, std::as_writable_bytes(std::span(&old_enabled, 1))) &&
+        read_memory(slot, std::as_writable_bytes(std::span(&old_object, 1))) &&
+        read_memory(slot + 8, std::as_writable_bytes(std::span(&old_bought, 1)));
+    constexpr std::uint32_t ENABLED = 1, BOUGHT = 0;
+    bool written = false;
+    if (read) {
+        written = write_memory(slot - 8, std::as_bytes(std::span(&ENABLED, 1))) &&
+            write_memory(slot, std::as_bytes(std::span(&object, 1))) &&
+            write_memory(slot + 8, std::as_bytes(std::span(&BOUGHT, 1)));
+        std::uint32_t enabled = 0, bought = 0;
+        std::uintptr_t current = 0;
+        written = written && read_memory(slot - 8, std::as_writable_bytes(std::span(&enabled, 1))) &&
+            read_memory(slot, std::as_writable_bytes(std::span(&current, 1))) &&
+            read_memory(slot + 8, std::as_writable_bytes(std::span(&bought, 1))) &&
+            enabled == ENABLED && (current & 0x0000ffffffffffffULL) == object && bought == BOUGHT;
+        if (!written) {
+            write_memory(slot - 8, std::as_bytes(std::span(&old_enabled, 1)));
+            write_memory(slot, std::as_bytes(std::span(&old_object, 1)));
+            write_memory(slot + 8, std::as_bytes(std::span(&old_bought, 1)));
+        }
+    }
+    DWORD ignored = 0;
+    VirtualProtect(reinterpret_cast<void*>(slot - 8), 0x14, old_protection, &ignored);
+    return written;
+}
+
+} // namespace s8::platform::windows

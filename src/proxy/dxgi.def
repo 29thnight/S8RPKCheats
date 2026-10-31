@@ -1,0 +1,4 @@
+EXPORTS
+    CreateDXGIFactory=proxy_create_dxgi_factory
+    CreateDXGIFactory1=proxy_create_dxgi_factory1
+    CreateDXGIFactory2=proxy_create_dxgi_factory2

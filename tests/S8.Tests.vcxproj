@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{2F2D7989-16B7-43C7-8E92-74834A5634D4}</ProjectGuid>
+    <RootNamespace>S8Tests</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets"><Import Project="$(MSBuildThisFileDirectory)..\build\S8.Cpp23.props" /></ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemGroup><ClCompile Include="stratagem5_tests.cpp" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\src\domain\S8.Domain.vcxproj"><Project>{0EA2D584-8408-44F9-9AA0-D6B5EF1E3E62}</Project></ProjectReference>
+    <ProjectReference Include="..\src\game\S8.Game.vcxproj"><Project>{4F3DF21B-E391-431B-8CDE-2AC3C9A9E7D6}</Project></ProjectReference>
+    <ProjectReference Include="..\src\platform\windows\S8.Windows.vcxproj"><Project>{9EF95D4D-3DAF-4BCF-915E-633442D816A1}</Project></ProjectReference>
+    <ProjectReference Include="..\src\runtime\S8.Runtime.vcxproj"><Project>{CE7ED1A1-6788-4BD9-A7FC-AE33B45C02A4}</Project></ProjectReference>
+    <ProjectReference Include="..\src\services\S8.Services.vcxproj"><Project>{56C82CE2-A8CE-4326-BBCE-9B688F3C327B}</Project></ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

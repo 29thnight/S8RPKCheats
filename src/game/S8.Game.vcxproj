@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{4F3DF21B-E391-431B-8CDE-2AC3C9A9E7D6}</ProjectGuid>
+    <RootNamespace>S8Game</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(MSBuildThisFileDirectory)..\..\build\S8.Cpp23.props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemGroup><ClCompile Include="auto_affinity.cpp" /><ClInclude Include="auto_affinity.h" /></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stratagem_table.cpp" />
+    <ClCompile Include="stratagem5_session.cpp" />
+    <ClCompile Include="stratagem5_runtime.cpp" />
+    <ClCompile Include="stratagem5_memory.cpp" />
+    <ClCompile Include="stratagem5_binding.cpp" />
+    <ClCompile Include="stratagem5_heal.cpp" />
+    <ClCompile Include="stratagem5_config.cpp" />
+    <ClCompile Include="stratagem5_model.cpp" />
+    <ClCompile Include="stratagem5_count.cpp" />
+    <ClCompile Include="stratagem5_owner.cpp" />
+    <ClCompile Include="stratagem5_camp.cpp" />
+    <ClCompile Include="stratagem5_model_binding.cpp" />
+    <ClCompile Include="short_battle_cooldown.cpp" />
+    <ClCompile Include="legacy_config.cpp" />
+    <ClCompile Include="recurring_features.cpp" />
+    <ClCompile Include="game_base.cpp" />
+    <ClCompile Include="stratagem5_metadata.cpp" />
+    <ClCompile Include="troop_count_combat.cpp" />
+    <ClCompile Include="reinforcement_arrival.cpp" />
+    <ClCompile Include="infinite_gift.cpp" />
+    <ClCompile Include="marriage_condition.cpp" />
+    <ClCompile Include="find_bytes.cpp" />
+    <ClCompile Include="instant_attitude.cpp" />
+    <ClCompile Include="tech_city_visibility.cpp" />
+    <ClCompile Include="infinite_talk.cpp" />
+    <ClCompile Include="infinite_duel_debate.cpp" />
+    <ClCompile Include="city_conversion.cpp" />
+    <ClCompile Include="fast_relationship.cpp" />
+    <ClCompile Include="tech_zero.cpp" />
+    <ClCompile Include="self_heal.cpp" />
+    <ClCompile Include="battle_observation.cpp" />
+    <ClCompile Include="battle_state.cpp" />
+    <ClCompile Include="tactics_data.cpp" />
+    <ClCompile Include="dongto.cpp" />
+    <ClCompile Include="celestial.cpp" />
+    <ClCompile Include="catapult.cpp" />
+    <ClCompile Include="terrain_tactics.cpp" />
+    <ClCompile Include="def_building.cpp" />
+    <ClCompile Include="road_block.cpp" />
+    <ClCompile Include="skill_condition.cpp" />
+    <ClCompile Include="battle_date.cpp" />
+    <ClCompile Include="battle_weather.cpp" />
+    <ClCompile Include="terrain_bonus.cpp" />
+    <ClCompile Include="officer_stats.cpp" />
+    <ClCompile Include="all_aggressive.cpp" />
+    <ClCompile Include="zero_infamy.cpp" />
+    <ClCompile Include="siege.cpp" />
+    <ClCompile Include="tavern_requests.cpp" />
+    <ClCompile Include="specialty_distribution.cpp" />
+    <ClCompile Include="battle_map_shuffle.cpp" />
+    <ClCompile Include="faction_lord_bonus.cpp" />
+    <ClCompile Include="undiscovered_ronin.cpp" />
+    <ClCompile Include="jewel_open.cpp" />
+    <ClCompile Include="secondary_jewel_hook.cpp" />
+    <ClCompile Include="instant_loyalty.cpp" />
+    <ClCompile Include="love_hate_targets.cpp" />
+    <ClCompile Include="love_hate.cpp" />
+    <ClCompile Include="instant_resonance.cpp" />
+    <ClCompile Include="domestics.cpp" />
+    <ClCompile Include="mission_appointment_limit.cpp" />
+    <ClCompile Include="domestic_reward.cpp" />
+    <ClCompile Include="ship_weaponization.cpp" />
+    <ClCompile Include="battle_skill_counts.cpp" />
+    <ClCompile Include="officer_roster.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stratagem_table.h" />
+    <ClInclude Include="stratagem5_session.h" />
+    <ClInclude Include="stratagem5_runtime.h" />
+    <ClInclude Include="stratagem5_memory.h" />
+    <ClInclude Include="stratagem5_binding.h" />
+    <ClInclude Include="stratagem5_heal.h" />
+    <ClInclude Include="stratagem5_config.h" />
+    <ClInclude Include="stratagem5_model.h" />
+    <ClInclude Include="stratagem5_count.h" />
+    <ClInclude Include="stratagem5_owner.h" />
+    <ClInclude Include="stratagem5_camp.h" />
+    <ClInclude Include="stratagem5_model_binding.h" />
+    <ClInclude Include="short_battle_cooldown.h" />
+    <ClInclude Include="legacy_config.h" />
+    <ClInclude Include="recurring_features.h" />
+    <ClInclude Include="game_base.h" />
+    <ClInclude Include="stratagem5_metadata.h" />
+    <ClInclude Include="troop_count_combat.h" />
+    <ClInclude Include="reinforcement_arrival.h" />
+    <ClInclude Include="infinite_gift.h" />
+    <ClInclude Include="marriage_condition.h" />
+    <ClInclude Include="find_bytes.h" />
+    <ClInclude Include="instant_attitude.h" />
+    <ClInclude Include="tech_city_visibility.h" />
+    <ClInclude Include="infinite_talk.h" />
+    <ClInclude Include="infinite_duel_debate.h" />
+    <ClInclude Include="city_conversion.h" />
+    <ClInclude Include="fast_relationship.h" />
+    <ClInclude Include="tech_zero.h" />
+    <ClInclude Include="self_heal.h" />
+    <ClInclude Include="battle_observation.h" />
+    <ClInclude Include="battle_state.h" />
+    <ClInclude Include="tactics_data.h" />
+    <ClInclude Include="dongto.h" />
+    <ClInclude Include="celestial.h" />
+    <ClInclude Include="catapult.h" />
+    <ClInclude Include="terrain_tactics.h" />
+    <ClInclude Include="def_building.h" />
+    <ClInclude Include="road_block.h" />
+    <ClInclude Include="skill_condition.h" />
+    <ClInclude Include="battle_date.h" />
+    <ClInclude Include="battle_weather.h" />
+    <ClInclude Include="terrain_bonus.h" />
+    <ClInclude Include="officer_stats.h" />
+    <ClInclude Include="all_aggressive.h" />
+    <ClInclude Include="zero_infamy.h" />
+    <ClInclude Include="siege.h" />
+    <ClInclude Include="tavern_requests.h" />
+    <ClInclude Include="specialty_distribution.h" />
+    <ClInclude Include="battle_map_shuffle.h" />
+    <ClInclude Include="battle_map_offsets.h" />
+    <ClInclude Include="faction_lord_bonus.h" />
+    <ClInclude Include="undiscovered_ronin.h" />
+    <ClInclude Include="jewel_open.h" />
+    <ClInclude Include="secondary_jewel_hook.h" />
+    <ClInclude Include="instant_loyalty.h" />
+    <ClInclude Include="love_hate_targets.h" />
+    <ClInclude Include="love_hate.h" />
+    <ClInclude Include="instant_resonance.h" />
+    <ClInclude Include="domestics.h" />
+    <ClInclude Include="mission_appointment_limit.h" />
+    <ClInclude Include="domestic_reward.h" />
+    <ClInclude Include="ship_weaponization.h" />
+    <ClInclude Include="battle_skill_counts.h" />
+    <ClInclude Include="officer_roster.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\domain\S8.Domain.vcxproj"><Project>{0EA2D584-8408-44F9-9AA0-D6B5EF1E3E62}</Project></ProjectReference>
+    <ProjectReference Include="..\platform\windows\S8.Windows.vcxproj"><Project>{9EF95D4D-3DAF-4BCF-915E-633442D816A1}</Project></ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{6CC4A5EC-8ED1-4D03-9925-F7A5D77106D2}</ProjectGuid>
+    <RootNamespace>S8ImGui</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets"><Import Project="$(MSBuildThisFileDirectory)..\..\build\S8.Cpp23.props" /></ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup><ClCompile><WarningLevel>Level3</WarningLevel></ClCompile></ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_demo.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_draw.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_tables.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_widgets.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_impl_dx11.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_impl_dx12.cpp" />
+    <ClCompile Include="..\..\third_party\imgui_legacy\imgui_impl_win32.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

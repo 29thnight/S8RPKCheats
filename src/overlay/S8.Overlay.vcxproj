@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{603D6FAD-59C6-4AA8-8B99-D847867FF2C2}</ProjectGuid>
+    <RootNamespace>S8Overlay</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <VCToolsVersion>14.51.36231</VCToolsVersion>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets"><Import Project="$(MSBuildThisFileDirectory)..\..\build\S8.Cpp23.props" /></ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemGroup><ClCompile Include="dx11_overlay.cpp" /><ClCompile Include="feature_menu.cpp" /><ClCompile Include="overlay_present.cpp" /><ClCompile Include="input_events.cpp" /><ClCompile Include="win32_input.cpp" /><ClCompile Include="window_subclass.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="dx11_overlay.h" /><ClInclude Include="feature_menu.h" /><ClInclude Include="overlay_present.h" /><ClInclude Include="input_events.h" /><ClInclude Include="win32_input.h" /><ClInclude Include="window_subclass.h" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="S8.ImGui.vcxproj"><Project>{6CC4A5EC-8ED1-4D03-9925-F7A5D77106D2}</Project></ProjectReference>
+    <ProjectReference Include="..\platform\windows\S8.Windows.vcxproj"><Project>{9EF95D4D-3DAF-4BCF-915E-633442D816A1}</Project></ProjectReference>
+    <ProjectReference Include="..\services\S8.Services.vcxproj"><Project>{56C82CE2-A8CE-4326-BBCE-9B688F3C327B}</Project></ProjectReference>
+  </ItemGroup>
+  <ItemGroup><ClCompile Include="notifications.cpp" /><ClInclude Include="notifications.h" /></ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
