@@ -89,5 +89,8 @@
     <ClInclude Include="officer_tools.h" />
     <ClInclude Include="officer_notifications.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="specialty_tools.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

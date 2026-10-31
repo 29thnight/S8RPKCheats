@@ -221,5 +221,9 @@
     <ClInclude Include="officer_notifications.h" />
     <ClCompile Include="officer_notifications.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="specialty_tools.h" />
+    <ClCompile Include="specialty_tools.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
