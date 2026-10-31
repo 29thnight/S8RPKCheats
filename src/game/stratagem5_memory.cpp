@@ -17,8 +17,11 @@ bool write_stratagem5(void* context, StratagemTableId table, const StratagemPayl
     if (memory.table != table) {
         return false;
     }
-    return platform::windows::write_data_memory(
-        memory.payload_table + 4 * STRATAGEM_RECORD_STRIDE, payload);
+    StratagemPayload verified{};
+    const std::uintptr_t address = memory.payload_table + 4 * STRATAGEM_RECORD_STRIDE;
+
+    return platform::windows::write_data_memory(address, payload) &&
+        platform::windows::read_memory(address, verified) && verified == payload;
 }
 
 } // namespace s8::game

@@ -18,6 +18,9 @@ struct Stratagem5CountApplied {
     std::uintptr_t owner;
     std::uint32_t entry_index;
     std::uint8_t original;
+    std::uintptr_t camp_data;
+    std::uintptr_t metadata_row;
+    bool verified = false;
 };
 
 struct Stratagem5Count {

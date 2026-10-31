@@ -13,32 +13,44 @@ bool apply_table(Stratagem5Binding& binding, domain::GameEpoch epoch, std::uintp
                  bool reset_before_reapply) {
     Stratagem5Memory memory{{epoch, static_cast<std::uint64_t>(table)}, table};
     StratagemTableSnapshot snapshot{};
+
     if (!read_stratagem_table(memory, snapshot)) {
-        if (reset_before_reapply) {
-            reset_stratagem5_session(binding.runtime.session);
-            binding.memory.reset();
-            binding.heal_history = {};
+        return false;
+    }
+
+    const std::array<domain::StratagemRecord, 5> records = decode_stratagem_table(snapshot);
+
+    if (!is_expected_stratagem_table(records)) {
+        return false;
+    }
+    const std::optional<StratagemTableId>& applied = binding.runtime.session.applied_table;
+
+    if (applied && applied->epoch == epoch && *applied != memory.table) {
+        const bool requested = binding.runtime.session.requested;
+        const bool restored = stop_stratagem5(binding, epoch);
+
+        binding.runtime.session.requested = requested;
+        if (!restored) {
+            return false;
         }
-        return false;
     }
-
-    const auto records = decode_stratagem_table(snapshot);
     if (reset_before_reapply && binding.runtime.session.applied_table) {
-        if (is_expected_stratagem_table(records) &&
-            stratagem5_ready(binding.runtime, memory.table, records[4]))
+        if (stratagem5_ready(binding.runtime, memory.table, records[4])) {
             return true;
-        reset_stratagem5_session(binding.runtime.session);
-        binding.memory.reset();
+        }
+    }
+    // Publish recovery identity before the write. A failed or partial write is
+    // still ours to recover; the session keeps original/attempted payloads.
+    binding.memory = memory;
+
+    const Stratagem5ApplyResult result = apply_stratagem5_table(binding.runtime.session, memory.table, records,
+                                               binding.runtime.settings, write_stratagem5, &memory);
+    if (result != Stratagem5ApplyResult::applied && result != Stratagem5ApplyResult::already_matches) {
+        return false;
+    }
+    if (result == Stratagem5ApplyResult::applied) {
         binding.heal_history = {};
     }
-
-    const auto result = apply_stratagem5_table(binding.runtime.session, memory.table, records,
-                                               binding.runtime.settings, write_stratagem5, &memory);
-    if (result != Stratagem5ApplyResult::applied && result != Stratagem5ApplyResult::already_matches)
-        return false;
-    binding.memory = memory;
-    if (result == Stratagem5ApplyResult::applied)
-        binding.heal_history = {};
     return true;
 }
 
@@ -51,17 +63,15 @@ bool enable_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch, std:
 }
 
 bool refresh_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch, std::uintptr_t module_base) {
-    if (!binding.runtime.session.requested)
+    if (!binding.runtime.session.requested) {
         return false;
+    }
 
     std::uintptr_t address = module_base + 0x034c8630;
     constexpr std::array<std::uintptr_t, 5> OFFSETS{0x0bb8, 0x0000, 0x0170, 0x0010, 0x0d38};
-    for (const auto offset : OFFSETS) {
+    for (const std::uintptr_t offset : OFFSETS) {
         std::uintptr_t next = 0;
         if (!platform::windows::read_memory(address, std::as_writable_bytes(std::span(&next, 1))) || !next) {
-            reset_stratagem5_session(binding.runtime.session);
-            binding.memory.reset();
-            binding.heal_history = {};
             return false;
         }
         address = next + offset;
@@ -89,15 +99,10 @@ Stratagem5SettingsResult set_stratagem5_settings(Stratagem5Binding& binding, dom
 }
 
 bool disable_stratagem5(Stratagem5Binding& binding) {
-    const bool was_applied = binding.runtime.session.applied_table.has_value();
-    const bool restored = set_stratagem5_requested(binding.runtime.session, false,
-        write_stratagem5, binding.memory ? &*binding.memory : nullptr);
+    const domain::GameEpoch epoch = binding.runtime.session.applied_table
+        ? binding.runtime.session.applied_table->epoch : domain::GameEpoch{0};
 
-    binding.memory.reset();
-    if (was_applied) {
-        binding.heal_history = {};
-    }
-    return restored;
+    return stop_stratagem5(binding, epoch);
 }
 
 bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
@@ -130,9 +135,16 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     const std::array<domain::StratagemRecord, 5> records = decode_stratagem_table(snapshot);
     const StratagemPayload original = encode_stratagem(session.original);
     const StratagemPayload current = encode_stratagem(records[4]);
+    const StratagemPayload last_written = encode_stratagem(session.last_written);
+    const StratagemPayload attempted = encode_stratagem(session.attempted);
+    bool owned = true;
 
-    if (!is_expected_stratagem_table(records) ||
-        (current != original && !domain::matches_stratagem5(records[4], binding.runtime.settings))) {
+    for (std::size_t index = 0; owned && index < current.size(); ++index) {
+        owned = current[index] == original[index] || current[index] == last_written[index] ||
+            (session.uncertain && current[index] == attempted[index]);
+    }
+
+    if (!is_expected_stratagem_table(records) || !owned) {
         reset_stratagem5_session(session);
         binding.memory.reset();
         binding.heal_history = {};
@@ -154,29 +166,33 @@ bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
     session.last_restore = Stratagem5RestoreStatus::Restored;
     session.applied_table.reset();
     session.original = {};
+    session.last_written = {};
+    session.attempted = {};
+    session.uncertain = false;
     binding.memory.reset();
     binding.heal_history = {};
     return true;
 }
 
 void end_stratagem5_battle(Stratagem5Binding& binding) {
-    if (binding.memory)
-        restore_stratagem5(binding.runtime.session, write_stratagem5, &*binding.memory);
-    binding.memory.reset();
+    const bool requested = binding.runtime.session.requested;
+
+    disable_stratagem5(binding);
+    binding.runtime.session.requested = requested;
     binding.heal_history = {};
 }
 
 void change_stratagem5_session(Stratagem5Binding& binding) {
-    if (!binding.runtime.session.requested)
-        return;
     reset_stratagem5_session(binding.runtime.session);
     binding.memory.reset();
     binding.heal_history = {};
 }
 
 void update_stratagem5_healing(Stratagem5Binding& binding, int unit_count, std::uintptr_t unit_list) {
-    if (!binding.runtime.session.applied_table || unit_list <= 0x10000 || unit_count <= 0)
+    if (!binding.runtime.session.requested || binding.runtime.session.uncertain ||
+        !binding.runtime.session.applied_table || unit_list <= 0x10000 || unit_count <= 0) {
         return;
+    }
 
     const auto count = static_cast<std::size_t>(std::min(unit_count, 60));
     begin_stratagem5_healing(binding.heal_history, static_cast<std::uint64_t>(unit_list));

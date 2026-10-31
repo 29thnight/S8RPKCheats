@@ -239,5 +239,11 @@
     <ClInclude Include="corps_mutation.h" />
     <ClCompile Include="corps_mutation.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stratagem5_native.h" />
+    <ClCompile Include="stratagem5_native.cpp" />
+    <ClInclude Include="stratagem5_native_code.h" />
+    <ClCompile Include="stratagem5_native_code.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -11,6 +11,9 @@ struct Stratagem5ModelApplied {
     StratagemEntry original_entry;
     std::uint32_t original_count;
     StratagemEntry replacement_entry;
+    std::uintptr_t owner;
+    std::uintptr_t camp_data;
+    bool uncertain = false;
 };
 
 struct Stratagem5ModelBinding {

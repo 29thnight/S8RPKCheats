@@ -11,6 +11,8 @@ struct Stratagem5CampSlot {
     std::uintptr_t address;
     std::uintptr_t original;
     std::uint32_t original_count;
+    std::uintptr_t camp_data;
+    bool uncertain = false;
 };
 
 struct Stratagem5Camp {
