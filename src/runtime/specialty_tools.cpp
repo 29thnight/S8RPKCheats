@@ -16,6 +16,27 @@ void update_specialty_tools(game::SpecialtyTools& tools, Runtime& runtime,
     const domain::NamedSpecialties& named = runtime.named_specialties ? *runtime.named_specialties : EMPTY;
     const std::uint64_t revision = tools.snapshot.revision;
 
+    if (!runtime.loop_context_observed) {
+        const std::optional<domain::SpecialtyRequest> request = bridge.specialties.pop();
+
+        if (!request) {
+            return;
+        }
+        if (request->epoch == runtime.epoch && request->action == domain::SpecialtyAction::Cancel) {
+            game::request_specialty_tools(tools, context, *request, named);
+        } else {
+            const bool stale = request->epoch != runtime.epoch;
+
+            tools.snapshot.last_error = stale ? domain::SpecialtyStatus::SessionChanged :
+                domain::SpecialtyStatus::ReadFailed;
+            ++tools.snapshot.revision;
+            bridge.publish_notice(stale ? "이전 게임의 명품 요청을 취소했습니다. 현재 게임에서 다시 요청하세요." :
+                "현재 게임 정보를 읽을 수 없어 명품 요청을 적용하지 않았습니다. 다시 조회한 뒤 요청하세요.");
+        }
+        bridge.specialties.publish(tools.snapshot);
+        return;
+    }
+
     if (tools.snapshot.epoch != runtime.epoch) {
         game::update_specialty_tools(tools, context, runtime.specialty_random, work_budget);
     }

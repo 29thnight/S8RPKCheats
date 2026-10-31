@@ -42,9 +42,10 @@ struct DebugTools {
 
 // Called by the window dispatcher. One request and at most one 64 KiB block
 // are handled per boundary, with a separate 500 us scan iteration deadline.
+// An unobserved game context admits only requests that use cached UI state.
 void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain::GameEpoch epoch,
     std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms,
-    const domain::WorkBudget& work_budget = {});
+    bool game_context_observed, const domain::WorkBudget& work_budget = {});
 void stop_debug_tools(DebugTools& state, services::DebugBridge& bridge);
 
 } // namespace s8::runtime

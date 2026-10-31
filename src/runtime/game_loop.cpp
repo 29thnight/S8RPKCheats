@@ -193,9 +193,7 @@ void dispatch_game_jobs(RuntimeSession& session) {
     // Root/epoch observation precedes all consumers. Work below shares one
     // deadline; native calls and started write transactions complete in place.
     observe_game_context(session.runtime, session.game_module, now_ms, dispatch_budget);
-    if (!session.runtime.loop_context_observed) {
-        return;
-    }
+
     for (std::size_t attempted = 0; attempted < JOB_COUNT && !dispatch_budget.exhausted(); ++attempted) {
         if (session.stop_requested.load(std::memory_order_acquire)) {
             break;
@@ -207,6 +205,14 @@ void dispatch_game_jobs(RuntimeSession& session) {
         // Advance before entering a job so an overrun yields to the next group
         // on the following message instead of starving later services.
         session.next_job = (session.next_job + 1) % JOB_COUNT;
+
+        // Failed game reads must not stop configuration delivery or strand a
+        // queued UI request. Request services gate their game-dependent work.
+        if (!session.runtime.loop_context_observed && job != Job::Ui &&
+            job != Job::Debug && job != Job::Specialty) {
+            continue;
+        }
+
         switch (job) {
         case Job::Game:
             tick_game(session.runtime, session.game_module, now_ms, slice);
@@ -228,7 +234,7 @@ void dispatch_game_jobs(RuntimeSession& session) {
         case Job::Debug:
             update_debug_tools(session.debug_tools, session.services.overlay.bridge.debug_tools,
                 session.runtime.epoch, session.game_module, session.runtime.loop_game_base,
-                session.runtime.loop_player, now_ms, slice);
+                session.runtime.loop_player, now_ms, session.runtime.loop_context_observed, slice);
             break;
         case Job::Specialty:
             update_specialty_tools(session.specialty_tools, session.runtime,

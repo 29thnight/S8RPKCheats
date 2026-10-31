@@ -244,7 +244,11 @@ void command_mailbox() {
 
 void command_commit() {
     runtime::Runtime state;
+
     state.epoch = domain::GameEpoch{2};
+    state.config_loaded = true;
+    state.loop_context_observed = true;
+
     services::CommandMailbox mailbox;
     assert(mailbox.push({domain::RequestId{1}, domain::GameEpoch{1},
                          domain::SetFeature{domain::FeatureId::InfiniteAp, true}}));
@@ -329,11 +333,17 @@ void config_save_queue() {
 
 void ui_bridge() {
     runtime::Runtime state;
+
     state.epoch = domain::GameEpoch{3};
+
     services::UiBridge bridge;
+
     assert(!bridge.snapshot());
+    bridge.publish_config_load(services::ConfigLoad{});
     assert(runtime::commit_ui_commands(state, bridge, 0, 1, std::chrono::seconds{1}) == 0);
     assert(bridge.snapshot() && bridge.snapshot()->epoch == state.epoch);
+    assert(bridge.snapshot()->config.config_loaded && !state.loop_game_base_ready);
+    state.loop_context_observed = true;
     assert(bridge.commands.push({domain::RequestId{1}, state.epoch,
                                  domain::SetFeature{domain::FeatureId::InfiniteAp, true}}));
     assert(runtime::commit_ui_commands(state, bridge, 0, 1, std::chrono::seconds{1}) == 1);
@@ -454,7 +464,11 @@ void config_json_update() {
 
 void terrain_bonus_config_and_modes() {
     runtime::Runtime state;
+
     state.epoch = domain::GameEpoch{4};
+    state.config_loaded = true;
+    state.loop_context_observed = true;
+
     services::CommandMailbox mailbox;
     assert(state.terrain_bonus.values[11][16] == 10);
     assert(state.terrain_bonus.values[11][17] == 0);
@@ -481,7 +495,11 @@ void terrain_bonus_config_and_modes() {
 
 void siege_modes_and_battle_identity() {
     runtime::Runtime state;
+
     state.epoch = domain::GameEpoch{6};
+    state.config_loaded = true;
+    state.loop_context_observed = true;
+
     services::CommandMailbox mailbox;
     assert(mailbox.push({domain::RequestId{1}, state.epoch,
                          domain::SetFeature{domain::FeatureId::SiegeWarfare, true}}));

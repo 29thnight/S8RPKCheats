@@ -832,7 +832,8 @@ void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uin
         (game_base && (game_base <= 0x10000 || !platform::windows::read_memory(game_base + 0xe0,
             std::as_writable_bytes(std::span(&player, 1)))))) {
         // An unreadable slot does not prove that a game object was destroyed.
-        // Keep its epoch and recovery journals, and admit no jobs this message.
+        // Keep its epoch and recovery journals. Only independent UI services
+        // may proceed until the game context can be observed again.
         runtime.loop_game_base_ready = false;
         runtime.loop_player_ready = false;
         return;

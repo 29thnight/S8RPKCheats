@@ -18,6 +18,36 @@
 #include <Windows.h>
 
 namespace s8::runtime {
+namespace {
+
+constexpr bool interface_only_command(const domain::CommandPayload& payload) noexcept {
+    if (std::holds_alternative<domain::SetUiScale>(payload) ||
+        std::holds_alternative<domain::SetNotificationSpeed>(payload) ||
+        std::holds_alternative<domain::CancelSpecialAbilityAssignment>(payload)) {
+        return true;
+    }
+
+    const domain::SetFeature* const feature = std::get_if<domain::SetFeature>(&payload);
+
+    if (!feature) {
+        return false;
+    }
+
+    switch (feature->feature) {
+    case domain::FeatureId::AutoLoadMenu:
+    case domain::FeatureId::ShowWidgetNotif:
+    case domain::FeatureId::ShowWidgetHero:
+    case domain::FeatureId::ShowWidgetAllOfficers:
+    case domain::FeatureId::FileLog:
+    case domain::FeatureId::MonitorRonin:
+    case domain::FeatureId::OfficerChangeNotify:
+        return true;
+    default:
+        return false;
+    }
+}
+
+} // namespace
 
 std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             std::uintptr_t game_module, std::size_t max_commands,
@@ -44,6 +74,11 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
         bool save_config = true;
         if (accepted->command.epoch != runtime.epoch) {
             result = std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+        } else if (!runtime.config_loaded ||
+            (!runtime.loop_context_observed && !interface_only_command(accepted->command.payload))) {
+            // Complete unavailable requests instead of leaving the menu waiting.
+            // No setting may overwrite a configuration that has not loaded yet.
+            result = std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure, ERROR_NOT_READY});
         } else {
             result = std::visit([&](const auto& command) -> domain::Result<void> {
                 using T = std::decay_t<decltype(command)>;
@@ -846,7 +881,7 @@ void service_pending_trait(Runtime& runtime, services::UiBridge& ui, std::uintpt
 }
 
 void consume_ui_configuration(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
-    if (runtime.loop_game_base_ready && !runtime.config_loaded) {
+    if (!runtime.config_loaded) {
         if (std::optional<services::ConfigLoad> config = ui.take_config_load()) {
             apply_config(runtime, std::move(*config), game_module);
             runtime.config_loaded = true;
@@ -1057,7 +1092,7 @@ void update_selected_officer(Runtime& runtime, services::UiBridge& ui, std::uint
 }
 
 void publish_runtime_view(Runtime& runtime, services::UiBridge& ui) {
-    if (ui.ui_rendered.exchange(false)) {
+    if (ui.ui_rendered.exchange(false) && runtime.loop_context_observed) {
         game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
                                  runtime.features.get(domain::FeatureId::ZeroInfamy));
     }
@@ -1091,11 +1126,23 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         const Job job = static_cast<Job>(runtime.next_ui_job);
 
         runtime.next_ui_job = (runtime.next_ui_job + 1) % JOB_COUNT;
+
+        const bool interface_job = job == Job::Configuration || job == Job::Commands ||
+            job == Job::Roster || job == Job::Notices || job == Job::Publish;
+
+        if (!runtime.loop_context_observed && !interface_job) {
+            continue;
+        }
+
         switch (job) {
         case Job::Configuration:
             consume_ui_configuration(runtime, ui, game_module);
             break;
         case Job::Commands:
+            if (!runtime.config_loaded) {
+                consume_ui_configuration(runtime, ui, game_module);
+            }
+
             processed += commit_commands(runtime, ui.commands, game_module, max_commands,
                 time_budget, &ui, work_budget);
             break;

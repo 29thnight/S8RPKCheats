@@ -30,6 +30,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     auto last_change = std::chrono::steady_clock::now();
     bool skill_save_failed = false;
     bool config_dispatched = false;
+    bool config_failure_reported = false;
     std::optional<OfficerNameEdit> pending_name;
     bool name_active = false;
     bool name_save_failed = false;
@@ -96,21 +97,36 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
             trait_catalogs.poll(bridge, trait_texts, reload_traits);
         }
         if (!config_dispatched && now >= next_config_attempt) {
-            auto baseline = platform::windows::read_config_for_save(path);
+            domain::Result<std::optional<std::string>> baseline = platform::windows::read_config_for_save(path);
+
             if (baseline) {
                 SecondaryJewelConfig secondary;
                 TerrainBonusChanges terrain_bonus{};
                 DefBuildingChanges def_building{};
                 ScalarConfigChanges scalars{};
-                auto lines = config_lines_for_load(*baseline ? std::string_view(**baseline) : std::string_view{},
-                                                   &secondary, &terrain_bonus, &def_building, &scalars);
+                const domain::Result<std::string> lines = config_lines_for_load(
+                    *baseline ? std::string_view(**baseline) : std::string_view{},
+                    &secondary, &terrain_bonus, &def_building, &scalars);
+
                 if (lines) {
-                    auto features = domain::read_feature_flag_changes(*lines);
+                    domain::FeatureFlagChanges features = domain::read_feature_flag_changes(*lines);
+
                     bridge.publish_config_load({std::move(*baseline), secondary.mask,
                                                 std::move(terrain_bonus), std::move(features), std::move(def_building),
                                                 std::move(scalars)});
                     config_dispatched = true;
+
+                    if (config_failure_reported) {
+                        bridge.publish_notice("설정 파일을 다시 읽었습니다.");
+                    }
+                } else if (!config_failure_reported) {
+                    bridge.publish_notice("설정 파일의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
+                    config_failure_reported = true;
                 }
+            } else if (!config_failure_reported) {
+                bridge.publish_notice("설정 파일을 읽지 못했습니다. 파일 접근 권한을 확인해 주세요. 오류 " +
+                    std::to_string(baseline.error().native_code));
+                config_failure_reported = true;
             }
             next_config_attempt = now + std::chrono::milliseconds(500);
         }

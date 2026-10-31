@@ -379,7 +379,7 @@ void publish(DebugTools& state, services::DebugBridge& bridge, std::uint64_t now
 
 void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain::GameEpoch epoch,
     std::uintptr_t module, std::uintptr_t game_base, std::uintptr_t player, std::uint64_t now_ms,
-    const domain::WorkBudget& work_budget) {
+    bool game_context_observed, const domain::WorkBudget& work_budget) {
     const platform::windows::RealClockScope real_clock;
 
     if (state.stopped || work_budget.exhausted()) {
@@ -395,15 +395,27 @@ void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain
         state.initialized = true;
         state.dirty = true;
     }
-    state.snapshot.module = module;
-    state.snapshot.game_base = game_base;
-    state.snapshot.player = player;
+    if (game_context_observed) {
+        state.snapshot.module = module;
+        state.snapshot.game_base = game_base;
+        state.snapshot.player = player;
+    }
     if (const std::optional<domain::DebugRequest> request = bridge.pop()) {
-        state.snapshot.request_status = apply_request(state, *request);
+        const bool local_request = request->action == domain::DebugAction::Cancel ||
+            request->action == domain::DebugAction::ClearCapture ||
+            request->action == domain::DebugAction::ResultPage;
+
+        if (request->epoch.value != epoch.value) {
+            state.snapshot.request_status = domain::DebugStatus::SessionChanged;
+        } else if (game_context_observed || local_request) {
+            state.snapshot.request_status = apply_request(state, *request);
+        } else {
+            state.snapshot.request_status = domain::DebugStatus::ReadFailed;
+        }
         state.snapshot.completed_request = request->id;
         state.dirty = true;
     }
-    if (state.snapshot.scanning) {
+    if (game_context_observed && state.snapshot.scanning) {
         const std::chrono::steady_clock::time_point deadline = std::min(work_budget.deadline, std::chrono::steady_clock::now() + SCAN_BUDGET);
 
         if (state.snapshot.refining) {
@@ -412,7 +424,8 @@ void update_debug_tools(DebugTools& state, services::DebugBridge& bridge, domain
             search_tick(state, deadline);
         }
     }
-    if (state.dirty || (state.snapshot.scanning && now_ms - state.last_publish_ms >= PUBLISH_INTERVAL_MS)) {
+    if (state.dirty || (game_context_observed && state.snapshot.scanning &&
+        now_ms - state.last_publish_ms >= PUBLISH_INTERVAL_MS)) {
         publish(state, bridge, now_ms);
     }
 }
