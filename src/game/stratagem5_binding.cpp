@@ -90,12 +90,14 @@ Stratagem5SettingsResult set_stratagem5_settings(Stratagem5Binding& binding, dom
 
 bool disable_stratagem5(Stratagem5Binding& binding) {
     const bool was_applied = binding.runtime.session.applied_table.has_value();
-    set_stratagem5_requested(binding.runtime.session, false,
-                             write_stratagem5, binding.memory ? &*binding.memory : nullptr);
+    const bool restored = set_stratagem5_requested(binding.runtime.session, false,
+        write_stratagem5, binding.memory ? &*binding.memory : nullptr);
+
     binding.memory.reset();
-    if (was_applied)
+    if (was_applied) {
         binding.heal_history = {};
-    return true;
+    }
+    return restored;
 }
 
 void end_stratagem5_battle(Stratagem5Binding& binding) {

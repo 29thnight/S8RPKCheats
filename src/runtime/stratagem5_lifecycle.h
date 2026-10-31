@@ -6,8 +6,10 @@ namespace s8::runtime {
 
 struct Stratagem5Lifecycle {
     std::atomic<bool> desired{false};
+    // Effective is the request armed at a safe boundary, not proof of installed game data.
     std::atomic<bool> effective{false};
     std::atomic<bool> skip_current_battle{true};
+    std::atomic<bool> last_transition_succeeded{true};
 };
 
 struct Stratagem5LifecycleActions {

@@ -173,7 +173,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     case domain::FeatureId::RoadBlock:
                     case domain::FeatureId::RoadBlock2: {
                         const bool second = command.feature == domain::FeatureId::RoadBlock2;
-                        if (!game::set_road_block(runtime.road_blocks[second], game_module, second, command.enabled)) {
+                        if (!game::set_road_block(runtime.road_blocks[second], game_module, second,
+                                                  command.enabled, runtime.epoch)) {
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
                         break;
@@ -205,6 +206,14 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
                     }
                     runtime.features.set(command.feature, command.enabled);
+                    if (command.feature == domain::FeatureId::TerrainIgnore ||
+                        command.feature == domain::FeatureId::WeatherSkillSimple ||
+                        command.feature == domain::FeatureId::WeatherSkillComplex) {
+                        game::update_battle_weather(runtime.battle_weather, game_module, GetTickCount64(),
+                            runtime.features.get(domain::FeatureId::WeatherSkillSimple),
+                            runtime.features.get(domain::FeatureId::WeatherSkillComplex), true,
+                            runtime.features.get(domain::FeatureId::TerrainIgnore));
+                    }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetShortBattleCooldown>) {
                     if ((command.enabled || runtime.short_battle_cooldown.applied) &&

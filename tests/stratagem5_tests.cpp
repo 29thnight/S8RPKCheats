@@ -157,8 +157,9 @@ void deferred_lifecycle() {
     runtime::request_stratagem5(lifecycle, true);
     assert(runtime::update_stratagem5_lifecycle(lifecycle, true, false, actions));
     assert(calls.count == 0 && runtime::should_skip_stratagem5(lifecycle));
-    assert(runtime::update_stratagem5_lifecycle(lifecycle, false, true, actions));
+    assert(!runtime::update_stratagem5_lifecycle(lifecycle, false, true, actions));
     assert(calls.count == 4 && !runtime::should_skip_stratagem5(lifecycle));
+    assert(!lifecycle.last_transition_succeeded.load());
     runtime::request_stratagem5(lifecycle, false);
     assert(!runtime::update_stratagem5_lifecycle(lifecycle, false, true, actions));
     assert(calls.count == 7 && runtime::should_skip_stratagem5(lifecycle));

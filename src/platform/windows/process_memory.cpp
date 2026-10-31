@@ -7,20 +7,33 @@
 namespace s8::platform::windows {
 
 bool is_committed_memory(std::uintptr_t address, std::size_t size) {
-    if (!address || !size || address + size - 1 < address)
+    if (!address || !size || address + size - 1 < address) {
         return false;
-    const auto end = address + size - 1;
-    MEMORY_BASIC_INFORMATION first{};
-    if (VirtualQuery(reinterpret_cast<const void*>(address), &first, sizeof(first)) != sizeof(first) ||
-        first.State != MEM_COMMIT || (first.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
-        return false;
-    const auto region_start = reinterpret_cast<std::uintptr_t>(first.BaseAddress);
-    const auto region_end = region_start + first.RegionSize - 1;
-    if (region_end >= region_start && end <= region_end)
-        return true;
-    MEMORY_BASIC_INFORMATION last{};
-    return VirtualQuery(reinterpret_cast<const void*>(end), &last, sizeof(last)) == sizeof(last) &&
-           last.State == MEM_COMMIT && !(last.Protect & (PAGE_NOACCESS | PAGE_GUARD));
+    }
+
+    const std::uintptr_t end = address + size - 1;
+    std::uintptr_t cursor = address;
+
+    for (;;) {
+        MEMORY_BASIC_INFORMATION region{};
+
+        if (VirtualQuery(reinterpret_cast<const void*>(cursor), &region, sizeof(region)) != sizeof(region) ||
+            region.State != MEM_COMMIT || (region.Protect & (PAGE_NOACCESS | PAGE_GUARD)) || !region.RegionSize) {
+            return false;
+        }
+
+        const std::uintptr_t region_start = reinterpret_cast<std::uintptr_t>(region.BaseAddress);
+        const std::uintptr_t region_end = region_start + region.RegionSize - 1;
+
+        if (region_end < region_start || region_end < cursor) {
+            return false;
+        }
+        if (end <= region_end) {
+            return true;
+        }
+
+        cursor = region_end + 1;
+    }
 }
 
 bool read_memory(std::uintptr_t address, std::span<std::byte> bytes) {
@@ -36,7 +49,7 @@ bool write_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
 }
 
 bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
-    auto* target = reinterpret_cast<void*>(address);
+    void* target = reinterpret_cast<void*>(address);
     DWORD old_protection = 0;
     if (!VirtualProtect(target, bytes.size(), PAGE_READWRITE, &old_protection))
         return false;
@@ -50,16 +63,16 @@ bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes)
 }
 
 bool write_code_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
-    auto* target = reinterpret_cast<void*>(address);
+    void* target = reinterpret_cast<void*>(address);
     DWORD old_protection = 0;
     if (!VirtualProtect(target, bytes.size(), PAGE_EXECUTE_READWRITE, &old_protection))
         return false;
     const bool written = write_memory(address, bytes);
     DWORD ignored = 0;
-    VirtualProtect(target, bytes.size(), old_protection, &ignored);
-    if (written)
-        FlushInstructionCache(GetCurrentProcess(), target, bytes.size());
-    return written;
+    const bool protection_restored = VirtualProtect(target, bytes.size(), old_protection, &ignored) != FALSE;
+    const bool cache_flushed = !written || FlushInstructionCache(GetCurrentProcess(), target, bytes.size()) != FALSE;
+
+    return written && protection_restored && cache_flushed;
 }
 
 bool write_specialty_slot(std::uintptr_t slot, std::uintptr_t object) {

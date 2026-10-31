@@ -15,10 +15,13 @@ struct StratagemTableId {
     bool operator==(const StratagemTableId&) const = default;
 };
 
+enum class Stratagem5RestoreStatus { None, Restored, Failed, Abandoned };
+
 struct Stratagem5Session {
     bool requested = false;
     std::optional<StratagemTableId> applied_table;
     domain::StratagemRecord original{};
+    Stratagem5RestoreStatus last_restore = Stratagem5RestoreStatus::None;
 };
 
 using WriteStratagem5 = bool (*)(void* context, StratagemTableId table, const StratagemPayload& payload);
@@ -37,7 +40,8 @@ bool is_stratagem5_ready(
     const Stratagem5Session& session, StratagemTableId table,
     const domain::StratagemRecord& current, const domain::Stratagem5Settings& settings);
 
-// OFF and battle end discard the saved record even if restoration fails.
+// OFF and battle end discard object-bound addresses, retaining the restoration outcome.
+// A later retry must resolve and validate a new object rather than reuse this address.
 bool restore_stratagem5(Stratagem5Session& session, WriteStratagem5 write, void* context);
 bool set_stratagem5_requested(Stratagem5Session& session, bool enabled, WriteStratagem5 write, void* context);
 void reset_stratagem5_session(Stratagem5Session& session);

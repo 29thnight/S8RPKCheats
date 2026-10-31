@@ -209,7 +209,8 @@ void on_active_battle_observed(Runtime& runtime, std::uintptr_t module_base, std
             runtime.features.get(domain::FeatureId::SkipDaysEnabled), runtime.skip_days, day_changed);
         game::update_battle_weather(runtime.battle_weather, module_base, now_ms,
             runtime.features.get(domain::FeatureId::WeatherSkillSimple),
-            runtime.features.get(domain::FeatureId::WeatherSkillComplex), day_changed);
+            runtime.features.get(domain::FeatureId::WeatherSkillComplex), day_changed,
+            runtime.features.get(domain::FeatureId::TerrainIgnore));
         if (day_changed) {
             std::uint8_t final_day = 0;
             if (platform::windows::read_memory(observation.day_base + 0x2c,
@@ -675,7 +676,7 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
     }
     game::update_faction_lord_bonus(runtime.faction_lord_bonus, game_module, now_ms);
     for (std::size_t i = 0; i < runtime.road_blocks.size(); ++i) {
-        game::tick_road_block(runtime.road_blocks[i], game_module, i == 1, now_ms);
+        game::tick_road_block(runtime.road_blocks[i], game_module, i == 1, now_ms, runtime.epoch);
     }
     for (auto& conversion : runtime.city_conversions)
         game::tick_city_conversion(conversion, runtime.epoch, now_ms);
@@ -722,7 +723,7 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
     constexpr std::array ROAD_FEATURES{domain::FeatureId::RoadBlock, domain::FeatureId::RoadBlock2};
     for (std::size_t i = 0; i < ROAD_FEATURES.size(); ++i) {
         if (runtime.features.get(ROAD_FEATURES[i]) && !runtime.road_blocks[i].applied) {
-            game::set_road_block(runtime.road_blocks[i], game_module, i == 1, true);
+            game::set_road_block(runtime.road_blocks[i], game_module, i == 1, true, runtime.epoch);
         }
     }
     constexpr std::array SKILL_FEATURES{domain::FeatureId::SkillCondition, domain::FeatureId::YumokCondition,
