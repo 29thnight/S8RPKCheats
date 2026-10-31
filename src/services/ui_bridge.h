@@ -8,11 +8,13 @@
 #include "../domain/ownership.h"
 #include "../domain/trait_runtime.h"
 #include "../domain/trait_text_edit.h"
+#include "../domain/city_management.h"
 #include "config_save.h"
 #include "config_json.h"
 #include "service_wake.h"
 #include "file_log.h"
 #include "debug_bridge.h"
+#include "city_bridge.h"
 
 #include <mutex>
 #include <array>
@@ -82,6 +84,7 @@ public:
     ServiceWake config_wake;
     FileLogChannel file_log{config_wake};
     DebugBridge debug_tools;
+    CityBridge city_management;
     std::atomic<bool> external_trait_runtime{false};
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
@@ -111,6 +114,14 @@ public:
     std::optional<ConfigSaveStatus> take_trait_text_save_result();
     void request_trait_text_reload();
     bool take_trait_text_reload();
+    void publish_city_support_routes(own::shared_owner<const domain::CitySupportRoutes> routes);
+    own::shared_owner<const domain::CitySupportRoutes> take_city_support_routes();
+    bool request_city_support_save(own::shared_owner<const domain::CitySupportRoutes> routes);
+    own::shared_owner<const domain::CitySupportRoutes> take_city_support_save();
+    void publish_city_support_save_result(ConfigSaveStatus result);
+    std::optional<ConfigSaveStatus> take_city_support_save_result();
+    void request_city_support_reload();
+    bool take_city_support_reload();
     bool request_officer_name(OfficerNameEdit edit);
     void close_officer_name_requests();
     std::optional<OfficerNameEdit> take_officer_name();
@@ -153,6 +164,10 @@ private:
     std::optional<TraitTextSaveRequest> pending_trait_text_save;
     std::optional<ConfigSaveStatus> trait_text_save_result;
     bool trait_text_reload = false;
+    own::shared_owner<const domain::CitySupportRoutes> pending_city_support_routes;
+    own::shared_owner<const domain::CitySupportRoutes> pending_city_support_save;
+    std::optional<ConfigSaveStatus> city_support_save_result;
+    bool city_support_reload = false;
     std::optional<OfficerNameEdit> pending_officer_name;
     bool officer_name_requests_open = true;
     std::optional<ConfigSaveStatus> officer_name_result;

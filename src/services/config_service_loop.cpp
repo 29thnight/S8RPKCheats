@@ -4,6 +4,7 @@
 #include "config_json.h"
 #include "trait_catalog_service.h"
 #include "trait_text_service.h"
+#include "city_support_service.h"
 #include "../platform/windows/config_commit.h"
 #include "../platform/windows/speed_clock.h"
 #include <chrono>
@@ -17,6 +18,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     ConfigSaveService service(bridge, path);
     TraitTextService trait_texts(path.parent_path());
     TraitCatalogService trait_catalogs(path.parent_path());
+    CitySupportService city_support(path.parent_path());
     FileLogWriter file_log(path.parent_path() / L"S8RPK_cheat.log");
     bool log_failure_reported = false;
     const auto skill_path = path.parent_path() / L"S8RPK_skill_counts.json";
@@ -77,6 +79,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         }
     };
     trait_texts.load_legacy(bridge);
+    city_support.load(bridge);
     while (!stop.stop_requested()) {
         const std::uint64_t observed = bridge.config_wake.observe();
         const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
@@ -113,6 +116,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         poll_skills(false);
         poll_names();
         trait_texts.poll(bridge);
+        city_support.poll(bridge);
         file_log.poll(bridge.file_log);
         if (bridge.file_log.failed() && !log_failure_reported) {
             bridge.publish_notice("파일 로그 저장에 실패했습니다. 경로를 확인한 뒤 옵션을 껐다 켜면 재시도합니다.");
@@ -150,8 +154,9 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     const bool config_saved = service.close_and_wait();
 
     trait_texts.poll(bridge);
+    city_support.poll(bridge);
     file_log.close(bridge.file_log);
-    return config_saved && !pending_counts && !name_save_failed;
+    return config_saved && !pending_counts && !name_save_failed && city_support.saved();
 }
 
 } // namespace s8::services

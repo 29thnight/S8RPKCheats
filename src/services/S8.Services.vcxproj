@@ -32,6 +32,13 @@
     <ClCompile Include="trait_catalog_service.cpp" />
     <ClInclude Include="debug_bridge.h" />
     <ClCompile Include="debug_bridge.cpp" />
+    <ClCompile Include="ui_bridge_city.cpp" />
+    <ClInclude Include="city_support_service.h" />
+    <ClCompile Include="city_support_service.cpp" />
+    <ClInclude Include="city_support_config.h" />
+    <ClCompile Include="city_support_config.cpp" />
+    <ClInclude Include="city_bridge.h" />
+    <ClCompile Include="city_bridge.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
