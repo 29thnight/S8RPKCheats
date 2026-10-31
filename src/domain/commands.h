@@ -16,6 +16,7 @@
 #include "officer_roster.h"
 #include "tengi.h"
 #include "ai_officer_growth.h"
+#include "trait_control.h"
 
 #include <cstdint>
 #include <optional>
@@ -134,7 +135,7 @@ using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSett
                                     SetProtagonistBasic, SetProtagonistGender, RefreshOfficerRoster, SelectRosterOfficer,
                                     SetRosterOfficerBasic, SetRosterOfficerGender, SetRosterOfficerVoice,
                                     SetRosterOfficerRonin, MoveRosterOfficer, ReviveRosterOfficer,
-                                    SetRosterOfficerTrait, SetRosterOfficerTraining>;
+                                    SetRosterOfficerTrait, SetRosterOfficerTraining, ApplyTraitTextEdits>;
 
 struct Command {
     RequestId request;

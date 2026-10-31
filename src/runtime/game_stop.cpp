@@ -16,6 +16,7 @@ namespace s8::runtime {
 namespace {
 
 enum class StopStep : std::size_t {
+    Traits,
     Native,
     Tengi,
     AiGrowth,
@@ -84,6 +85,7 @@ bool needed(const Runtime& runtime, StopStep step) {
     const domain::FeatureFlags& flags = runtime.features;
 
     switch (step) {
+    case StopStep::Traits: return true;
     case StopStep::Native: return true;
     case StopStep::Tengi: return runtime.tengi.module_base != 0;
     case StopStep::AiGrowth: return runtime.ai_growth_settings.enabled;
@@ -146,6 +148,8 @@ bool needed(const Runtime& runtime, StopStep step) {
 domain::Result<void> perform_stop(Runtime& runtime, std::uintptr_t module_base, StopStep step) {
 
     switch (step) {
+    case StopStep::Traits:
+        return stop_trait_control(runtime.traits, module_base, runtime.loop_game_base, runtime.epoch.value);
     case StopStep::Native:
         return stop_native_features(runtime, module_base);
     case StopStep::Tengi: {

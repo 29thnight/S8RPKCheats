@@ -83,6 +83,85 @@ own::shared_owner<const domain::TraitRuntimeCatalog> UiBridge::take_trait_catalo
     return catalog;
 }
 
+void UiBridge::publish_legacy_trait_texts(own::shared_owner<const domain::TraitTextEdits> rows) {
+    own::shared_owner<const domain::TraitTextEdits> pending = rows;
+
+    {
+        std::lock_guard lock(mutex);
+
+        current_legacy_trait_texts.swap(rows);
+        pending_legacy_trait_texts.swap(pending);
+    }
+}
+
+own::shared_owner<const domain::TraitTextEdits> UiBridge::legacy_trait_texts_view() {
+    std::lock_guard lock(mutex);
+
+    return current_legacy_trait_texts;
+}
+
+own::shared_owner<const domain::TraitTextEdits> UiBridge::take_legacy_trait_texts() {
+    own::shared_owner<const domain::TraitTextEdits> rows;
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_legacy_trait_texts.swap(rows);
+    }
+    return rows;
+}
+
+bool UiBridge::request_trait_text_save(TraitTextSaveRequest request) {
+    {
+        std::lock_guard lock(mutex);
+
+        if (!officer_name_requests_open || !request.rows || pending_trait_text_save) {
+            return false;
+        }
+        pending_trait_text_save = std::move(request);
+    }
+    config_wake.signal();
+    return true;
+}
+
+std::optional<TraitTextSaveRequest> UiBridge::take_trait_text_save() {
+    std::optional<TraitTextSaveRequest> request;
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_trait_text_save.swap(request);
+    }
+    return request;
+}
+
+void UiBridge::publish_trait_text_save_result(ConfigSaveStatus result) {
+    std::lock_guard lock(mutex);
+
+    trait_text_save_result = result;
+}
+
+std::optional<ConfigSaveStatus> UiBridge::take_trait_text_save_result() {
+    std::lock_guard lock(mutex);
+
+    return std::exchange(trait_text_save_result, std::nullopt);
+}
+
+void UiBridge::request_trait_text_reload() {
+    {
+        std::lock_guard lock(mutex);
+
+        trait_text_reload = true;
+    }
+    config_wake.signal();
+}
+
+bool UiBridge::take_trait_text_reload() {
+    std::lock_guard lock(mutex);
+
+    return std::exchange(trait_text_reload, false);
+}
+
 bool UiBridge::request_officer_name(OfficerNameEdit edit) {
     {
         std::lock_guard lock(mutex);

@@ -7,10 +7,12 @@
 #include "../domain/officer_roster.h"
 #include "../domain/ownership.h"
 #include "../domain/trait_runtime.h"
+#include "../domain/trait_text_edit.h"
 #include "config_save.h"
 #include "config_json.h"
 #include "service_wake.h"
 #include "file_log.h"
+#include "debug_bridge.h"
 
 #include <mutex>
 #include <array>
@@ -69,11 +71,18 @@ struct OfficerNameEdit {
     std::string name;
 };
 
+struct TraitTextSaveRequest {
+    bool embedded = false;
+    own::shared_owner<const domain::TraitTextEdits> rows;
+};
+
 class UiBridge {
 public:
     CommandMailbox commands;
     ServiceWake config_wake;
     FileLogChannel file_log{config_wake};
+    DebugBridge debug_tools;
+    std::atomic<bool> external_trait_runtime{false};
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
     std::atomic<int> officer_roster_scan_cursor{-1};
@@ -93,6 +102,15 @@ public:
     own::shared_owner<const domain::CustomTraits> custom_traits_view();
     void publish_trait_catalog(own::shared_owner<const domain::TraitRuntimeCatalog> catalog);
     own::shared_owner<const domain::TraitRuntimeCatalog> take_trait_catalog();
+    void publish_legacy_trait_texts(own::shared_owner<const domain::TraitTextEdits> rows);
+    own::shared_owner<const domain::TraitTextEdits> legacy_trait_texts_view();
+    own::shared_owner<const domain::TraitTextEdits> take_legacy_trait_texts();
+    bool request_trait_text_save(TraitTextSaveRequest request);
+    std::optional<TraitTextSaveRequest> take_trait_text_save();
+    void publish_trait_text_save_result(ConfigSaveStatus result);
+    std::optional<ConfigSaveStatus> take_trait_text_save_result();
+    void request_trait_text_reload();
+    bool take_trait_text_reload();
     bool request_officer_name(OfficerNameEdit edit);
     void close_officer_name_requests();
     std::optional<OfficerNameEdit> take_officer_name();
@@ -130,6 +148,11 @@ private:
     own::shared_owner<const domain::TraitEffectDefinitions> current_trait_effects;
     own::shared_owner<const domain::CustomTraits> current_custom_traits;
     own::shared_owner<const domain::TraitRuntimeCatalog> pending_trait_catalog;
+    own::shared_owner<const domain::TraitTextEdits> current_legacy_trait_texts;
+    own::shared_owner<const domain::TraitTextEdits> pending_legacy_trait_texts;
+    std::optional<TraitTextSaveRequest> pending_trait_text_save;
+    std::optional<ConfigSaveStatus> trait_text_save_result;
+    bool trait_text_reload = false;
     std::optional<OfficerNameEdit> pending_officer_name;
     bool officer_name_requests_open = true;
     std::optional<ConfigSaveStatus> officer_name_result;

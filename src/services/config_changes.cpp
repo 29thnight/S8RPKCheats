@@ -83,6 +83,7 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
         FeatureKey{domain::FeatureId::MissionCpuHeroExclusion, "bMissionCpuHeroExclusion"},
         FeatureKey{domain::FeatureId::CouncilExecuteFreeOfficers, "bCouncilExecuteFreeOfficers"},
         FeatureKey{domain::FeatureId::AffinityDisplay, "bAffinityDisplay"},
+        FeatureKey{domain::FeatureId::TraitViewer, "bTraitViewer"},
     };
     std::vector<ConfigChange> changes;
     changes.reserve(FEATURES.size() + 128 + 12 * 11 + domain::TENGI_EVENT_COUNT * 3);

@@ -33,5 +33,11 @@
     <ProjectReference Include="..\overlay\S8.Overlay.vcxproj"><Project>{603D6FAD-59C6-4AA8-8B99-D847867FF2C2}</Project></ProjectReference>
   </ItemGroup>
   <ItemGroup><ClCompile Include="native_feature_control.cpp" /><ClInclude Include="native_feature_control.h" /><ClCompile Include="game_stop.cpp" /></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="trait_control.cpp" />
+    <ClInclude Include="trait_control.h" />
+    <ClCompile Include="debug_tools.cpp" />
+    <ClInclude Include="debug_tools.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

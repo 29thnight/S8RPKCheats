@@ -171,12 +171,12 @@ bool request_native_feature(Runtime& runtime, domain::FeatureId feature, bool en
     return true;
 }
 
-void reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms) {
+bool reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms) {
 
     NativeFeatureControl& control = runtime.native_features;
 
     if (!runtime.config_loaded) {
-        return;
+        return false;
     }
 
     if (!control.initialized) {
@@ -219,7 +219,7 @@ void reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std
             }
         }
 
-        return;
+        return true;
     }
 
     for (std::size_t offset = 0; offset < domain::NATIVE_FEATURE_GROUP_COUNT; ++offset) {
@@ -235,8 +235,10 @@ void reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std
 
         control.next_group = (index + 1) % domain::NATIVE_FEATURE_GROUP_COUNT;
         record_result(control, group, succeeded, now_ms);
-        return;
+        return true;
     }
+
+    return false;
 }
 
 void change_native_feature_epoch(Runtime& runtime) {

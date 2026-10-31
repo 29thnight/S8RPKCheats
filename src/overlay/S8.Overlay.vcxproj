@@ -33,5 +33,11 @@
     <ProjectReference Include="..\services\S8.Services.vcxproj"><Project>{56C82CE2-A8CE-4326-BBCE-9B688F3C327B}</Project></ProjectReference>
   </ItemGroup>
   <ItemGroup><ClCompile Include="notifications.cpp" /><ClInclude Include="notifications.h" /></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="trait_text_editor.cpp" />
+    <ClInclude Include="trait_text_editor.h" />
+    <ClCompile Include="debug_tools_panel.cpp" />
+    <ClInclude Include="debug_tools_panel.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

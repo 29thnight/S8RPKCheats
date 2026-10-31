@@ -69,6 +69,7 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.special_assignment_results,
         runtime.special_assignment_generation,
         runtime.native_features.statuses,
+        runtime.traits.view,
     };
 }
 
@@ -636,6 +637,8 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t 
     }
     if (const auto enabled = scalars.troop_count_combat)
         set_troop_count_combat(runtime, game_module, *enabled);
+
+    request_trait_viewer(runtime.traits, runtime.features.get(domain::FeatureId::TraitViewer));
 }
 
 void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,

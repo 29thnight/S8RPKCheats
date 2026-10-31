@@ -24,6 +24,14 @@
     <ClCompile Include="trait_runtime_config.cpp" />
     <ClInclude Include="file_log.h" />
     <ClCompile Include="file_log.cpp" />
+    <ClInclude Include="trait_text_config.h" />
+    <ClCompile Include="trait_text_config.cpp" />
+    <ClInclude Include="trait_text_service.h" />
+    <ClCompile Include="trait_text_service.cpp" />
+    <ClInclude Include="trait_catalog_service.h" />
+    <ClCompile Include="trait_catalog_service.cpp" />
+    <ClInclude Include="debug_bridge.h" />
+    <ClCompile Include="debug_bridge.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

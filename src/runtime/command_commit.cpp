@@ -86,6 +86,9 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     case domain::FeatureId::ShowWidgetAllOfficers:
                     case domain::FeatureId::FileLog:
                         break;
+                    case domain::FeatureId::TraitViewer:
+                        request_trait_viewer(runtime.traits, command.enabled);
+                        break;
                     case domain::FeatureId::AutoAffinityGrowth:
                         runtime.auto_affinity = {};
                         break;
@@ -595,6 +598,9 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         runtime.selected_officer->voice = command.voice;
                     }
                     return {};
+                } else if constexpr (std::is_same_v<T, domain::ApplyTraitTextEdits>) {
+                    save_config = false;
+                    return request_trait_text_apply(runtime.traits, command);
                 } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerRonin>) {
                     save_config = false;
                     if (!game::set_roster_officer_ronin(runtime.officer_roster, game_module,
@@ -1003,7 +1009,20 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         runtime.ship_weaponization.last_active_unit = 0;
     }
     service_ai_jobs(runtime, ui, game_module);
-    reconcile_native_features(runtime, game_module, GetTickCount64());
+    consume_trait_configuration(runtime.traits, ui);
+
+    const std::uint64_t native_now_ms = GetTickCount64();
+    const bool native_operation = reconcile_native_features(runtime, game_module, native_now_ms);
+
+    if (runtime.config_loaded && !native_operation) {
+        reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
+            runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
+    }
+
+    if (runtime.traits.notice) {
+        ui.publish_notice(std::move(*runtime.traits.notice));
+        runtime.traits.notice.reset();
+    }
 
     if (runtime.native_features.notice) {
 

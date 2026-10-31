@@ -2,19 +2,12 @@
 
 #include "config_save_service.h"
 #include "config_json.h"
-#include "trait_runtime_config.h"
+#include "trait_catalog_service.h"
+#include "trait_text_service.h"
 #include "../platform/windows/config_commit.h"
 #include "../platform/windows/speed_clock.h"
-#include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
-#include <charconv>
 #include <chrono>
-#include <fstream>
-#include <iterator>
 #include <algorithm>
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
 
 namespace s8::services {
 
@@ -22,6 +15,8 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                         std::optional<std::string> skill_baseline, std::stop_token stop) {
     const platform::windows::RealClockScope real_clock;
     ConfigSaveService service(bridge, path);
+    TraitTextService trait_texts(path.parent_path());
+    TraitCatalogService trait_catalogs(path.parent_path());
     FileLogWriter file_log(path.parent_path() / L"S8RPK_cheat.log");
     bool log_failure_reported = false;
     const auto skill_path = path.parent_path() / L"S8RPK_skill_counts.json";
@@ -36,9 +31,6 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     bool name_save_failed = false;
     auto next_config_attempt = std::chrono::steady_clock::time_point{};
     auto next_trait_check = std::chrono::steady_clock::time_point{};
-    bool trait_loaded = false;
-    bool trait_from_default = false;
-    std::optional<std::filesystem::file_time_type> trait_write_time;
     const auto poll_skills = [&](bool stopping) {
         if (auto completion = service.take_skill_counts_completion()) {
             if (completion->status == ConfigSaveStatus::Completed) {
@@ -84,96 +76,19 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
             name_active = true;
         }
     };
+    trait_texts.load_legacy(bridge);
     while (!stop.stop_requested()) {
         const std::uint64_t observed = bridge.config_wake.observe();
         const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
-        if (now >= next_trait_check) {
-            next_trait_check = now + std::chrono::seconds(2);
-            std::error_code error;
-            const auto cwd = std::filesystem::current_path(error);
-            auto custom_path = path.parent_path() / L"san8r_traits_config.json";
-            if (!std::filesystem::exists(custom_path, error) && !error) {
-                custom_path = cwd / L"san8r_traits_config.json";
-            }
-            error.clear();
-            const bool custom_exists = std::filesystem::exists(custom_path, error) && !error;
-            std::optional<std::filesystem::file_time_type> write_time;
-            if (custom_exists) {
-                const auto value = std::filesystem::last_write_time(custom_path, error);
-                if (!error) {
-                    write_time = value;
-                }
-            }
-            const bool unchanged_external = trait_loaded && !trait_from_default && custom_exists && write_time &&
-                                            trait_write_time && *write_time == *trait_write_time;
-            const bool unchanged_default = trait_loaded && trait_from_default && !custom_exists;
-            if (!unchanged_external && !unchanged_default) {
-                std::ifstream custom_file(custom_path, std::ios::binary);
-                std::string text;
-                bool from_default = false;
-                if (custom_file) {
-                    text.assign(std::istreambuf_iterator<char>(custom_file), std::istreambuf_iterator<char>());
-                }
-                if (text.empty()) {
-                    std::array<wchar_t, 32768> executable{};
-                    const auto length = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
-                    const auto version = length && length < executable.size()
-                        ? std::filesystem::path(executable.data()).parent_path() / L"version.dll" : std::filesystem::path{};
-                    error.clear();
-                    if (version.empty() || !std::filesystem::is_regular_file(version, error)) {
-                        auto defaults = path.parent_path() / L"S8RPK_traits_default.json";
-                        error.clear();
-                        if (!std::filesystem::is_regular_file(defaults, error)) {
-                            defaults = cwd / L"S8RPK_traits_default.json";
-                        }
-                        std::ifstream file(defaults, std::ios::binary);
-                        if (file) {
-                            text.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-                            from_default = !text.empty();
-                        }
-                    }
-                }
-                domain::CustomTraits traits;
-                const auto json = nlohmann::json::parse(text, nullptr, false);
-                if (json.is_object() && json.contains("customNames") && json["customNames"].is_object()) {
-                    const auto& names = json["customNames"];
-                    for (auto it = names.begin(); it != names.end(); ++it) {
-                        unsigned index = 0;
-                        const auto& key = it.key();
-                        const auto parsed = std::from_chars(key.data(), key.data() + key.size(), index);
-                        if (parsed.ec != std::errc{} || parsed.ptr != key.data() + key.size() || index >= 65535 ||
-                            !it.value().is_object() || !it.value().contains("name") || !it.value()["name"].is_string()) {
-                            continue;
-                        }
-                        const auto& name = it.value()["name"].get_ref<const std::string&>();
-                        if (name.empty()) {
-                            continue;
-                        }
-                        int grade = 0;
-                        if (it.value().contains("grade") && it.value()["grade"].is_number_integer()) {
-                            grade = it.value()["grade"].get<int>();
-                        }
-                        traits[static_cast<std::uint16_t>(index + 1)] = {name, grade};
-                    }
-                }
-                if (!text.empty()) {
-                    domain::Result<domain::TraitRuntimeCatalog> catalog = read_trait_runtime_config(text);
+        const bool reload_traits = bridge.take_trait_text_reload();
 
-                    if (catalog) {
-                        bridge.publish_trait_catalog(own::make_shared<domain::TraitRuntimeCatalog>(std::move(*catalog)));
-                        bridge.publish_custom_traits(std::move(traits));
-                    } else {
-                        bridge.publish_notice("특기 설정 형식이 올바르지 않아 이전 설정을 유지합니다.");
-                    }
-                } else {
-                    bridge.publish_trait_catalog(own::make_shared<domain::TraitRuntimeCatalog>());
-                    bridge.publish_custom_traits({});
-                }
-                trait_loaded = true;
-                trait_from_default = from_default;
-                trait_write_time = !from_default && !text.empty() ? write_time : std::nullopt;
-            }
+        if (reload_traits) {
+            trait_texts.load_legacy(bridge);
+        }
+        if (reload_traits || now >= next_trait_check) {
+            next_trait_check = now + std::chrono::seconds(2);
+            trait_catalogs.poll(bridge, trait_texts, reload_traits);
         }
         if (!config_dispatched && now >= next_config_attempt) {
             auto baseline = platform::windows::read_config_for_save(path);
@@ -197,6 +112,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         service.poll();
         poll_skills(false);
         poll_names();
+        trait_texts.poll(bridge);
         file_log.poll(bridge.file_log);
         if (bridge.file_log.failed() && !log_failure_reported) {
             bridge.publish_notice("파일 로그 저장에 실패했습니다. 경로를 확인한 뒤 옵션을 껐다 켜면 재시도합니다.");
@@ -233,6 +149,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
     } while (active_counts || (pending_counts && !skill_save_failed) || name_active || pending_name);
     const bool config_saved = service.close_and_wait();
 
+    trait_texts.poll(bridge);
     file_log.close(bridge.file_log);
     return config_saved && !pending_counts && !name_save_failed;
 }

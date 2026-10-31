@@ -18,6 +18,7 @@ namespace s8::services {
 class ConfigSaveExecutor {
 public:
     explicit ConfigSaveExecutor(ServiceWake* wake = nullptr) : wake(wake) {}
+    ~ConfigSaveExecutor();
     ConfigSaveExecutor(const ConfigSaveExecutor&) = delete;
     ConfigSaveExecutor& operator=(const ConfigSaveExecutor&) = delete;
 
@@ -32,6 +33,7 @@ public:
 
 private:
     ServiceWake* wake = nullptr;
+    bool closed = false;
     exec::static_thread_pool pool{1};
     stdexec::counting_scope scope;
     std::stop_source stop;

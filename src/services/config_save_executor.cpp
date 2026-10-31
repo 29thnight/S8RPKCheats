@@ -8,6 +8,12 @@
 
 namespace s8::services {
 
+ConfigSaveExecutor::~ConfigSaveExecutor() {
+    // The service thread owns this object. Exceptions in unrelated decoding or
+    // resource loading still drain jobs before their captured context dies.
+    close_and_wait();
+}
+
 void ConfigSaveExecutor::start_officer_name(std::filesystem::path path, int id, std::string name) {
     auto work = stdexec::starts_on(pool.get_scheduler(),
         stdexec::just() | stdexec::then([path = std::move(path), id, name = std::move(name)]() {
@@ -137,8 +143,12 @@ void ConfigSaveExecutor::request_stop() {
 }
 
 void ConfigSaveExecutor::close_and_wait() {
+    if (closed) {
+        return;
+    }
     scope.close();
     (void)stdexec::sync_wait(scope.join());
+    closed = true;
 }
 
 } // namespace s8::services

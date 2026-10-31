@@ -76,5 +76,14 @@
     <ClCompile Include="special_ability_assignment.cpp" />
   </ItemGroup>
   <ItemGroup><ClInclude Include="native_features.h" /></ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="trait_runtime.h" />
+    <ClCompile Include="trait_text_edit.cpp" />
+    <ClInclude Include="trait_text_edit.h" />
+    <ClInclude Include="trait_text_defaults.inc" />
+    <ClInclude Include="trait_control.h" />
+    <ClCompile Include="debug_tools.cpp" />
+    <ClInclude Include="debug_tools.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

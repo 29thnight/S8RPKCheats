@@ -82,6 +82,7 @@ enum class FeatureId {
     MissionCpuHeroExclusion,
     CouncilExecuteFreeOfficers,
     AffinityDisplay,
+    TraitViewer,
     Count,
 };
 

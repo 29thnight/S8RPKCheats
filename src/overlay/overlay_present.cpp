@@ -26,8 +26,14 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         state.capture_mouse.store(false, std::memory_order_release);
         state.capture_keyboard.store(false, std::memory_order_release);
         shutdown_dx11_overlay(state.renderer);
+        state.render_retry_ms = 0;
     }
     state.target_swap_chain.store(swap_chain, std::memory_order_release);
+    const ULONGLONG now_ms = GetTickCount64();
+
+    if (state.render_failed.load(std::memory_order_acquire) && now_ms < state.render_retry_ms) {
+        return;
+    }
     if (state.toggle_requests.exchange(0) % 2 != 0) {
         state.menu.open = true;
         state.menu.toggle_collapse = true;
@@ -128,6 +134,7 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
             }
             draw_officer_roster(state.menu, state.bridge);
             draw_protagonist_abilities(state.menu, state.bridge);
+            draw_debug_tools(state.menu.debug_tools, state.bridge.debug_tools, state.menu.epoch);
             draw_notifications(state.menu.notifications, state.bridge, state.menu.snapshot.notification_speed);
         }
     }, &state);
@@ -140,10 +147,12 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         state.capture_mouse.store(io.WantCaptureMouse);
         state.capture_keyboard.store(io.WantCaptureKeyboard);
         state.render_failed.store(false, std::memory_order_release);
+        state.render_retry_ms = 0;
     } else {
         state.capture_mouse.store(false, std::memory_order_release);
         state.capture_keyboard.store(false, std::memory_order_release);
         state.render_failed.store(true, std::memory_order_release);
+        state.render_retry_ms = now_ms + 1000;
     }
 }
 
@@ -161,9 +170,15 @@ void on_overlay_present(void* context, IDXGISwapChain* swap_chain) noexcept {
         state.capture_mouse.store(false, std::memory_order_release);
         state.capture_keyboard.store(false, std::memory_order_release);
         state.render_failed.store(true, std::memory_order_release);
+        state.render_retry_ms = GetTickCount64() + 1000;
         state.menu.range_textures.fill(nullptr);
         shutdown_dx11_overlay(state.renderer);
         state.target_swap_chain.store(nullptr, std::memory_order_release);
+    }
+    if (state.frame_callback &&
+        (state.target_swap_chain.load(std::memory_order_acquire) == swap_chain ||
+         state.render_stopped.load(std::memory_order_acquire))) {
+        state.frame_callback(state.frame_context);
     }
 }
 
@@ -194,6 +209,7 @@ void on_overlay_present_failed(void* context, IDXGISwapChain* swap_chain, std::i
     shutdown_dx11_overlay(state.renderer);
     state.target_swap_chain.store(nullptr, std::memory_order_release);
     state.render_failed.store(true, std::memory_order_release);
+    state.render_retry_ms = GetTickCount64() + 1000;
 }
 
 bool on_overlay_window_message(OverlayPresent& state, HWND window, UINT message, WPARAM wparam, LPARAM lparam) {

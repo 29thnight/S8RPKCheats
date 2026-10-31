@@ -1,14 +1,11 @@
 #pragma once
 
-#include "runtime.h"
-
 #include <cstdint>
-#include <stop_token>
 
 namespace s8::runtime {
 
-// The caller owns the thread and waits for this function to return before unloading.
-void run_game_loop(Runtime& runtime, std::stop_token stop,
-                   std::uintptr_t game_module);
+// Pins the proxy and schedules initialization. Does not wait or initialize
+// graphics, hooks, configuration, or C++ runtime owners under loader lock.
+bool start_runtime_async(std::uintptr_t plugin_module) noexcept;
 
 } // namespace s8::runtime

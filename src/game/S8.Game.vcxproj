@@ -200,6 +200,13 @@
     <ClInclude Include="council_execute_free.h" />
     <ClCompile Include="affinity_display.cpp" />
     <ClInclude Include="affinity_display.h" />
+    <ClCompile Include="trait_runtime_native.cpp" />
+    <ClInclude Include="trait_runtime_native.h" />
+    <ClCompile Include="trait_text_native.cpp" />
+    <ClInclude Include="trait_text_native.h" />
+    <ClCompile Include="trait_viewer_native.cpp" />
+    <ClInclude Include="trait_viewer_native.h" />
+    <ClInclude Include="trait_viewer_data.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

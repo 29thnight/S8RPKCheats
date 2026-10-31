@@ -57,6 +57,7 @@
 #include "../game/special_ability_assignment.h"
 #include "stratagem5_lifecycle.h"
 #include "native_feature_control.h"
+#include "trait_control.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
 
@@ -91,6 +92,7 @@ struct Runtime {
     std::size_t next_stop_step = 0;
     std::optional<domain::ConfigSnapshot> stop_snapshot;
     NativeFeatureControl native_features;
+    TraitControl traits;
     game::AiGrowthState ai_growth;
     domain::AiGrowthSettings ai_growth_settings;
     std::optional<domain::AiGrowthReport> ai_growth_last_report;

@@ -5,6 +5,8 @@
 #include "../services/command_mailbox.h"
 #include "../services/ui_bridge.h"
 #include "notifications.h"
+#include "trait_text_editor.h"
+#include "debug_tools_panel.h"
 
 #include <cstdint>
 #include <optional>
@@ -28,6 +30,8 @@ struct FeatureMenu {
     std::optional<domain::Error> error;
     std::optional<services::ConfigSaveNotice> save_notice;
     Notifications notifications;
+    TraitTextEditor trait_text_editor;
+    DebugToolsPanel debug_tools;
     bool open = false;
     bool ready = false;
     bool file_log_failed = false;

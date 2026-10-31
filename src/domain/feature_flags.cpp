@@ -78,6 +78,7 @@ constexpr std::array FEATURE_KEYS{
     std::string_view{"\"bMissionCpuHeroExclusion\""},
     std::string_view{"\"bCouncilExecuteFreeOfficers\""},
     std::string_view{"\"bAffinityDisplay\""},
+    std::string_view{"\"bTraitViewer\""},
 };
 
 static_assert(FEATURE_KEYS.size() == static_cast<std::size_t>(FeatureId::Count));
@@ -91,6 +92,7 @@ FeatureFlags::FeatureFlags() {
     set(FeatureId::HealLv3Self, true);
     set(FeatureId::PrisonerCaptureManagement, true);
     set(FeatureId::IsolatedTerritoryMovement, true);
+    set(FeatureId::TraitViewer, true);
 }
 
 bool FeatureFlags::get(FeatureId id) const {

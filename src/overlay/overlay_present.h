@@ -28,7 +28,10 @@ struct OverlayPresent {
     std::atomic<unsigned> window_callbacks{0};
     WindowMessageCallback message_callback = nullptr;
     void* message_context = nullptr;
+    void (*frame_callback)(void* context) noexcept = nullptr;
+    void* frame_context = nullptr;
     std::uint64_t last_menu_key_ms = 0;
+    std::uint64_t render_retry_ms = 0;
     unsigned mouse_buttons = 0;
     bool owns_mouse_capture = false;
 };

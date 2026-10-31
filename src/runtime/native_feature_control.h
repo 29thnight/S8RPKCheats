@@ -52,7 +52,7 @@ struct NativeFeatureControl {
 bool request_native_feature(Runtime& runtime, domain::FeatureId feature, bool enabled);
 // At most one patch transaction per admitted commit boundary. Busy groups retain
 // the desired setting and yield to other groups until their next retry deadline.
-void reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms);
+bool reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms);
 void change_native_feature_epoch(Runtime& runtime);
 void update_native_feature_candidates(Runtime& runtime, std::uintptr_t module_base);
 // Restore at most one active group per call. QueueFull means another boundary is

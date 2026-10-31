@@ -1,4 +1,5 @@
 #include "entry.h"
+#include "../runtime/game_loop.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -27,6 +28,7 @@ BOOL APIENTRY DllMain(HMODULE module_handle, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module_handle);
         module.store(reinterpret_cast<std::uintptr_t>(module_handle));
+        s8::runtime::start_runtime_async(reinterpret_cast<std::uintptr_t>(module_handle));
     } else if (reason == DLL_PROCESS_DETACH) {
         stopping.store(true);
     }

@@ -231,6 +231,8 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.next_officer_edit = 0;
         }
     }
+
+    update_trait_text_editor(menu.trait_text_editor, menu.snapshot.traits, bridge);
 }
 
 void on_feature_menu_completion(FeatureMenu& menu, const services::CommandCompletion& completion) {
@@ -253,6 +255,7 @@ void on_feature_menu_completion(FeatureMenu& menu, const services::CommandComple
 
 void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     draw_special_assignment_results(menu);
+    draw_trait_text_editor(menu, mailbox);
 
     if (!menu.open) {
         return;
@@ -337,6 +340,7 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         FeatureItem{"CPU 임무에서 주인공 제외", domain::FeatureId::MissionCpuHeroExclusion},
         FeatureItem{"평정에서 미행동 무장도 실행", domain::FeatureId::CouncilExecuteFreeOfficers},
         FeatureItem{"상성 수치 표시", domain::FeatureId::AffinityDisplay},
+        FeatureItem{"기재 3칸 표시", domain::FeatureId::TraitViewer},
         FeatureItem{"치료", domain::FeatureId::SelfHeal},
         FeatureItem{"동토", domain::FeatureId::Dongto},
         FeatureItem{"천계", domain::FeatureId::Celestial},
@@ -460,6 +464,22 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
             }
         }
 
+        if (item.id == domain::FeatureId::TraitViewer) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", domain::trait_apply_status_text(menu.snapshot.traits.viewer));
+
+            if (menu.snapshot.traits.viewer != domain::TraitApplyStatus::Applied &&
+                menu.snapshot.traits.viewer != domain::TraitApplyStatus::Disabled &&
+                menu.snapshot.traits.viewer != domain::TraitApplyStatus::Pending &&
+                menu.snapshot.traits.viewer != domain::TraitApplyStatus::CallbackBusy) {
+                ImGui::SameLine();
+
+                if (ImGui::SmallButton("기재 표시 다시 시도")) {
+                    submit(domain::SetFeature{domain::FeatureId::TraitViewer, enabled});
+                }
+            }
+        }
+
         const std::optional<domain::NativeFeatureGroup> native_group = domain::native_feature_group(item.id);
 
         if (native_group) {
@@ -489,6 +509,19 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
             }
         }
     }
+    ImGui::Separator();
+
+    if (ImGui::Button("기재 이름·설명 편집")) {
+        menu.trait_text_editor.open = true;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("메모장 / 메모리 도구")) {
+        menu.debug_tools.open = true;
+    }
+
+    ImGui::TextDisabled("확장 기재: %s", domain::trait_apply_status_text(menu.snapshot.traits.catalog));
     ImGui::Separator();
 
     bool growth_enabled = menu.snapshot.ai_growth_settings.enabled;
