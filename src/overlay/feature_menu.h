@@ -28,12 +28,32 @@ struct MenuFloatDraft {
     std::optional<float> submitted;
 };
 
+struct OfficerRosterIndices {
+    std::array<std::uint16_t, domain::OFFICER_ROSTER_LIMIT> ids{};
+    std::size_t count = 0;
+
+    void clear() noexcept { count = 0; }
+    bool empty() const noexcept { return count == 0; }
+    std::size_t size() const noexcept { return count; }
+    std::uint16_t front() const noexcept { return ids[0]; }
+    std::uint16_t operator[](std::size_t index) const noexcept { return ids[index]; }
+    const std::uint16_t* begin() const noexcept { return ids.data(); }
+    const std::uint16_t* end() const noexcept { return ids.data() + count; }
+
+    void push_back(std::size_t id) noexcept {
+        if (id != 0 && id <= domain::OFFICER_ROSTER_LIMIT && count < ids.size()) {
+            ids[count++] = static_cast<std::uint16_t>(id);
+        }
+    }
+};
+
 struct FeatureMenu {
     std::array<void*, 11> range_textures{};
     float dpi_scale = 1.0f;
     domain::ConfigSnapshot snapshot;
     own::shared_owner<const domain::SkillCounts> skill_counts;
-    own::shared_owner<const services::OfficerRosterSnapshot> officer_roster;
+    own::unique_owner<domain::OfficerRosterSnapshot> officer_roster =
+        own::make_unique<domain::OfficerRosterSnapshot>();
     own::shared_owner<const domain::OfficerNames> officer_names;
     domain::GameEpoch epoch{0};
     std::uint64_t next_request = 0;
@@ -84,8 +104,9 @@ struct FeatureMenu {
     int officer_cached_filter = -2;
     bool officer_reselect_pending = false;
     std::optional<std::uint16_t> officer_next_selection;
-    own::shared_owner<const services::OfficerRosterSnapshot> officer_filtered_source;
-    std::vector<std::size_t> officer_filtered_indices;
+    std::uint64_t officer_filtered_generation = 0;
+    std::uint64_t officer_filtered_revision = 0;
+    OfficerRosterIndices officer_filtered_indices;
     std::array<bool, 5103> selected_officer_ids{};
     domain::GameEpoch selection_epoch{0};
     std::vector<domain::CommandPayload> pending_officer_edits;

@@ -31,8 +31,6 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
 
     const auto deadline = std::chrono::steady_clock::now() + time_budget;
     std::size_t processed = 0;
-    std::array<bool, 5103> ronin_changes{};
-    bool ronin_changed = false;
     std::array<services::CompletionToken, services::CommandMailbox::CAPACITY> ronin_completions{};
     std::size_t ronin_completion_count = 0;
     while (processed < max_commands && std::chrono::steady_clock::now() < deadline) {
@@ -505,12 +503,11 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::RefreshOfficerRoster>) {
                     save_config = false;
-                    runtime.officer_roster = {};
-                    runtime.selected_officer.reset();
-                    runtime.officer_roster.requested = true;
+                    game::request_officer_roster(runtime.officer_roster);
                     if (ui) {
-                        ui->publish_officer_roster({runtime.epoch, {}, true});
+                        ui->officer_roster_scan_cursor.store(0, std::memory_order_release);
                     }
+                    runtime.selected_officer.reset();
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SelectRosterOfficer>) {
                     save_config = false;
@@ -572,9 +569,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
                         runtime.selected_officer->status = 0x58;
                     }
-                    ronin_changes[command.officer_id] = true;
+                    game::update_roster_officer_status(runtime.officer_roster, command.officer_id, 0x58);
                     game::update_ronin_notice_baseline(*runtime.officer_notices, command.officer_id, 0x58);
-                    ronin_changed = true;
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::ReviveRosterOfficer>) {
                     save_config = false;
@@ -586,9 +582,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
                         runtime.selected_officer = game::read_roster_officer(runtime.officer_roster, game_module, command.officer_id);
                     }
-                    ronin_changes[command.officer_id] = true;
+                    game::update_roster_officer_status(runtime.officer_roster, command.officer_id, 0x58);
                     game::update_ronin_notice_baseline(*runtime.officer_notices, command.officer_id, 0x58);
-                    ronin_changed = true;
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::MoveRosterOfficer>) {
                     save_config = false;
@@ -685,24 +680,6 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
             mailbox.complete(accepted->completion, std::move(result));
         }
         ++processed;
-    }
-    if (ronin_changed) {
-        for (auto& entry : runtime.officer_roster.entries) {
-            if (ronin_changes[entry.id]) {
-                entry.status = 0x58;
-            }
-        }
-        if (ui) {
-            if (const auto current = ui->officer_roster_view(); current && current->epoch == runtime.epoch) {
-                auto roster = *current;
-                for (auto& entry : roster.entries) {
-                    if (ronin_changes[entry.id]) {
-                        entry.status = 0x58;
-                    }
-                }
-                ui->publish_officer_roster(std::move(roster));
-            }
-        }
     }
     for (std::size_t i = 0; i < ronin_completion_count; ++i) {
         mailbox.complete(ronin_completions[i], {});
@@ -862,7 +839,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             }
         }
     }
-    ui.officer_roster_scan_cursor.store(runtime.officer_roster.requested
+    ui.officer_roster_scan_cursor.store((runtime.officer_roster.requested || runtime.officer_roster.completed)
         ? static_cast<int>(runtime.officer_roster.cursor) : -1);
     if (runtime.auto_affinity.report) {
         const auto report = *runtime.auto_affinity.report;
@@ -891,15 +868,11 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         }
     }
     runtime.mission_appointment_limit_value = game::read_mission_appointment_limit(game_module);
-    if (runtime.officer_roster.completed) {
-        ui.publish_officer_roster({runtime.epoch, std::move(runtime.officer_roster.entries), false});
-        runtime.officer_roster.completed = false;
-    } else if (runtime.officer_roster.requested && runtime.officer_roster.cursor > 0 &&
-               (runtime.officer_roster.published_base != runtime.officer_roster.base ||
-                runtime.officer_roster.published_size != runtime.officer_roster.entries.size())) {
-        ui.publish_officer_roster({runtime.epoch, runtime.officer_roster.entries, true});
-        runtime.officer_roster.published_base = runtime.officer_roster.base;
-        runtime.officer_roster.published_size = runtime.officer_roster.entries.size();
+    const domain::OfficerRosterUpdate* const roster_update =
+        game::peek_officer_roster_update(runtime.officer_roster, runtime.epoch);
+
+    if (roster_update && ui.publish_officer_roster(*roster_update)) {
+        game::acknowledge_officer_roster_update(runtime.officer_roster);
     }
     std::uint16_t protagonist_id = 0;
     if (runtime.loop_player_ready && platform::windows::read_memory(runtime.loop_player + 8,

@@ -5,6 +5,7 @@
 #include "../domain/named_specialties.h"
 #include "../domain/skill_counts.h"
 #include "../domain/officer_roster.h"
+#include "../domain/officer_roster_publication.h"
 #include "../domain/ownership.h"
 #include "../domain/trait_runtime.h"
 #include "../domain/trait_text_edit.h"
@@ -60,12 +61,6 @@ struct PendingNotice {
     std::uint32_t repeat = 1;
 };
 
-struct OfficerRosterSnapshot {
-    domain::GameEpoch epoch;
-    domain::OfficerRoster entries;
-    bool loading = false;
-};
-
 struct RangeImage {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
@@ -106,8 +101,10 @@ public:
     std::optional<domain::SkillCounts> take_skill_counts();
     void publish_skill_counts_view(const domain::SkillCounts& counts);
     own::shared_owner<const domain::SkillCounts> skill_counts_view();
-    void publish_officer_roster(OfficerRosterSnapshot snapshot);
-    own::shared_owner<const OfficerRosterSnapshot> officer_roster_view();
+    // Game producer / Present consumer only. Full channels retain the producer's
+    // packet for a later boundary; no roster or owner allocation occurs here.
+    bool publish_officer_roster(const domain::OfficerRosterUpdate& update);
+    bool consume_officer_roster(domain::OfficerRosterSnapshot& snapshot, domain::GameEpoch epoch);
     void publish_officer_names(domain::OfficerNames names);
     own::shared_owner<const domain::OfficerNames> officer_names_view();
     own::shared_owner<const domain::OfficerNames> officer_name_overrides_view();
@@ -169,7 +166,11 @@ private:
     std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> named_specialties;
     std::optional<domain::SkillCounts> skill_counts;
     own::shared_owner<const domain::SkillCounts> current_skill_counts;
-    own::shared_owner<const OfficerRosterSnapshot> current_officer_roster;
+    static constexpr std::size_t ROSTER_PACKET_CAPACITY = 4;
+    static constexpr std::size_t ROSTER_PACKETS_PER_FRAME = 2;
+    std::array<domain::OfficerRosterUpdate, ROSTER_PACKET_CAPACITY> roster_packets{};
+    std::atomic<std::size_t> roster_write{0};
+    std::atomic<std::size_t> roster_read{0};
     own::shared_owner<const domain::OfficerNames> current_officer_names;
     own::shared_owner<const domain::OfficerNames> current_officer_name_overrides;
     own::shared_owner<const domain::TraitEffectDefinitions> current_trait_effects;

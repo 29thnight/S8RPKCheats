@@ -3,6 +3,21 @@
 #include <utility>
 
 namespace s8::services {
+namespace {
+
+void reset_roster_snapshot(domain::OfficerRosterSnapshot& snapshot, domain::GameEpoch epoch,
+    std::uint64_t generation, bool initialized, bool available, bool loading) {
+    snapshot.epoch = epoch;
+    snapshot.generation = generation;
+    ++snapshot.revision;
+    snapshot.entry_count = 0;
+    snapshot.entries.fill({});
+    snapshot.stream_initialized = initialized;
+    snapshot.available = available;
+    snapshot.loading = loading;
+}
+
+} // namespace
 
 void UiBridge::publish_range_images(RangeImages images) {
     own::shared_owner<const RangeImages> view = own::make_shared<RangeImages>(std::move(images));
@@ -226,18 +241,78 @@ std::optional<ConfigSaveStatus> UiBridge::take_officer_name_result() {
     return result;
 }
 
-void UiBridge::publish_officer_roster(OfficerRosterSnapshot snapshot) {
-    own::shared_owner<const OfficerRosterSnapshot> view = own::make_shared<OfficerRosterSnapshot>(std::move(snapshot));
+bool UiBridge::publish_officer_roster(const domain::OfficerRosterUpdate& update) {
+    const std::size_t position = roster_write.load(std::memory_order_relaxed);
+    const std::size_t next = (position + 1) % ROSTER_PACKET_CAPACITY;
 
-    {
-        std::lock_guard lock(mutex);
-        current_officer_roster.swap(view);
+    if (update.count > update.entries.size() || next == roster_read.load(std::memory_order_acquire)) {
+        return false;
     }
+    roster_packets[position] = update;
+    roster_write.store(next, std::memory_order_release);
+    return true;
 }
 
-own::shared_owner<const OfficerRosterSnapshot> UiBridge::officer_roster_view() {
-    std::lock_guard lock(mutex);
-    return current_officer_roster;
+bool UiBridge::consume_officer_roster(domain::OfficerRosterSnapshot& snapshot, domain::GameEpoch epoch) {
+    bool changed = false;
+
+    if (snapshot.epoch != epoch) {
+        reset_roster_snapshot(snapshot, epoch, 0, false, false, false);
+        changed = true;
+    }
+    for (std::size_t consumed = 0; consumed < ROSTER_PACKETS_PER_FRAME; ++consumed) {
+        const std::size_t position = roster_read.load(std::memory_order_relaxed);
+
+        if (position == roster_write.load(std::memory_order_acquire)) {
+            break;
+        }
+        const domain::OfficerRosterUpdate& update = roster_packets[position];
+
+        if (update.epoch.value > epoch.value) {
+            // The new game's roster may precede its ConfigSnapshot. Leave the
+            // packet in the channel until Present observes that epoch as well.
+            break;
+        }
+        if (update.epoch == epoch) {
+            if (update.kind == domain::OfficerRosterUpdateKind::Reset) {
+                if (!snapshot.stream_initialized || update.generation > snapshot.generation) {
+                    reset_roster_snapshot(snapshot, epoch, update.generation, true, update.available, update.loading);
+                    changed = true;
+                }
+            } else if (snapshot.stream_initialized && snapshot.available && update.generation == snapshot.generation) {
+                if (update.kind == domain::OfficerRosterUpdateKind::Rows) {
+                    bool rows_changed = false;
+
+                    for (std::size_t index = 0; index < update.count; ++index) {
+                        const domain::OfficerRosterEntry& row = update.entries[index];
+
+                        if (row.id == 0 || row.id > domain::OFFICER_ROSTER_LIMIT) {
+                            continue;
+                        }
+                        domain::OfficerRosterEntry& destination = snapshot.entries[row.id];
+
+                        if (destination.id == 0) {
+                            ++snapshot.entry_count;
+                        }
+                        if (destination.id != row.id || destination.status != row.status) {
+                            destination = row;
+                            rows_changed = true;
+                        }
+                    }
+                    if (rows_changed) {
+                        ++snapshot.revision;
+                    }
+                    changed = rows_changed || snapshot.loading != update.loading || changed;
+                    snapshot.loading = update.loading;
+                } else if (update.kind == domain::OfficerRosterUpdateKind::Complete) {
+                    changed = snapshot.loading || changed;
+                    snapshot.loading = false;
+                }
+            }
+        }
+        roster_read.store((position + 1) % ROSTER_PACKET_CAPACITY, std::memory_order_release);
+    }
+    return changed;
 }
 
 void UiBridge::publish_skill_counts(domain::SkillCounts counts) {

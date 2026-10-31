@@ -227,7 +227,6 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
         }
         on_feature_menu_completion(menu, *completion);
     }
-    menu.officer_roster = bridge.officer_roster_view();
     if (const auto snapshot = bridge.snapshot()) {
         const bool reset_float_drafts = menu.epoch != snapshot->epoch ||
             (!menu.ready && snapshot->config.config_loaded);
@@ -266,6 +265,7 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.officer_next_selection.reset();
         }
     }
+    bridge.consume_officer_roster(*menu.officer_roster, menu.epoch);
     if (const std::optional<domain::OfficerToolsView> tools = bridge.officer_tools.take()) {
         menu.officer_tools_view = *tools;
     }
@@ -1519,7 +1519,8 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         return;
     }
     if (menu.ready && !menu.pending && menu.pending_officer_edits.empty() &&
-        (!menu.officer_roster || menu.officer_roster->epoch != menu.epoch)) {
+        (!menu.officer_roster->available || menu.officer_roster->epoch != menu.epoch) &&
+        bridge.officer_roster_scan_cursor.load(std::memory_order_acquire) < 0) {
         const domain::RequestId request{++menu.next_request};
         auto result = mailbox.push({request, menu.epoch, domain::RefreshOfficerRoster{}});
         if (result) {
@@ -1533,6 +1534,8 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         const auto scan_cursor = bridge.officer_roster_scan_cursor.load();
         if (scan_cursor >= 0) {
             ImGui::Text("목록 로딩 중... (%d/5102)", scan_cursor);
+        } else if (menu.officer_roster->loading && menu.officer_roster->epoch == menu.epoch) {
+            ImGui::Text("목록 반영 중... (%zu명)", menu.officer_roster->entry_count);
         }
         if (!menu.pending_officer_edits.empty()) {
             ImGui::Text("일괄 적용 중: %zu / %zu", menu.completed_officer_edits,
@@ -1589,7 +1592,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             }
         }
         ImGui::EndDisabled();
-        if (menu.officer_roster && menu.officer_roster->epoch == menu.epoch) {
+        if (menu.officer_roster->available && menu.officer_roster->epoch == menu.epoch) {
             struct Filter { const char* label; int status; };
             constexpr std::array filters{
                 Filter{"군사", 0x18}, Filter{"일반", 0x28}, Filter{"두령", 0x38}, Filter{"동지", 0x48},
@@ -1608,18 +1611,25 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             ImGui::EndDisabled();
             const auto rebuild_filter = [&]() {
                 menu.officer_filtered_indices.clear();
-                for (std::size_t i = 0; i < menu.officer_roster->entries.size(); ++i) {
-                    const auto status = menu.officer_roster->entries[i].status;
+                for (std::size_t i = 1; i < menu.officer_roster->entries.size(); ++i) {
+                    const domain::OfficerRosterEntry& entry = menu.officer_roster->entries[i];
+                    const std::uint8_t status = entry.status;
+
+                    if (entry.id == 0) {
+                        continue;
+                    }
                     if (menu.officer_filter == -1 || status == menu.officer_filter ||
                         (menu.officer_filter == 0x68 && status == 0x78)) {
                         menu.officer_filtered_indices.push_back(i);
                     }
                 }
                 menu.officer_cached_filter = menu.officer_filter;
-                menu.officer_filtered_source = menu.officer_roster;
+                menu.officer_filtered_generation = menu.officer_roster->generation;
+                menu.officer_filtered_revision = menu.officer_roster->revision;
             };
             const bool filter_changed = menu.officer_cached_filter != menu.officer_filter ||
-                                        own::identity(menu.officer_filtered_source) != own::identity(menu.officer_roster);
+                menu.officer_filtered_generation != menu.officer_roster->generation ||
+                menu.officer_filtered_revision != menu.officer_roster->revision;
             if (filter_changed) {
                 rebuild_filter();
                 menu.officer_reselect_pending = true;
@@ -1650,6 +1660,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 if (all_ronin || selected_ronin) {
                     menu.pending_officer_edits.clear();
                     for (const auto& entry : menu.officer_roster->entries) {
+                        if (entry.id == 0) {
+                            continue;
+                        }
                         if ((all_ronin && (entry.status == 0x68 || entry.status == 0x78)) ||
                             (selected_ronin && menu.selected_officer_ids[entry.id])) {
                             menu.pending_officer_edits.push_back(domain::SetRosterOfficerRonin{entry.id, all_ronin});
@@ -1728,6 +1741,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 }
                 if (menu.officer_search_result < 0 && menu.officer_filter != -1) {
                     for (const auto& entry : menu.officer_roster->entries) {
+                        if (entry.id == 0) {
+                            continue;
+                        }
                         const auto name = menu.officer_names ? menu.officer_names->find(entry.id) : domain::OfficerNames::const_iterator{};
                         if (std::to_string(entry.id) == query || (menu.officer_names && name != menu.officer_names->end() &&
                             name->second.find(query) != std::string::npos)) {

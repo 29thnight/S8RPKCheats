@@ -2,6 +2,7 @@
 #include "../platform/windows/process_memory.h"
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <span>
 
@@ -78,30 +79,38 @@ std::uintptr_t resolve_trait_target(const OfficerRosterScan& scan, std::uintptr_
         ? player : 0;
 }
 
-void scan_trait_object(TraitObjectSearch& search, std::size_t max_bytes) {
-    if (search.complete) {
+void scan_trait_object(TraitObjectSearch& search, std::size_t max_bytes, const domain::WorkBudget& budget) {
+    if (search.complete || budget.exhausted()) {
         return;
     }
     SYSTEM_INFO system{};
+
     GetSystemInfo(&system);
-    const auto minimum = reinterpret_cast<std::uintptr_t>(system.lpMinimumApplicationAddress);
-    const auto maximum = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
+
+    const std::uintptr_t minimum = reinterpret_cast<std::uintptr_t>(system.lpMinimumApplicationAddress);
+    const std::uintptr_t maximum = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
+
     if (search.cursor < minimum) {
         search.cursor = minimum;
     }
-    std::array<std::byte, 16392> bytes{};
     std::size_t scanned = 0;
+
     while (search.cursor < maximum && scanned < max_bytes) {
+        if (budget.exhausted()) {
+            return;
+        }
         MEMORY_BASIC_INFORMATION region{};
+
         if (!VirtualQuery(reinterpret_cast<const void*>(search.cursor), &region, sizeof(region))) {
             search.complete = true;
             return;
         }
-        const auto end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
-        const auto protection = region.Protect & 0xff;
+        const std::uintptr_t end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+        const DWORD protection = region.Protect & 0xff;
         const bool readable = protection == PAGE_READONLY || protection == PAGE_READWRITE ||
             protection == PAGE_WRITECOPY || protection == PAGE_EXECUTE_READ ||
             protection == PAGE_EXECUTE_READWRITE || protection == PAGE_EXECUTE_WRITECOPY;
+
         if (region.State != MEM_COMMIT || !readable || (region.Protect & PAGE_GUARD)) {
             search.cursor = end;
             continue;
@@ -111,22 +120,36 @@ void scan_trait_object(TraitObjectSearch& search, std::size_t max_bytes) {
             search.cursor = end;
             continue;
         }
-        const auto amount = std::min({std::size_t{16384}, max_bytes - scanned,
-                                      static_cast<std::size_t>(end - search.cursor - 2)});
-        const auto candidates = amount / 8;
+        const std::size_t amount = std::min({TraitObjectSearch::BLOCK_SIZE, max_bytes - scanned,
+            static_cast<std::size_t>(end - search.cursor - 2)});
+        const std::size_t candidates = amount / 8;
+
         if (!candidates) {
             break;
         }
-        const auto length = candidates * 8 + 2;
-        if (platform::windows::read_memory(search.cursor, std::span(bytes).first(length))) {
-            for (std::size_t i = 0; i < candidates; ++i) {
+        if (budget.exhausted()) {
+            return;
+        }
+        const std::size_t length = candidates * 8 + 2;
+
+        if (platform::windows::read_memory(search.cursor, std::span(search.bytes).first(length))) {
+            for (std::size_t index = 0; index < candidates; ++index) {
+                if (index != 0 && index % 64 == 0 && budget.exhausted()) {
+                    // Only inspected candidates are retired. The next slice
+                    // resumes at the first unexamined pointer, including its ID.
+                    // Complete one small comparison slice after an admitted
+                    // read, so a slow ReadProcessMemory cannot prevent progress.
+                    search.cursor += index * 8;
+                    return;
+                }
                 std::uintptr_t vtable = 0;
                 std::uint16_t id = 0;
-                std::memcpy(&vtable, bytes.data() + i * 8, sizeof(vtable));
+
+                std::memcpy(&vtable, search.bytes.data() + index * 8, sizeof(vtable));
                 if (vtable == search.vtable) {
-                    std::memcpy(&id, bytes.data() + i * 8 + 8, sizeof(id));
+                    std::memcpy(&id, search.bytes.data() + index * 8 + 8, sizeof(id));
                     if (id == search.trait_id) {
-                        search.result = search.cursor + i * 8;
+                        search.result = search.cursor + index * 8;
                         search.complete = true;
                         return;
                     }
@@ -139,27 +162,69 @@ void scan_trait_object(TraitObjectSearch& search, std::size_t max_bytes) {
     search.complete = search.cursor >= maximum;
 }
 
-void update_officer_roster(OfficerRosterScan& scan, std::uintptr_t module_base) {
-    if (!scan.requested) {
+void reset_officer_roster(OfficerRosterScan& scan) {
+    scan.base = 0;
+    scan.cursor = 0;
+    scan.slots.fill(0);
+    scan.entries.fill({});
+    scan.dirty.fill(0);
+    scan.dirty_count = 0;
+    scan.publication_word = 0;
+    ++scan.generation;
+    scan.publication_epoch.reset();
+    scan.publication_pending = false;
+    scan.reset_pending = true;
+    scan.has_scan = false;
+    scan.requested = false;
+    scan.completed = false;
+}
+
+void request_officer_roster(OfficerRosterScan& scan) {
+    reset_officer_roster(scan);
+    scan.has_scan = true;
+    scan.requested = true;
+}
+
+namespace {
+
+void mark_roster_dirty(OfficerRosterScan& scan, std::uint16_t id) {
+    const std::uint64_t bit = std::uint64_t{1} << (id % 64);
+    std::uint64_t& word = scan.dirty[id / 64];
+
+    if ((word & bit) == 0) {
+        word |= bit;
+        ++scan.dirty_count;
+    }
+}
+
+} // namespace
+
+void update_officer_roster(OfficerRosterScan& scan, std::uintptr_t module_base, const domain::WorkBudget& budget) {
+    if (!scan.requested || budget.exhausted()) {
         return;
     }
-    const auto roster = roster_base(module_base);
+    const std::uintptr_t roster = roster_base(module_base);
+
     if (!roster) {
         return;
     }
     if (scan.base != roster) {
+        if (scan.base != 0) {
+            request_officer_roster(scan);
+        }
         scan.base = roster;
-        scan.cursor = 0;
-        scan.seen.fill(false);
-        scan.slots.fill(0);
-        scan.entries.clear();
     }
-    const auto end = std::min(scan.cursor + 128, std::size_t{5102});
+    const std::size_t end = std::min(scan.cursor + domain::OFFICER_ROSTER_BATCH_CAPACITY, domain::OFFICER_ROSTER_LIMIT);
+
     for (; scan.cursor < end; ++scan.cursor) {
-        const auto officer = roster + scan.cursor * 0x3d0;
+        if (budget.exhausted()) {
+            return;
+        }
+        const std::uintptr_t officer = roster + scan.cursor * 0x3d0;
         std::uint16_t id = 0, face = 0, merit = 0, reputation = 0;
         std::uint32_t gold = 0;
         std::uint8_t strategy = 0, status = 0;
+
         if (!platform::windows::read_memory(officer + 8, std::as_writable_bytes(std::span(&id, 1))) ||
             !platform::windows::read_memory(officer + 0x2e, std::as_writable_bytes(std::span(&face, 1))) ||
             !platform::windows::read_memory(officer + 0xe8, std::as_writable_bytes(std::span(&gold, 1))) ||
@@ -167,18 +232,111 @@ void update_officer_roster(OfficerRosterScan& scan, std::uintptr_t module_base) 
             !platform::windows::read_memory(officer + 0x108, std::as_writable_bytes(std::span(&reputation, 1))) ||
             !platform::windows::read_memory(officer + 0xed, std::as_writable_bytes(std::span(&strategy, 1))) ||
             !platform::windows::read_memory(officer + 0x10, std::as_writable_bytes(std::span(&status, 1))) ||
-            id == 0 || id > 5102 || scan.seen[id]) {
+            id == 0 || id > domain::OFFICER_ROSTER_LIMIT || scan.entries[id].id != 0) {
             continue;
         }
-        scan.seen[id] = true;
         scan.slots[id] = static_cast<std::uint16_t>(scan.cursor + 1);
-        scan.entries.push_back({id, status});
+        scan.entries[id] = {id, status};
+        mark_roster_dirty(scan, id);
     }
-    if (scan.cursor == 5102) {
-        std::sort(scan.entries.begin(), scan.entries.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
+    if (scan.cursor == domain::OFFICER_ROSTER_LIMIT) {
         scan.requested = false;
         scan.completed = true;
     }
+}
+
+bool update_roster_officer_status(OfficerRosterScan& scan, std::uint16_t id, std::uint8_t status) {
+    if (id == 0 || id > domain::OFFICER_ROSTER_LIMIT || scan.entries[id].id != id) {
+        return false;
+    }
+    if (scan.entries[id].status != status) {
+        scan.entries[id].status = status;
+        mark_roster_dirty(scan, id);
+    }
+    return true;
+}
+
+const domain::OfficerRosterUpdate* peek_officer_roster_update(OfficerRosterScan& scan, domain::GameEpoch epoch) {
+    if (scan.publication_epoch && *scan.publication_epoch != epoch) {
+        // A caller that misses the explicit epoch reset must still never label
+        // the old roster's rows as belonging to the new game session.
+        reset_officer_roster(scan);
+    }
+    scan.publication_epoch = epoch;
+    if (scan.publication_pending) {
+        return &scan.publication;
+    }
+    domain::OfficerRosterUpdate& update = scan.publication;
+
+    update.epoch = epoch;
+    update.generation = scan.generation;
+    update.count = 0;
+    update.available = scan.has_scan;
+    update.loading = scan.has_scan && (scan.requested || scan.completed);
+    if (scan.reset_pending) {
+        update.kind = domain::OfficerRosterUpdateKind::Reset;
+        scan.publication_pending = true;
+        return &update;
+    }
+    if (scan.dirty_count != 0) {
+        update.kind = domain::OfficerRosterUpdateKind::Rows;
+
+        for (std::size_t offset = 0; offset < scan.dirty.size(); ++offset) {
+            const std::size_t word_index = (scan.publication_word + offset) % scan.dirty.size();
+            std::uint64_t bits = scan.dirty[word_index];
+
+            while (bits != 0) {
+                const std::size_t bit_index = static_cast<std::size_t>(std::countr_zero(bits));
+                const std::size_t id = word_index * 64 + bit_index;
+
+                bits &= bits - 1;
+                if (id != 0 && id <= domain::OFFICER_ROSTER_LIMIT) {
+                    update.entries[update.count++] = scan.entries[id];
+                }
+                if (update.count == update.entries.size()) {
+                    scan.publication_word = word_index;
+                    scan.publication_pending = true;
+                    return &update;
+                }
+            }
+        }
+        scan.publication_pending = update.count != 0;
+        return scan.publication_pending ? &update : nullptr;
+    }
+    if (scan.completed) {
+        update.kind = domain::OfficerRosterUpdateKind::Complete;
+        update.loading = false;
+        scan.publication_pending = true;
+        return &update;
+    }
+    return nullptr;
+}
+
+void acknowledge_officer_roster_update(OfficerRosterScan& scan) {
+    if (!scan.publication_pending) {
+        return;
+    }
+    const domain::OfficerRosterUpdate& update = scan.publication;
+
+    if (update.kind == domain::OfficerRosterUpdateKind::Reset) {
+        scan.reset_pending = false;
+    } else if (update.kind == domain::OfficerRosterUpdateKind::Complete) {
+        scan.completed = false;
+    } else {
+        for (std::size_t index = 0; index < update.count; ++index) {
+            const domain::OfficerRosterEntry& row = update.entries[index];
+            const std::uint64_t bit = std::uint64_t{1} << (row.id % 64);
+            std::uint64_t& word = scan.dirty[row.id / 64];
+
+            // A command may have changed this row while the full channel held
+            // an older packet. Retain the newer value for the next publication.
+            if (scan.entries[row.id].status == row.status && (word & bit) != 0) {
+                word &= ~bit;
+                --scan.dirty_count;
+            }
+        }
+    }
+    scan.publication_pending = false;
 }
 
 domain::OfficerTraits read_officer_traits(std::uintptr_t officer) {

@@ -62,6 +62,8 @@
     <ClInclude Include="skill_counts.h" />
     <ClInclude Include="officer_basic.h" />
     <ClInclude Include="officer_roster.h" />
+    <ClInclude Include="officer_roster_publication.h" />
+    <ClInclude Include="work_budget.h" />
     <ClInclude Include="trait.h" />
     <ClInclude Include="auto_affinity.h" />
   </ItemGroup>

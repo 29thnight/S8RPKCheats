@@ -111,7 +111,7 @@ void change_game_session(Runtime& runtime) {
     runtime.battle_skill_counts = {};
     runtime.terrain_bonus_state = {};
     runtime.officer_stats = {};
-    runtime.officer_roster = {};
+    game::reset_officer_roster(runtime.officer_roster);
     runtime.pending_trait_change.reset();
     runtime.auto_affinity = {};
     runtime.selected_officer.reset();
