@@ -17,12 +17,14 @@ bool load_font(const std::filesystem::path& path, float size_pixels) {
     if (!file) {
         return false;
     }
-    const auto size = file.tellg();
+    const std::ifstream::pos_type size = file.tellg();
+
     if (size <= 0 || size > std::numeric_limits<int>::max()) {
         return false;
     }
-    const auto length = static_cast<int>(size);
+    const int length = static_cast<int>(size);
     void* data = IM_ALLOC(length);
+
     if (!data) {
         return false;
     }
@@ -37,6 +39,7 @@ bool load_font(const std::filesystem::path& path, float size_pixels) {
         0x3000, 0x303f, 0xac00, 0xd7a3, 0,
     };
     ImFontConfig config;
+
     config.PixelSnapH = true;
     config.OversampleH = 2;
     config.OversampleV = 1;
@@ -50,15 +53,18 @@ void load_korean_font(float size_pixels) {
     std::array<wchar_t, 32768> path{};
     if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                            reinterpret_cast<LPCWSTR>(&load_korean_font), &module)) {
-        const auto length = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
+        const DWORD length = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
+
         if (length && length < path.size()) {
-            const auto directory = std::filesystem::path(path.data()).parent_path();
+            const std::filesystem::path directory = std::filesystem::path(path.data()).parent_path();
+
             if (load_font(directory / L"malgunbd.ttf", size_pixels) || load_font(directory / L"malgun.ttf", size_pixels)) {
                 return;
             }
         }
     }
-    const auto length = GetWindowsDirectoryW(path.data(), static_cast<UINT>(path.size()));
+    const UINT length = GetWindowsDirectoryW(path.data(), static_cast<UINT>(path.size()));
+
     if (length && length < path.size()) {
         load_font(std::filesystem::path(path.data()) / L"Fonts" / L"malgun.ttf", size_pixels);
     }
@@ -66,20 +72,25 @@ void load_korean_font(float size_pixels) {
 
 bool create_render_target(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     winrt::com_ptr<ID3D11Texture2D> buffer;
-    if (FAILED(swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), buffer.put_void())))
+
+    if (FAILED(swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), buffer.put_void()))) {
         return false;
+    }
     return SUCCEEDED(overlay.device->CreateRenderTargetView(buffer.get(), nullptr, overlay.render_target.put()));
 }
 
 } // namespace
 
 bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
-    if (!swap_chain)
+    if (!swap_chain) {
         return false;
+    }
     DXGI_SWAP_CHAIN_DESC description{};
+
     if (FAILED(swap_chain->GetDesc(&description)) ||
-        FAILED(swap_chain->GetDevice(__uuidof(ID3D11Device), overlay.device.put_void())))
+        FAILED(swap_chain->GetDevice(__uuidof(ID3D11Device), overlay.device.put_void()))) {
         return false;
+    }
     overlay.device->GetImmediateContext(overlay.context.put());
     if (!overlay.context || !create_render_target(overlay, swap_chain)) {
         overlay.device = nullptr;
@@ -89,11 +100,13 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     IMGUI_CHECKVERSION();
     overlay.imgui = ImGui::CreateContext();
     ImGui::SetCurrentContext(overlay.imgui);
-    auto& io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
+
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = nullptr;
     ImGui::StyleColorsDark();
-    auto& style = ImGui::GetStyle();
+    ImGuiStyle& style = ImGui::GetStyle();
+
     style.WindowPadding = ImVec2(10, 10);
     style.WindowRounding = 8.0f;
     style.FramePadding = ImVec2(5, 2);
@@ -108,7 +121,8 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     style.PopupRounding = 8.0f;
     style.ChildRounding = 8.0f;
     style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-    auto* colors = style.Colors;
+    ImVec4* const colors = style.Colors;
+
     colors[ImGuiCol_Text] = ImVec4(0.95f, 0.96f, 0.98f, 1.00f);
     colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.09f, 0.96f);
     colors[ImGuiCol_Border] = ImVec4(1.00f, 0.75f, 0.00f, 0.50f);
@@ -132,7 +146,8 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     colors[ImGuiCol_Tab] = ImVec4(1.00f, 0.75f, 0.00f, 0.18f);
     colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.75f, 0.00f, 0.42f);
     colors[ImGuiCol_TabSelected] = ImVec4(1.00f, 0.75f, 0.00f, 0.58f);
-    const auto dpi = GetDpiForWindow(description.OutputWindow);
+    const UINT dpi = GetDpiForWindow(description.OutputWindow);
+
     load_korean_font(15.0f * (dpi ? static_cast<float>(dpi) / 96.0f : 1.0f));
     overlay.window = description.OutputWindow;
     if (!ImGui_ImplWin32_Init(overlay.window)) {
@@ -143,8 +158,10 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
         overlay.device = nullptr;
         return false;
     }
+    overlay.win32_ready = true;
     if (!ImGui_ImplDX11_Init(overlay.device.get(), overlay.context.get())) {
         ImGui_ImplWin32_Shutdown();
+        overlay.win32_ready = false;
         ImGui::DestroyContext(overlay.imgui);
         overlay.imgui = nullptr;
         overlay.render_target = nullptr;
@@ -152,17 +169,22 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
         overlay.device = nullptr;
         return false;
     }
+    overlay.dx11_ready = true;
+    overlay.swap_chain.copy_from(swap_chain);
     return true;
 }
 
 bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawUi draw, void* context) {
-    if (!swap_chain || !draw)
+    if (!swap_chain || !draw) {
         return false;
-    if (!overlay.imgui && !initialize_dx11_overlay(overlay, swap_chain))
+    }
+    if (!overlay.imgui && !initialize_dx11_overlay(overlay, swap_chain)) {
         return false;
+    }
     ImGui::SetCurrentContext(overlay.imgui);
-    if (!overlay.render_target && !create_render_target(overlay, swap_chain))
+    if (!overlay.render_target && !create_render_target(overlay, swap_chain)) {
         return false;
+    }
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -174,14 +196,17 @@ bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawU
     std::array<ID3D11RenderTargetView*, D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT> previous_targets{};
     std::array<winrt::com_ptr<ID3D11RenderTargetView>, D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT> retained_targets;
     winrt::com_ptr<ID3D11DepthStencilView> previous_depth;
+
     overlay.context->OMGetRenderTargets(static_cast<UINT>(previous_targets.size()), previous_targets.data(), previous_depth.put());
-    for (std::size_t i = 0; i < previous_targets.size(); ++i)
+    for (std::size_t i = 0; i < previous_targets.size(); ++i) {
         retained_targets[i].attach(previous_targets[i]);
-    auto* target = overlay.render_target.get();
+    }
+
+    ID3D11RenderTargetView* const target = overlay.render_target.get();
+
     overlay.context->OMSetRenderTargets(1, &target, nullptr);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
     overlay.context->OMSetRenderTargets(static_cast<UINT>(previous_targets.size()), previous_targets.data(), previous_depth.get());
-    overlay.render_target = nullptr;
     return true;
 }
 
@@ -192,19 +217,27 @@ void release_dx11_render_target(Dx11Overlay& overlay) {
 void shutdown_dx11_overlay(Dx11Overlay& overlay) {
     if (overlay.imgui) {
         ImGui::SetCurrentContext(overlay.imgui);
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
+        if (overlay.dx11_ready) {
+            ImGui_ImplDX11_Shutdown();
+            overlay.dx11_ready = false;
+        }
+        if (overlay.win32_ready) {
+            ImGui_ImplWin32_Shutdown();
+            overlay.win32_ready = false;
+        }
         ImGui::DestroyContext(overlay.imgui);
         overlay.imgui = nullptr;
     }
     overlay.render_target = nullptr;
-    for (auto& texture : overlay.range_textures) {
+    for (winrt::com_ptr<ID3D11ShaderResourceView>& texture : overlay.range_textures) {
         texture = nullptr;
     }
     overlay.range_textures_loaded = false;
     overlay.context = nullptr;
     overlay.device = nullptr;
     overlay.window = nullptr;
+    overlay.swap_chain = nullptr;
+    overlay.input.request_reset();
 }
 
 } // namespace s8::overlay

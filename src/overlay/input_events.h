@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
 #include <string_view>
 
 namespace s8::overlay {
@@ -21,15 +21,19 @@ struct InputEvent {
 
 class InputEvents {
 public:
+    static constexpr std::size_t CAPACITY = 256;
+
+    // The window thread is the only producer; serialized Present is the consumer.
     bool push(InputEvent event);
     bool push_text(std::wstring_view text);
+    void request_reset() noexcept;
     void deliver();
 
 private:
-    static constexpr std::size_t CAPACITY = 256;
-    std::mutex mutex;
     std::array<InputEvent, CAPACITY> events{};
-    std::size_t count = 0;
+    alignas(64) std::atomic<std::uint64_t> read_position{0};
+    alignas(64) std::atomic<std::uint64_t> write_position{0};
+    std::atomic<bool> reset_pending{false};
 };
 
 } // namespace s8::overlay

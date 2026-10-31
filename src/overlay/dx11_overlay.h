@@ -11,18 +11,21 @@ struct ImGuiContext;
 
 namespace s8::overlay {
 
-using DrawUi = void (*)(void* context) noexcept;
+using DrawUi = void (*)(void* context);
 
 struct Dx11Overlay {
     Dx11Overlay() = default;
     Dx11Overlay(const Dx11Overlay&) = delete;
     Dx11Overlay& operator=(const Dx11Overlay&) = delete;
+    winrt::com_ptr<IDXGISwapChain> swap_chain;
     winrt::com_ptr<ID3D11Device> device;
     winrt::com_ptr<ID3D11DeviceContext> context;
     winrt::com_ptr<ID3D11RenderTargetView> render_target;
     std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 11> range_textures;
     bool range_textures_loaded = false;
     ImGuiContext* imgui = nullptr;
+    bool win32_ready = false;
+    bool dx11_ready = false;
     InputEvents input;
     void* window = nullptr;
 };

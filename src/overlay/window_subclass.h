@@ -8,5 +8,6 @@ namespace s8::overlay {
 // removal has completed and all window callbacks have returned.
 bool install_window_subclass(HWND window, OverlayPresent& state);
 bool remove_window_subclass(HWND window, OverlayPresent& state);
+bool overlay_window_callbacks_idle(const OverlayPresent& state) noexcept;
 
 } // namespace s8::overlay

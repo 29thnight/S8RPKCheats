@@ -6,45 +6,75 @@ namespace s8::overlay {
 
 bool InputEvents::push(InputEvent event) {
     if ((event.kind == InputKind::MouseButton && event.value >= 5) ||
-        (event.kind == InputKind::Character && event.value > 0xffff)) {
+        (event.kind == InputKind::Character && event.value > 0xffff) ||
+        reset_pending.load(std::memory_order_acquire)) {
         return false;
     }
-    std::lock_guard lock(mutex);
-    if (count == CAPACITY) {
+
+    const std::uint64_t write = write_position.load(std::memory_order_relaxed);
+    const std::uint64_t read = read_position.load(std::memory_order_acquire);
+
+    if (write - read == CAPACITY) {
+        request_reset();
         return false;
     }
-    events[count++] = event;
+
+    events[write % CAPACITY] = event;
+    write_position.store(write + 1, std::memory_order_release);
     return true;
 }
 
 bool InputEvents::push_text(std::wstring_view text) {
-    std::lock_guard lock(mutex);
-    if (text.size() > CAPACITY - count) {
+    if (reset_pending.load(std::memory_order_acquire)) {
         return false;
     }
-    for (const auto character : text) {
-        InputEvent event{};
-        event.kind = InputKind::Character;
-        event.value = static_cast<std::uint16_t>(character);
-        events[count++] = event;
+
+    const std::uint64_t write = write_position.load(std::memory_order_relaxed);
+    const std::uint64_t read = read_position.load(std::memory_order_acquire);
+
+    if (text.size() > CAPACITY - (write - read)) {
+        request_reset();
+        return false;
     }
+
+    std::uint64_t position = write;
+
+    for (const wchar_t character : text) {
+        events[position % CAPACITY] = InputEvent{
+            .kind = InputKind::Character,
+            .value = static_cast<std::uint16_t>(character),
+        };
+        ++position;
+    }
+    write_position.store(position, std::memory_order_release);
     return true;
 }
 
+void InputEvents::request_reset() noexcept {
+    reset_pending.store(true, std::memory_order_release);
+}
+
 void InputEvents::deliver() {
-    std::array<InputEvent, CAPACITY> pending{};
-    std::size_t size = 0;
-    {
-        std::lock_guard lock(mutex);
-        size = count;
-        for (std::size_t i = 0; i < size; ++i) {
-            pending[i] = events[i];
-        }
-        count = 0;
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (reset_pending.load(std::memory_order_acquire)) {
+        // The producer stays paused until the old queue has been discarded.
+        const std::uint64_t end = write_position.load(std::memory_order_acquire);
+
+        read_position.store(end, std::memory_order_release);
+        io.ClearEventsQueue();
+        io.ClearInputKeys();
+        io.ClearInputMouse();
+        reset_pending.store(false, std::memory_order_release);
+        return;
     }
-    auto& io = ImGui::GetIO();
-    for (std::size_t i = 0; i < size; ++i) {
-        const auto& event = pending[i];
+
+    std::uint64_t position = read_position.load(std::memory_order_relaxed);
+    const std::uint64_t end = write_position.load(std::memory_order_acquire);
+
+    while (position != end) {
+        const InputEvent event = events[position % CAPACITY];
+
         switch (event.kind) {
         case InputKind::MousePosition:
             io.AddMousePosEvent(event.x, event.y);
@@ -69,6 +99,8 @@ void InputEvents::deliver() {
             io.AddKeyEvent(static_cast<ImGuiKey>(event.value), event.down);
             break;
         }
+        ++position;
+        read_position.store(position, std::memory_order_release);
     }
 }
 

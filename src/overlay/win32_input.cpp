@@ -1,15 +1,186 @@
 #include "win32_input.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
+#include "../../third_party/minhook/include/MinHook.h"
 #include <windowsx.h>
 #include <imm.h>
 #include <cfloat>
-#include <string>
+#include <array>
+#include <cstdint>
+#include <string_view>
 
 #pragma comment(lib, "imm32.lib")
 
 namespace s8::overlay {
 namespace {
+
+constexpr std::uint64_t CAPTURE_CLOSED = std::uint64_t{1} << 63;
+constexpr std::uint64_t CAPTURE_COUNT_MASK = CAPTURE_CLOSED - 1;
+constexpr std::size_t CURSOR_INDEX = 0;
+constexpr std::size_t ASYNC_KEY_INDEX = 1;
+constexpr std::size_t KEY_INDEX = 2;
+constexpr std::size_t KEYBOARD_INDEX = 3;
+constexpr std::size_t PEEK_W_INDEX = 4;
+constexpr std::size_t PEEK_A_INDEX = 5;
+
+std::atomic<InputCaptureHooks*> active_capture{nullptr};
+std::atomic<std::uint64_t> capture_gate{CAPTURE_CLOSED};
+std::array<std::atomic<void*>, InputCaptureHooks::COUNT> input_originals{};
+thread_local unsigned capture_bypass_depth = 0;
+
+struct CapturePolicy {
+    HWND window = nullptr;
+    bool mouse = false;
+    bool keyboard = false;
+};
+
+CapturePolicy read_capture_policy() noexcept {
+    if (capture_bypass_depth) {
+        return {};
+    }
+
+    std::uint64_t observed = capture_gate.load(std::memory_order_acquire);
+
+    while (!(observed & CAPTURE_CLOSED)) {
+        if (capture_gate.compare_exchange_weak(observed, observed + 1,
+                std::memory_order_acq_rel, std::memory_order_acquire)) {
+            const InputCaptureHooks* const state = active_capture.load(std::memory_order_acquire);
+            const CapturePolicy policy{
+                state->window,
+                state->capture_mouse->load(std::memory_order_acquire),
+                state->capture_keyboard->load(std::memory_order_acquire),
+            };
+
+            capture_gate.fetch_sub(1, std::memory_order_release);
+            return policy;
+        }
+    }
+    return {};
+}
+
+constexpr bool is_mouse_key(int key) noexcept {
+    return key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON ||
+           key == VK_XBUTTON1 || key == VK_XBUTTON2;
+}
+
+constexpr bool is_system_modifier(int key) noexcept {
+    return key == VK_SHIFT || key == VK_LSHIFT || key == VK_RSHIFT ||
+           key == VK_CONTROL || key == VK_LCONTROL || key == VK_RCONTROL ||
+           key == VK_MENU || key == VK_LMENU || key == VK_RMENU ||
+           key == VK_LWIN || key == VK_RWIN || key == VK_OEM_3 ||
+           key == VK_HANGUL;
+}
+
+bool blocked_key(const CapturePolicy& policy, int key) noexcept {
+    return is_mouse_key(key) ? policy.mouse : policy.keyboard && !is_system_modifier(key);
+}
+
+BOOL WINAPI capture_cursor(LPPOINT point) {
+    using Function = BOOL (WINAPI*)(LPPOINT);
+    const Function original = reinterpret_cast<Function>(input_originals[CURSOR_INDEX].load(std::memory_order_acquire));
+    const BOOL result = original(point);
+    const CapturePolicy policy = read_capture_policy();
+
+    if (result && point && policy.mouse) {
+        point->x = -1;
+        point->y = -1;
+    }
+    return result;
+}
+
+SHORT WINAPI capture_async_key(int key) {
+    using Function = SHORT (WINAPI*)(int);
+    const Function original = reinterpret_cast<Function>(input_originals[ASYNC_KEY_INDEX].load(std::memory_order_acquire));
+    const SHORT result = original(key);
+    const CapturePolicy policy = read_capture_policy();
+
+    return blocked_key(policy, key) ? 0 : result;
+}
+
+SHORT WINAPI capture_key(int key) {
+    using Function = SHORT (WINAPI*)(int);
+    const Function original = reinterpret_cast<Function>(input_originals[KEY_INDEX].load(std::memory_order_acquire));
+    const SHORT result = original(key);
+    const CapturePolicy policy = read_capture_policy();
+
+    return blocked_key(policy, key) ? 0 : result;
+}
+
+BOOL WINAPI capture_keyboard(PBYTE keys) {
+    using Function = BOOL (WINAPI*)(PBYTE);
+    const Function original = reinterpret_cast<Function>(input_originals[KEYBOARD_INDEX].load(std::memory_order_acquire));
+    const BOOL result = original(keys);
+    const CapturePolicy policy = read_capture_policy();
+
+    if (result && keys && (policy.mouse || policy.keyboard)) {
+        constexpr int KEY_COUNT = 256;
+
+        for (int key = 0; key < KEY_COUNT; ++key) {
+            if (blocked_key(policy, key)) {
+                keys[key] = 0;
+            }
+        }
+    }
+    return result;
+}
+
+void filter_message(MSG& message, UINT removal) noexcept {
+    const CapturePolicy policy = read_capture_policy();
+
+    if (!(removal & PM_REMOVE) || message.hwnd != policy.window ||
+        (!policy.mouse && !policy.keyboard)) {
+        return;
+    }
+    if (message.message == WM_INPUT) {
+        RAWINPUTHEADER header{};
+        UINT bytes = sizeof(header);
+        const UINT result = GetRawInputData(reinterpret_cast<HRAWINPUT>(message.lParam),
+                                             RID_HEADER, &header, &bytes, sizeof(header));
+
+        if (result == sizeof(header) &&
+            ((header.dwType == RIM_TYPEMOUSE && policy.mouse) ||
+             (header.dwType == RIM_TYPEKEYBOARD && policy.keyboard))) {
+            if (GET_RAWINPUT_CODE_WPARAM(message.wParam) == RIM_INPUT) {
+                if (IsWindowUnicode(message.hwnd)) {
+                    DefWindowProcW(message.hwnd, WM_INPUT, message.wParam, message.lParam);
+                } else {
+                    DefWindowProcA(message.hwnd, WM_INPUT, message.wParam, message.lParam);
+                }
+            }
+            message.message = WM_NULL;
+        }
+    }
+}
+
+BOOL WINAPI capture_peek_w(LPMSG message, HWND window, UINT first, UINT last, UINT removal) {
+    using Function = BOOL (WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
+    const Function original = reinterpret_cast<Function>(input_originals[PEEK_W_INDEX].load(std::memory_order_acquire));
+    const BOOL result = original(message, window, first, last, removal);
+
+    if (result && message) {
+        filter_message(*message, removal);
+    }
+    return result;
+}
+
+BOOL WINAPI capture_peek_a(LPMSG message, HWND window, UINT first, UINT last, UINT removal) {
+    using Function = BOOL (WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
+    const Function original = reinterpret_cast<Function>(input_originals[PEEK_A_INDEX].load(std::memory_order_acquire));
+    const BOOL result = original(message, window, first, last, removal);
+
+    if (result && message) {
+        filter_message(*message, removal);
+    }
+    return result;
+}
+
+void discard_input_hooks(InputCaptureHooks& state) {
+    while (state.installed) {
+        --state.installed;
+        platform::windows::remove_hook(state.hooks[state.installed]);
+        state.hooks[state.installed] = {};
+    }
+}
 
 ImGuiKey translate_key(WPARAM key, LPARAM lparam) {
     if (key >= '0' && key <= '9') {
@@ -79,8 +250,135 @@ ImGuiKey translate_key(WPARAM key, LPARAM lparam) {
 
 } // namespace
 
+InputCaptureBypass::InputCaptureBypass() noexcept {
+    ++capture_bypass_depth;
+}
+
+InputCaptureBypass::~InputCaptureBypass() {
+    --capture_bypass_depth;
+}
+
+std::expected<void, int> install_input_capture(InputCaptureHooks& state, HWND window,
+    const std::atomic<bool>& capture_mouse, const std::atomic<bool>& capture_keyboard) {
+    if (!window || state.installed || active_capture.load(std::memory_order_acquire)) {
+        return std::unexpected(static_cast<int>(ERROR_INVALID_PARAMETER));
+    }
+
+    const HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    constexpr std::array<const char*, InputCaptureHooks::COUNT> NAMES{
+        "GetCursorPos", "GetAsyncKeyState", "GetKeyState",
+        "GetKeyboardState", "PeekMessageW", "PeekMessageA",
+    };
+    const std::array<void*, InputCaptureHooks::COUNT> detours{
+        reinterpret_cast<void*>(&capture_cursor), reinterpret_cast<void*>(&capture_async_key),
+        reinterpret_cast<void*>(&capture_key), reinterpret_cast<void*>(&capture_keyboard),
+        reinterpret_cast<void*>(&capture_peek_w), reinterpret_cast<void*>(&capture_peek_a),
+    };
+
+    if (!user32) {
+        return std::unexpected(static_cast<int>(ERROR_MOD_NOT_FOUND));
+    }
+    for (std::size_t index = 0; index < NAMES.size(); ++index) {
+        void* const target = reinterpret_cast<void*>(GetProcAddress(user32, NAMES[index]));
+
+        if (!target) {
+            discard_input_hooks(state);
+            return std::unexpected(static_cast<int>(ERROR_PROC_NOT_FOUND));
+        }
+
+        const std::expected<platform::windows::Hook, int> hook =
+            platform::windows::create_hook(target, detours[index]);
+
+        if (!hook) {
+            discard_input_hooks(state);
+            return std::unexpected(hook.error());
+        }
+        state.hooks[index] = *hook;
+        ++state.installed;
+    }
+
+    state.window = window;
+    state.capture_mouse = &capture_mouse;
+    state.capture_keyboard = &capture_keyboard;
+
+    InputCaptureHooks* expected = nullptr;
+
+    if (!active_capture.compare_exchange_strong(expected, &state, std::memory_order_acq_rel)) {
+        discard_input_hooks(state);
+        return std::unexpected(static_cast<int>(ERROR_ALREADY_INITIALIZED));
+    }
+    for (std::size_t index = 0; index < state.installed; ++index) {
+        input_originals[index].store(state.hooks[index].original, std::memory_order_release);
+    }
+    capture_gate.store(0, std::memory_order_release);
+
+    MH_STATUS status = MH_OK;
+
+    for (std::size_t index = 0; index < state.installed && status == MH_OK; ++index) {
+        status = MH_QueueEnableHook(state.hooks[index].target);
+    }
+    if (status == MH_OK) {
+        status = MH_ApplyQueued();
+    }
+    if (status != MH_OK) {
+        disable_input_capture(state);
+        return std::unexpected(static_cast<int>(status));
+    }
+
+    state.enabled = true;
+    return {};
+}
+
+int disable_input_capture(InputCaptureHooks& state) {
+    if (active_capture.load(std::memory_order_acquire) == &state) {
+        capture_gate.fetch_or(CAPTURE_CLOSED, std::memory_order_acq_rel);
+    }
+
+    int first_error = MH_OK;
+
+    for (std::size_t index = 0; index < state.installed; ++index) {
+        const int status = platform::windows::disable_hook(state.hooks[index]);
+        const MH_STATUS queued = MH_QueueDisableHook(state.hooks[index].target);
+
+        if (first_error == MH_OK && status != MH_OK && status != MH_ERROR_DISABLED) {
+            first_error = status;
+        }
+        if (first_error == MH_OK && queued != MH_OK) {
+            first_error = static_cast<int>(queued);
+        }
+    }
+    if (first_error == MH_OK) {
+        state.enabled = false;
+    }
+    return first_error;
+}
+
+bool input_capture_callbacks_idle(const InputCaptureHooks&) noexcept {
+    return (capture_gate.load(std::memory_order_acquire) & CAPTURE_COUNT_MASK) == 0;
+}
+
+bool detach_input_capture(InputCaptureHooks& state) noexcept {
+    const std::uint64_t gate = capture_gate.load(std::memory_order_acquire);
+
+    if (!(gate & CAPTURE_CLOSED) || (gate & CAPTURE_COUNT_MASK)) {
+        return false;
+    }
+
+    InputCaptureHooks* expected = &state;
+
+    if (!active_capture.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel) &&
+        expected != nullptr) {
+        return false;
+    }
+    state.capture_mouse = nullptr;
+    state.capture_keyboard = nullptr;
+    state.window = nullptr;
+    return true;
+}
+
 InputMessageResult queue_win32_input(InputEvents& input, UINT message, WPARAM wparam, LPARAM lparam) {
     InputEvent event{};
+
     switch (message) {
     case WM_MOUSEMOVE:
         event.kind = InputKind::MousePosition;
@@ -125,7 +423,8 @@ InputMessageResult queue_win32_input(InputEvents& input, UINT message, WPARAM wp
         event.down = message == WM_SETFOCUS;
         break;
     case WM_KEYDOWN: case WM_KEYUP: case WM_SYSKEYDOWN: case WM_SYSKEYUP: {
-        const auto key = translate_key(wparam, lparam);
+        const ImGuiKey key = translate_key(wparam, lparam);
+
         if (key == ImGuiKey_None) {
             return InputMessageResult::Ignored;
         }
@@ -148,22 +447,33 @@ InputMessageResult queue_ime_result(InputEvents& input, HWND window, LPARAM lpar
     if (!(lparam & GCS_RESULTSTR)) {
         return InputMessageResult::Ignored;
     }
-    const auto context = ImmGetContext(window);
+    const HIMC context = ImmGetContext(window);
+
     if (!context) {
         return InputMessageResult::Ignored;
     }
     const LONG bytes = ImmGetCompositionStringW(context, GCS_RESULTSTR, nullptr, 0);
+
     if (bytes <= 0 || bytes % static_cast<LONG>(sizeof(wchar_t)) != 0) {
         ImmReleaseContext(window, context);
         return InputMessageResult::Ignored;
     }
-    std::wstring text(static_cast<std::size_t>(bytes) / sizeof(wchar_t), L'\0');
+    std::array<wchar_t, InputEvents::CAPACITY> text;
+    const std::size_t length = static_cast<std::size_t>(bytes) / sizeof(wchar_t);
+
+    if (length > text.size()) {
+        ImmReleaseContext(window, context);
+        input.request_reset();
+        return InputMessageResult::QueueFull;
+    }
+
     const LONG copied = ImmGetCompositionStringW(context, GCS_RESULTSTR, text.data(), bytes);
+
     ImmReleaseContext(window, context);
     if (copied != bytes) {
         return InputMessageResult::Ignored;
     }
-    return input.push_text(text) ? InputMessageResult::Queued : InputMessageResult::QueueFull;
+    return input.push_text(std::wstring_view(text.data(), length)) ? InputMessageResult::Queued : InputMessageResult::QueueFull;
 }
 
 } // namespace s8::overlay

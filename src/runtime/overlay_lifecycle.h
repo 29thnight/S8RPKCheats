@@ -13,10 +13,12 @@ struct OverlayLifecycle {
     platform::windows::PresentHook present;
 };
 
-// The owner keeps this state alive until callbacks and trampolines are quiescent.
+// The owner retains this state and published trampolines for process lifetime.
 std::expected<void, int> start_overlay(OverlayLifecycle& state, HWND game_window);
+// Close command admission and ask the render callback to release its resources.
 int stop_overlay_entries(OverlayLifecycle& state);
-// Call after Present and window callbacks have returned and the subclass is removed.
+// Returns ERROR_BUSY until the renderer acknowledges stop and the subclass is
+// removed. Never removes a published trampoline or frees a borrowed context.
 int finish_overlay_stop(OverlayLifecycle& state);
 
 } // namespace s8::runtime
