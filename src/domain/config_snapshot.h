@@ -17,6 +17,7 @@
 #include "tengi.h"
 #include "ai_officer_growth.h"
 #include "special_ability_assignment.h"
+#include "native_features.h"
 #include "ownership.h"
 
 #include <cstdint>
@@ -74,6 +75,7 @@ struct ConfigSnapshot {
     SpecialAssignmentSummary special_assignment;
     own::shared_owner<const std::vector<SpecialAssignmentResult>> special_assignment_results;
     std::uint64_t special_assignment_generation = 0;
+    NativeFeatureStatuses native_features{};
 };
 
 } // namespace s8::domain

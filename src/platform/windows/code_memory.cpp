@@ -78,4 +78,11 @@ void free_code(std::uintptr_t address) {
     VirtualFree(reinterpret_cast<void*>(address), 0, MEM_RELEASE);
 }
 
+bool retain_callback_module(std::uintptr_t callback_address) {
+    HMODULE module = nullptr;
+
+    return callback_address && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+        GET_MODULE_HANDLE_EX_FLAG_PIN, reinterpret_cast<LPCWSTR>(callback_address), &module) != FALSE;
+}
+
 } // namespace s8::platform::windows

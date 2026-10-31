@@ -36,7 +36,7 @@ bool update_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
     const std::optional<Stratagem5CountCandidate>& dialog,
     const std::optional<Stratagem5CountCandidate>& attack,
     const std::optional<Stratagem5CountCandidate>& defense);
-void disable_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
+bool disable_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
     std::optional<std::uintptr_t> valid_attack, std::optional<std::uintptr_t> valid_defense);
 void reset_stratagem5_count(Stratagem5Count& state);
 

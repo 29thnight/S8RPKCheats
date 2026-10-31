@@ -1,11 +1,10 @@
 #include "speed_clock.h"
 
-#include "../../../third_party/minhook/include/MinHook.h"
-
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 #include <intrin.h>
+#include "../../../third_party/minhook/include/MinHook.h"
 
 #include <algorithm>
 #include <array>

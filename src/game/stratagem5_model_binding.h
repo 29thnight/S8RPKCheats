@@ -10,6 +10,7 @@ struct Stratagem5ModelApplied {
     std::uintptr_t count_address;
     StratagemEntry original_entry;
     std::uint32_t original_count;
+    StratagemEntry replacement_entry;
 };
 
 struct Stratagem5ModelBinding {
@@ -18,7 +19,7 @@ struct Stratagem5ModelBinding {
 
 bool extend_stratagem5_model(Stratagem5ModelBinding& state, domain::GameEpoch epoch,
                              std::uintptr_t owner, const Stratagem5Plan& plan);
-void restore_stratagem5_model(Stratagem5ModelBinding& state, domain::GameEpoch epoch);
+bool restore_stratagem5_model(Stratagem5ModelBinding& state, domain::GameEpoch epoch);
 void reset_stratagem5_model(Stratagem5ModelBinding& state);
 
 } // namespace s8::game

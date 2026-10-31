@@ -177,5 +177,29 @@
     <ClCompile Include="ai_officer_growth.cpp" />
     <ClCompile Include="special_ability_assignment.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="native_patch.cpp" />
+    <ClInclude Include="native_patch.h" />
+    <ClCompile Include="ai_war_policy.cpp" />
+    <ClInclude Include="ai_war_policy.h" />
+    <ClCompile Include="prisoner_capture.cpp" />
+    <ClInclude Include="prisoner_capture.h" />
+    <ClCompile Include="governor_prisoner_disposal.cpp" />
+    <ClInclude Include="governor_prisoner_disposal.h" />
+    <ClCompile Include="stratagem_gauge.cpp" />
+    <ClInclude Include="stratagem_gauge.h" />
+    <ClCompile Include="isolated_territory.cpp" />
+    <ClInclude Include="isolated_territory.h" />
+    <ClCompile Include="reinforcement_placement.cpp" />
+    <ClInclude Include="reinforcement_placement.h" />
+    <ClCompile Include="council_continue.cpp" />
+    <ClInclude Include="council_continue.h" />
+    <ClCompile Include="mission_cpu_exclusion.cpp" />
+    <ClInclude Include="mission_cpu_exclusion.h" />
+    <ClCompile Include="council_execute_free.cpp" />
+    <ClInclude Include="council_execute_free.h" />
+    <ClCompile Include="affinity_display.cpp" />
+    <ClInclude Include="affinity_display.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

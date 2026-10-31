@@ -71,6 +71,18 @@ std::vector<ConfigChange> config_changes(const domain::ConfigSnapshot& snapshot)
         FeatureKey{domain::FeatureId::HealLv1Self, "bHealLv1_Self"},
         FeatureKey{domain::FeatureId::HealLv2Self, "bHealLv2_Self"},
         FeatureKey{domain::FeatureId::HealLv3Self, "bHealLv3_Self"},
+        FeatureKey{domain::FeatureId::AiWarImprove, "bAIWarImprove"},
+        FeatureKey{domain::FeatureId::PrisonerCaptureManagement, "bPrisonerCaptureManagement"},
+        FeatureKey{domain::FeatureId::GovernorPrisonerDisposal, "bGovernorPrisonerDisposal"},
+        FeatureKey{domain::FeatureId::GovernorPrisonerConsumePrivilege, "bGovernorPrisonerConsumePrivilege"},
+        FeatureKey{domain::FeatureId::MaxAttackStratagemGauge, "bMaxAttackStratagemGauge"},
+        FeatureKey{domain::FeatureId::MaxDefenseStratagemGauge, "bMaxDefenseStratagemGauge"},
+        FeatureKey{domain::FeatureId::IsolatedTerritoryMovement, "bIsolatedTerritoryMovement"},
+        FeatureKey{domain::FeatureId::ReinforcementDefenderPlacement, "bReinforcementDefenderPlacement"},
+        FeatureKey{domain::FeatureId::CouncilContinueAfterMove, "bCouncilContinueAfterMove"},
+        FeatureKey{domain::FeatureId::MissionCpuHeroExclusion, "bMissionCpuHeroExclusion"},
+        FeatureKey{domain::FeatureId::CouncilExecuteFreeOfficers, "bCouncilExecuteFreeOfficers"},
+        FeatureKey{domain::FeatureId::AffinityDisplay, "bAffinityDisplay"},
     };
     std::vector<ConfigChange> changes;
     changes.reserve(FEATURES.size() + 128 + 12 * 11 + domain::TENGI_EVENT_COUNT * 3);

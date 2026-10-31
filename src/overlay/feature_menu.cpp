@@ -124,6 +124,9 @@ void draw_ai_growth_preview(const domain::AiGrowthPreview& preview) {
 } // namespace
 
 void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
+    menu.file_log_failed = bridge.file_log.failed();
+    menu.file_log_dropped = bridge.file_log.dropped();
+
     menu.skill_counts = bridge.skill_counts_view();
     menu.officer_names = bridge.officer_names_view();
     menu.trait_effects = bridge.trait_effects_view();
@@ -322,6 +325,18 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         FeatureItem{"시나리오 초기 설정 보정", domain::FeatureId::StartSetting},
         FeatureItem{"게임 배속", domain::FeatureId::SpeedHack},
         FeatureItem{"매 평정 새로운 전기", domain::FeatureId::InfTengi},
+        FeatureItem{"AI 전쟁 개선", domain::FeatureId::AiWarImprove},
+        FeatureItem{"포로 포획 관리", domain::FeatureId::PrisonerCaptureManagement},
+        FeatureItem{"태수 포로 처분", domain::FeatureId::GovernorPrisonerDisposal},
+        FeatureItem{"태수 포로 처분 시 특권 소모", domain::FeatureId::GovernorPrisonerConsumePrivilege},
+        FeatureItem{"공격측 전법 게이지 최대", domain::FeatureId::MaxAttackStratagemGauge},
+        FeatureItem{"수비측 전법 게이지 최대", domain::FeatureId::MaxDefenseStratagemGauge},
+        FeatureItem{"고립 영토 이동 허용", domain::FeatureId::IsolatedTerritoryMovement},
+        FeatureItem{"수비측 증원 배치 개선", domain::FeatureId::ReinforcementDefenderPlacement},
+        FeatureItem{"이동 후 평정 계속", domain::FeatureId::CouncilContinueAfterMove},
+        FeatureItem{"CPU 임무에서 주인공 제외", domain::FeatureId::MissionCpuHeroExclusion},
+        FeatureItem{"평정에서 미행동 무장도 실행", domain::FeatureId::CouncilExecuteFreeOfficers},
+        FeatureItem{"상성 수치 표시", domain::FeatureId::AffinityDisplay},
         FeatureItem{"치료", domain::FeatureId::SelfHeal},
         FeatureItem{"동토", domain::FeatureId::Dongto},
         FeatureItem{"천계", domain::FeatureId::Celestial},
@@ -358,6 +373,7 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         FeatureItem{"위젯: 알림확인", domain::FeatureId::ShowWidgetNotif},
         FeatureItem{"위젯: 주인공", domain::FeatureId::ShowWidgetHero},
         FeatureItem{"위젯: 모든 무장", domain::FeatureId::ShowWidgetAllOfficers},
+        FeatureItem{"알림 파일 로그", domain::FeatureId::FileLog},
         FeatureItem{"선물 무제한", domain::FeatureId::InfiniteGift},
         FeatureItem{"담화 무제한", domain::FeatureId::InfiniteTalk},
         FeatureItem{"대련 무제한", domain::FeatureId::InfiniteDuel},
@@ -380,6 +396,10 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     };
     for (const auto& item : FEATURES) {
         bool enabled = menu.snapshot.features.get(item.id);
+
+        ImGui::BeginDisabled(item.id == domain::FeatureId::GovernorPrisonerConsumePrivilege &&
+            !menu.snapshot.features.get(domain::FeatureId::GovernorPrisonerDisposal));
+
         if (ImGui::Checkbox(item.label, &enabled)) {
             if (submit(domain::SetFeature{item.id, enabled})) {
                 switch (item.id) {
@@ -406,6 +426,7 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
                 case domain::FeatureId::AutoLoadMenu: case domain::FeatureId::ShowWidgetNotif:
                 case domain::FeatureId::ShowWidgetHero:
                 case domain::FeatureId::ShowWidgetAllOfficers:
+                case domain::FeatureId::FileLog:
                     menu.pending_notice = std::string(item.label) + (enabled ? ": 활성화" : ": 비활성화");
                     break;
                 default:
@@ -413,9 +434,59 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
                 }
             }
         }
+
+        ImGui::EndDisabled();
+
         if (item.id == domain::FeatureId::AutoAffinityGrowth && ImGui::IsItemHovered()) {
             ImGui::SetTooltip("분기 평정월에 같은 세력과 도시의 AI 무장 친밀도를 상성과 흥미에 따라 올립니다.\n"
                               "이미 진행 중인 달에는 소급 적용하지 않습니다.");
+        }
+
+        if (item.id == domain::FeatureId::CouncilExecuteFreeOfficers && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("미행동 후보를 조금씩 갱신하며 실행 직전에 자격을 다시 확인합니다.\n"
+                             "새로 자격을 얻은 무장은 후보 목록 한 바퀴를 갱신한 뒤 반영됩니다.");
+        }
+
+        if (item.id == domain::FeatureId::FileLog) {
+
+            if (menu.file_log_failed) {
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f),
+                    "파일 로그 저장 실패: 옵션을 껐다 켜면 다시 시도합니다.");
+            }
+
+            if (menu.file_log_dropped != 0) {
+                ImGui::TextDisabled("로그 대기열에서 누락된 알림: %llu",
+                    static_cast<unsigned long long>(menu.file_log_dropped));
+            }
+        }
+
+        const std::optional<domain::NativeFeatureGroup> native_group = domain::native_feature_group(item.id);
+
+        if (native_group) {
+
+            const domain::NativeFeatureStatus& status = menu.snapshot.native_features[static_cast<std::size_t>(*native_group)];
+
+            ImGui::SameLine();
+
+            if (status.phase == domain::NativeFeaturePhase::Pending) {
+                ImGui::TextDisabled("적용 대기 (현재 그룹 %s)", status.applied ? "활성" : "해제");
+            } else if (status.phase == domain::NativeFeaturePhase::Applied) {
+                ImGui::TextDisabled("그룹 적용됨");
+            } else if (status.phase == domain::NativeFeaturePhase::Disabled) {
+                ImGui::TextDisabled("해제됨");
+            } else {
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f), "%s: %s",
+                    status.phase == domain::NativeFeaturePhase::Uncertain ? "복구 확인 필요" : "적용 실패",
+                    domain::native_feature_error_text(status.error));
+                ImGui::SameLine();
+                ImGui::PushID(static_cast<int>(item.id));
+
+                if (ImGui::SmallButton("다시 시도")) {
+                    submit(domain::SetFeature{item.id, enabled});
+                }
+
+                ImGui::PopID();
+            }
         }
     }
     ImGui::Separator();

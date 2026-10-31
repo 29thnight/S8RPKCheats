@@ -100,6 +100,65 @@ bool disable_stratagem5(Stratagem5Binding& binding) {
     return restored;
 }
 
+bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch) {
+
+    Stratagem5Session& session = binding.runtime.session;
+
+    session.requested = false;
+
+    if (!session.applied_table) {
+        return session.last_restore != Stratagem5RestoreStatus::Failed;
+    }
+
+    if (session.applied_table->epoch != epoch) {
+        reset_stratagem5_session(session);
+        binding.memory.reset();
+        binding.heal_history = {};
+        return true;
+    }
+
+    if (!binding.memory || binding.memory->table != *session.applied_table) {
+        return false;
+    }
+
+    StratagemTableSnapshot snapshot{};
+
+    if (!read_stratagem_table(*binding.memory, snapshot)) {
+        return false;
+    }
+
+    const std::array<domain::StratagemRecord, 5> records = decode_stratagem_table(snapshot);
+    const StratagemPayload original = encode_stratagem(session.original);
+    const StratagemPayload current = encode_stratagem(records[4]);
+
+    if (!is_expected_stratagem_table(records) ||
+        (current != original && !domain::matches_stratagem5(records[4], binding.runtime.settings))) {
+        reset_stratagem5_session(session);
+        binding.memory.reset();
+        binding.heal_history = {};
+        return true;
+    }
+
+    if (current != original) {
+
+        StratagemPayload verified{};
+
+        if (!write_stratagem5(&*binding.memory, *session.applied_table, original) ||
+            !platform::windows::read_memory(binding.memory->payload_table + 4 * STRATAGEM_RECORD_STRIDE, verified) ||
+            verified != original) {
+            session.last_restore = Stratagem5RestoreStatus::Failed;
+            return false;
+        }
+    }
+
+    session.last_restore = Stratagem5RestoreStatus::Restored;
+    session.applied_table.reset();
+    session.original = {};
+    binding.memory.reset();
+    binding.heal_history = {};
+    return true;
+}
+
 void end_stratagem5_battle(Stratagem5Binding& binding) {
     if (binding.memory)
         restore_stratagem5(binding.runtime.session, write_stratagem5, &*binding.memory);

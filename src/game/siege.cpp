@@ -31,7 +31,9 @@ bool set_move_cost(std::uintptr_t module_base, std::uint8_t value) {
         return false;
     }
     for (std::uintptr_t i = 0; i < 12; ++i) {
-        platform::windows::write_memory(base + i * 0x28, std::as_bytes(std::span(&value, 1)));
+        if (!platform::windows::write_memory(base + i * 0x28, std::as_bytes(std::span(&value, 1)))) {
+            return false;
+        }
     }
     return true;
 }
@@ -77,11 +79,12 @@ bool set_shallow(std::uintptr_t module_base, bool wide) {
 
 } // namespace
 
-void disable_siege(Siege& state, std::uintptr_t module_base) {
-    if (module_base) {
-        set_move_cost(module_base, 255);
+bool disable_siege(Siege& state, std::uintptr_t module_base) {
+    if (state.move_applied && (!module_base || !set_move_cost(module_base, 255))) {
+        return false;
     }
     state = {};
+    return true;
 }
 
 void update_siege(Siege& state, std::uintptr_t module_base, const BattleObservation& observation,

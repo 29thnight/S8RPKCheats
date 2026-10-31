@@ -30,6 +30,8 @@ struct FeatureMenu {
     Notifications notifications;
     bool open = false;
     bool ready = false;
+    bool file_log_failed = false;
+    std::uint64_t file_log_dropped = 0;
     bool collapsed = false;
     bool toggle_collapse = false;
     bool auto_load_applied = false;

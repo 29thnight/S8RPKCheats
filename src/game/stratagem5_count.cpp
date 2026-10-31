@@ -57,7 +57,7 @@ bool update_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
     return true;
 }
 
-void disable_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
+bool disable_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
     std::optional<std::uintptr_t> valid_attack, std::optional<std::uintptr_t> valid_defense) {
     state.requested = false;
     if (state.applied) {
@@ -66,10 +66,13 @@ void disable_stratagem5_count(Stratagem5Count& state, domain::GameEpoch epoch,
             (valid_attack == applied.owner || valid_defense == applied.owner)) {
             const auto address = applied.owner + 0x100 +
                 static_cast<std::uintptr_t>(applied.entry_index) * 0x10 + 0x0c;
-            platform::windows::write_data_memory(address, std::as_bytes(std::span(&applied.original, 1)));
+            if (!platform::windows::write_data_memory(address, std::as_bytes(std::span(&applied.original, 1)))) {
+                return false;
+            }
         }
         state.applied.reset();
     }
+    return true;
 }
 
 void reset_stratagem5_count(Stratagem5Count& state) {

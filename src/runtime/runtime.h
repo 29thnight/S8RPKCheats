@@ -56,6 +56,7 @@
 #include "../game/ai_officer_growth.h"
 #include "../game/special_ability_assignment.h"
 #include "stratagem5_lifecycle.h"
+#include "native_feature_control.h"
 #include "../domain/feature_flags.h"
 #include "../domain/config_snapshot.h"
 
@@ -82,6 +83,14 @@ struct PendingTraitChange {
 };
 
 struct Runtime {
+    bool stopping = false;
+    bool stopped = false;
+    bool stopped_state_published = false;
+    std::uint64_t completed_stop_steps = 0;
+    std::uint64_t failed_stop_steps = 0;
+    std::size_t next_stop_step = 0;
+    std::optional<domain::ConfigSnapshot> stop_snapshot;
+    NativeFeatureControl native_features;
     game::AiGrowthState ai_growth;
     domain::AiGrowthSettings ai_growth_settings;
     std::optional<domain::AiGrowthReport> ai_growth_last_report;
@@ -223,6 +232,7 @@ struct Runtime {
 };
 
 void change_game_session(Runtime& runtime);
+domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module);
 domain::ConfigSnapshot config_snapshot(const Runtime& runtime);
 bool initialize_game_base(Runtime& runtime, std::span<const std::byte> image, std::uintptr_t module_base);
 bool initialize_game_base_from_module(Runtime& runtime, std::uintptr_t module_base);

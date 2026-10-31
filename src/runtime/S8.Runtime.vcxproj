@@ -32,5 +32,6 @@
     <ProjectReference Include="..\services\S8.Services.vcxproj"><Project>{56C82CE2-A8CE-4326-BBCE-9B688F3C327B}</Project></ProjectReference>
     <ProjectReference Include="..\overlay\S8.Overlay.vcxproj"><Project>{603D6FAD-59C6-4AA8-8B99-D847867FF2C2}</Project></ProjectReference>
   </ItemGroup>
+  <ItemGroup><ClCompile Include="native_feature_control.cpp" /><ClInclude Include="native_feature_control.h" /><ClCompile Include="game_stop.cpp" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -30,55 +30,67 @@ std::uintptr_t root_address(std::uintptr_t module_base) {
     return address;
 }
 
-void write_bytes(std::uintptr_t address, std::span<const std::byte> desired) {
+bool write_bytes(std::uintptr_t address, std::span<const std::byte> desired) {
     std::array<std::byte, 48> current{};
     const auto data = std::span(current).first(desired.size());
-    if (platform::windows::read_memory(address, data) && !std::equal(data.begin(), data.end(), desired.begin())) {
-        platform::windows::write_data_memory(address, desired);
+    if (!platform::windows::read_memory(address, data)) {
+        return false;
     }
+    return std::equal(data.begin(), data.end(), desired.begin()) ||
+        platform::windows::write_data_memory(address, desired);
 }
 
-void clear_lord(std::uintptr_t address, std::uintptr_t root) {
+bool clear_lord(std::uintptr_t address, std::uintptr_t root) {
     std::uintptr_t current = 0;
     if (!read_value(address, current)) {
-        return;
+        return false;
     }
     for (std::uintptr_t i = 0; i < 5; ++i) {
         if (current == root + 0x4ec6d8 + i * 24) {
             constexpr std::uintptr_t ZERO = 0;
-            platform::windows::write_data_memory(address, std::as_bytes(std::span(&ZERO, 1)));
-            break;
+            return platform::windows::write_data_memory(address, std::as_bytes(std::span(&ZERO, 1)));
         }
     }
+    return true;
 }
 
 } // namespace
 
-void set_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, bool enabled) {
-    if (state.enabled == enabled) {
-        return;
+bool set_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, bool enabled) {
+    if (state.enabled == enabled && (enabled || (!state.names_applied && state.assigned.empty()))) {
+        return true;
     }
     state.enabled = enabled;
     state.last_tick_ms = 0;
     if (enabled) {
         state.names_applied = false;
-        return;
+        return true;
     }
     const auto root = root_address(module_base);
     if (!root) {
-        return;
+        return false;
     }
-    for (const auto address : state.assigned) {
-        clear_lord(address, root);
+    std::size_t failed_count = 0;
+
+    for (const std::uintptr_t address : state.assigned) {
+        if (!clear_lord(address, root)) {
+            state.assigned[failed_count++] = address;
+        }
     }
-    state.assigned.clear();
+    state.assigned.resize(failed_count);
     constexpr std::array<std::uint8_t, 15> ZEROS{};
+    bool restored_names = true;
+
     for (std::uintptr_t i = 0; i < 5; ++i) {
-        write_bytes(root + 0x4ec6d8 + i * 24 + 9, std::as_bytes(std::span(ZEROS)));
+        const bool written = write_bytes(root + 0x4ec6d8 + i * 24 + 9, std::as_bytes(std::span(ZEROS)));
+
+        restored_names = written && restored_names;
     }
     constexpr std::array<std::uint8_t, 48> NAMES_ZERO{};
-    write_bytes(root + 0x197a774, std::as_bytes(std::span(NAMES_ZERO)));
-    state.names_applied = false;
+
+    restored_names = write_bytes(root + 0x197a774, std::as_bytes(std::span(NAMES_ZERO))) && restored_names;
+    state.names_applied = !restored_names;
+    return restored_names && failed_count == 0;
 }
 
 void update_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, std::uint64_t now_ms) {

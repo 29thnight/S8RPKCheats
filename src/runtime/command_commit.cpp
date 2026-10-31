@@ -20,6 +20,10 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                             services::UiBridge* ui) {
     const platform::windows::RealClockScope real_clock;
 
+    if (runtime.stopping) {
+        return 0;
+    }
+
     const auto deadline = std::chrono::steady_clock::now() + time_budget;
     std::size_t processed = 0;
     std::array<bool, 5103> ronin_changes{};
@@ -40,6 +44,10 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
             result = std::visit([&](const auto& command) -> domain::Result<void> {
                 using T = std::decay_t<decltype(command)>;
                 if constexpr (std::is_same_v<T, domain::SetFeature>) {
+                    if (request_native_feature(runtime, command.feature, command.enabled)) {
+                        return {};
+                    }
+
                     switch (command.feature) {
                     case domain::FeatureId::InfiniteAp:
                         runtime.recurring_features.infinite_action_points = command.enabled;
@@ -76,6 +84,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     case domain::FeatureId::ShowWidgetNotif:
                     case domain::FeatureId::ShowWidgetHero:
                     case domain::FeatureId::ShowWidgetAllOfficers:
+                    case domain::FeatureId::FileLog:
                         break;
                     case domain::FeatureId::AutoAffinityGrowth:
                         runtime.auto_affinity = {};
@@ -854,6 +863,10 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
                                std::chrono::steady_clock::duration time_budget) {
     const platform::windows::RealClockScope real_clock;
 
+    if (runtime.stopping) {
+        return 0;
+    }
+
     if (runtime.pending_trait_change) {
         auto& pending = *runtime.pending_trait_change;
         const auto player = pending.protagonist ? game::read_player(pending.game_base) : 0;
@@ -990,6 +1003,26 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         runtime.ship_weaponization.last_active_unit = 0;
     }
     service_ai_jobs(runtime, ui, game_module);
+    reconcile_native_features(runtime, game_module, GetTickCount64());
+
+    if (runtime.native_features.notice) {
+
+        const NativeFeatureNotice notice = *runtime.native_features.notice;
+        const domain::NativeFeatureStatus& status = notice.status;
+        std::string message = domain::native_feature_label(notice.group);
+
+        if (status.phase == domain::NativeFeaturePhase::Applied) {
+            message += ": 적용했습니다.";
+        } else if (status.phase == domain::NativeFeaturePhase::Disabled) {
+            message += ": 해제했습니다.";
+        } else {
+            message += ": ";
+            message += domain::native_feature_error_text(status.error);
+        }
+
+        ui.publish_notice(std::move(message));
+        runtime.native_features.notice.reset();
+    }
     if (ui.ui_rendered.exchange(false)) {
         game::update_zero_infamy(runtime.zero_infamy, runtime.cached_game_base, GetTickCount64(),
                                  runtime.features.get(domain::FeatureId::ZeroInfamy));
@@ -1029,6 +1062,35 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
     }
     ui.publish({runtime.epoch, config_snapshot(runtime)});
     return commit_commands(runtime, ui.commands, game_module, max_commands, time_budget, &ui);
+}
+
+void publish_stopped_state(Runtime& runtime, services::UiBridge& ui) {
+
+    if (!runtime.stopped || runtime.stopped_state_published) {
+        return;
+    }
+
+    if (runtime.skill_counts) {
+        ui.publish_skill_counts_view(*runtime.skill_counts);
+        ui.request_skill_counts_save(*runtime.skill_counts);
+    }
+
+    if (runtime.config_loaded) {
+
+        const domain::ConfigSnapshot snapshot = config_snapshot(runtime);
+
+        ui.publish({runtime.epoch, snapshot});
+        ui.request_config_save(snapshot);
+    }
+
+    if (runtime.special_assignment.summary.phase == domain::SpecialAssignmentPhase::Cancelled &&
+        runtime.special_assignment.summary.assigned != 0) {
+        ui.publish_notice("종료 전 특수능력 부여 결과 " +
+            std::to_string(runtime.special_assignment.summary.assigned_officers) + "명 / " +
+            std::to_string(runtime.special_assignment.summary.assigned) + "건을 저장합니다.");
+    }
+
+    runtime.stopped_state_published = true;
 }
 
 } // namespace s8::runtime

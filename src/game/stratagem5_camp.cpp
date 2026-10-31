@@ -31,10 +31,31 @@ bool attach_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch,
     return true;
 }
 
-void restore_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch) {
-    if (state.slot && state.slot->epoch == epoch)
-        platform::windows::write_data_memory(state.slot->address, std::as_bytes(std::span(&state.slot->original, 1)));
+bool restore_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch) {
+
+    if (state.slot && state.slot->epoch == epoch) {
+
+        const Stratagem5CampSlot& slot = *state.slot;
+        std::uintptr_t current = 0;
+        const std::uintptr_t replacement = slot.metadata_table + 4 * 0x20;
+
+        if (!platform::windows::read_memory(slot.address, std::as_writable_bytes(std::span(&current, 1)))) {
+            return false;
+        }
+
+        if (current != slot.original && current != replacement) {
+            state.slot.reset();
+            return true;
+        }
+
+        if (current != slot.original && !platform::windows::write_data_memory(slot.address,
+                std::as_bytes(std::span(&slot.original, 1)))) {
+            return false;
+        }
+    }
+
     state.slot.reset();
+    return true;
 }
 
 void reset_stratagem5_camp(Stratagem5Camp& state) {

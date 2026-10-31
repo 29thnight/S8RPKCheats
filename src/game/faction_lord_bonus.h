@@ -12,7 +12,7 @@ struct FactionLordBonus {
     bool names_applied = false;
 };
 
-void set_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, bool enabled);
+bool set_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, bool enabled);
 void update_faction_lord_bonus(FactionLordBonus& state, std::uintptr_t module_base, std::uint64_t now_ms);
 
 } // namespace s8::game

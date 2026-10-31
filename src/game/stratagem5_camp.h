@@ -19,7 +19,7 @@ struct Stratagem5Camp {
 
 bool attach_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch,
     std::uintptr_t owner, std::uintptr_t metadata_table, const Stratagem5Plan& plan);
-void restore_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch);
+bool restore_stratagem5_camp(Stratagem5Camp& state, domain::GameEpoch epoch);
 void reset_stratagem5_camp(Stratagem5Camp& state);
 
 } // namespace s8::game

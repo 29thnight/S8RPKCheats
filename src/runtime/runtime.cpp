@@ -14,6 +14,10 @@
 namespace s8::runtime {
 
 domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
+    if (runtime.stop_snapshot) {
+        return *runtime.stop_snapshot;
+    }
+
     return domain::ConfigSnapshot{
         runtime.features,
         runtime.short_battle_cooldown_enabled,
@@ -64,6 +68,7 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.special_assignment.summary,
         runtime.special_assignment_results,
         runtime.special_assignment_generation,
+        runtime.native_features.statuses,
     };
 }
 
@@ -132,6 +137,7 @@ void change_game_session(Runtime& runtime) {
     runtime.stratagem5_attack_owner = 0;
     runtime.stratagem5_defense_owner = 0;
     ++runtime.epoch.value;
+    change_native_feature_epoch(runtime);
 }
 
 void request_stratagem5(Runtime& runtime, bool enabled) {
@@ -642,6 +648,10 @@ void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,
 void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms) {
     const platform::windows::RealClockScope real_clock;
 
+    if (runtime.stopping) {
+        return;
+    }
+
     game::update_start_setting(runtime.start_setting, game_module, now_ms,
         runtime.features.get(domain::FeatureId::StartSetting));
     if (runtime.config_loaded && !runtime.speed_clock_configured) {
@@ -687,6 +697,7 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
                           now_ms, runtime.tengi_settings);
     }
     game::update_officer_roster(runtime.officer_roster, game_module);
+    update_native_feature_candidates(runtime, game_module);
     if (runtime.config_loaded) {
         game::update_ai_officer_growth(runtime.ai_growth, game_module,
             runtime.loop_game_base_ready ? game_base : 0, runtime.loop_player_ready ? player : 0,

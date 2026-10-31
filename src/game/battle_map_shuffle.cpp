@@ -33,14 +33,19 @@ std::uintptr_t resolve_base(BattleMapShuffle& state, std::uintptr_t module_base,
 
 } // namespace
 
-void disable_battle_map_shuffle(BattleMapShuffle& state) {
+bool disable_battle_map_shuffle(BattleMapShuffle& state) {
     if (!state.active) {
-        return;
+        return true;
     }
+    bool restored = true;
+
     for (const auto& record : state.records) {
-        platform::windows::write_data_memory(record.address, std::as_bytes(std::span(&record.original, 1)));
+        const bool written = platform::windows::write_data_memory(record.address, std::as_bytes(std::span(&record.original, 1)));
+
+        restored = written && restored;
     }
-    state.active = false;
+    state.active = !restored;
+    return restored;
 }
 
 void update_battle_map_shuffle(BattleMapShuffle& state, std::uintptr_t module_base,
@@ -50,11 +55,15 @@ void update_battle_map_shuffle(BattleMapShuffle& state, std::uintptr_t module_ba
         return;
     }
     if (!council && state.last_council) {
-        disable_battle_map_shuffle(state);
+        if (!disable_battle_map_shuffle(state)) {
+            return;
+        }
         state.applied_this_council = false;
     }
     if (council && !state.applied_this_council) {
-        disable_battle_map_shuffle(state);
+        if (!disable_battle_map_shuffle(state)) {
+            return;
+        }
         state.cached_base = 0;
         const auto base = resolve_base(state, module_base, now_ms);
         if (base) {

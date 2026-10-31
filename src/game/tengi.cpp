@@ -386,6 +386,17 @@ int stop_tengi(TengiState& state) {
         update_durations(state, domain::TengiSettings{});
     }
 
+    if (status != 0) {
+        return status;
+    }
+
+    for (const TengiDurationOverride& duration : state.durations) {
+
+        if (duration.active) {
+            return ERROR_WRITE_FAULT;
+        }
+    }
+
     state = {};
     return status;
 }

@@ -20,6 +20,8 @@ bool refresh_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch, std
 bool apply_stratagem5_metadata(Stratagem5Binding& binding, domain::GameEpoch epoch, std::uintptr_t metadata_table);
 Stratagem5SettingsResult set_stratagem5_settings(Stratagem5Binding& binding, domain::Stratagem5Settings settings);
 bool disable_stratagem5(Stratagem5Binding& binding);
+// Shutdown retries revalidate the still-owned table before reusing its backup.
+bool stop_stratagem5(Stratagem5Binding& binding, domain::GameEpoch epoch);
 void end_stratagem5_battle(Stratagem5Binding& binding);
 void change_stratagem5_session(Stratagem5Binding& binding);
 void update_stratagem5_healing(Stratagem5Binding& binding, int unit_count, std::uintptr_t unit_list);

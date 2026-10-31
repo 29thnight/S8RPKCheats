@@ -75,5 +75,6 @@
     <ClCompile Include="ai_officer_growth.cpp" />
     <ClCompile Include="special_ability_assignment.cpp" />
   </ItemGroup>
+  <ItemGroup><ClInclude Include="native_features.h" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

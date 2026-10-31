@@ -21,7 +21,7 @@ struct BattleMapShuffle {
     bool applied_this_council = false;
 };
 
-void disable_battle_map_shuffle(BattleMapShuffle& state);
+bool disable_battle_map_shuffle(BattleMapShuffle& state);
 void update_battle_map_shuffle(BattleMapShuffle& state, std::uintptr_t module_base,
                                std::uint64_t now_ms, bool enabled, bool council, std::mt19937& random);
 

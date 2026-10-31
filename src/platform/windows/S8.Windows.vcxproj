@@ -34,6 +34,8 @@
   <ItemGroup>
     <ClCompile Include="speed_clock.cpp" />
     <ClInclude Include="speed_clock.h" />
+    <ClCompile Include="code_patch.cpp" />
+    <ClInclude Include="code_patch.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

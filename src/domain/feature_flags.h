@@ -70,6 +70,18 @@ enum class FeatureId {
     HealLv1Self,
     HealLv2Self,
     HealLv3Self,
+    AiWarImprove,
+    PrisonerCaptureManagement,
+    GovernorPrisonerDisposal,
+    GovernorPrisonerConsumePrivilege,
+    MaxAttackStratagemGauge,
+    MaxDefenseStratagemGauge,
+    IsolatedTerritoryMovement,
+    ReinforcementDefenderPlacement,
+    CouncilContinueAfterMove,
+    MissionCpuHeroExclusion,
+    CouncilExecuteFreeOfficers,
+    AffinityDisplay,
     Count,
 };
 

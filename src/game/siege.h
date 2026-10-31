@@ -12,7 +12,7 @@ struct Siege {
     std::uint64_t last_attempt_ms = 0;
 };
 
-void disable_siege(Siege& state, std::uintptr_t module_base);
+bool disable_siege(Siege& state, std::uintptr_t module_base);
 void update_siege(Siege& state, std::uintptr_t module_base, const BattleObservation& observation,
                   std::uint64_t now_ms, bool wide, int heal_rate);
 

@@ -18,5 +18,6 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
 std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
                                std::uintptr_t game_module, std::size_t max_commands,
                                std::chrono::steady_clock::duration time_budget);
+void publish_stopped_state(Runtime& runtime, services::UiBridge& ui);
 
 } // namespace s8::runtime

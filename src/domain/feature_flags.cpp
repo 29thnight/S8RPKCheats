@@ -66,7 +66,21 @@ constexpr std::array FEATURE_KEYS{
     std::string_view{"\"bHealLv1_Self\""},
     std::string_view{"\"bHealLv2_Self\""},
     std::string_view{"\"bHealLv3_Self\""},
+    std::string_view{"\"bAIWarImprove\""},
+    std::string_view{"\"bPrisonerCaptureManagement\""},
+    std::string_view{"\"bGovernorPrisonerDisposal\""},
+    std::string_view{"\"bGovernorPrisonerConsumePrivilege\""},
+    std::string_view{"\"bMaxAttackStratagemGauge\""},
+    std::string_view{"\"bMaxDefenseStratagemGauge\""},
+    std::string_view{"\"bIsolatedTerritoryMovement\""},
+    std::string_view{"\"bReinforcementDefenderPlacement\""},
+    std::string_view{"\"bCouncilContinueAfterMove\""},
+    std::string_view{"\"bMissionCpuHeroExclusion\""},
+    std::string_view{"\"bCouncilExecuteFreeOfficers\""},
+    std::string_view{"\"bAffinityDisplay\""},
 };
+
+static_assert(FEATURE_KEYS.size() == static_cast<std::size_t>(FeatureId::Count));
 
 } // namespace
 
@@ -75,6 +89,8 @@ FeatureFlags::FeatureFlags() {
     set(FeatureId::HealLv1Self, true);
     set(FeatureId::HealLv2Self, true);
     set(FeatureId::HealLv3Self, true);
+    set(FeatureId::PrisonerCaptureManagement, true);
+    set(FeatureId::IsolatedTerritoryMovement, true);
 }
 
 bool FeatureFlags::get(FeatureId id) const {
