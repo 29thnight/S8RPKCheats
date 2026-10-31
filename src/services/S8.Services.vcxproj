@@ -22,6 +22,8 @@
     <ClInclude Include="service_wake.h" />
     <ClInclude Include="trait_runtime_config.h" />
     <ClCompile Include="trait_runtime_config.cpp" />
+    <ClInclude Include="file_log.h" />
+    <ClCompile Include="file_log.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

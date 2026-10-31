@@ -22,6 +22,8 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                         std::optional<std::string> skill_baseline, std::stop_token stop) {
     const platform::windows::RealClockScope real_clock;
     ConfigSaveService service(bridge, path);
+    FileLogWriter file_log(path.parent_path() / L"S8RPK_cheat.log");
+    bool log_failure_reported = false;
     const auto skill_path = path.parent_path() / L"S8RPK_skill_counts.json";
     const auto names_path = path.parent_path() / L"S8RPK_cheat_char.json";
     std::optional<domain::SkillCounts> pending_counts;
@@ -195,6 +197,13 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         service.poll();
         poll_skills(false);
         poll_names();
+        file_log.poll(bridge.file_log);
+        if (bridge.file_log.failed() && !log_failure_reported) {
+            bridge.publish_notice("파일 로그 저장에 실패했습니다. 경로를 확인한 뒤 옵션을 껐다 켜면 재시도합니다.");
+            log_failure_reported = true;
+        } else if (!bridge.file_log.failed()) {
+            log_failure_reported = false;
+        }
         std::chrono::steady_clock::time_point deadline = next_trait_check;
 
         if (!config_dispatched) {
@@ -206,6 +215,9 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
             if (debounce > now) {
                 deadline = std::min(deadline, debounce);
             }
+        }
+        if (bridge.file_log.pending()) {
+            deadline = now;
         }
         bridge.config_wake.wait_until(observed, deadline, stop);
     }
@@ -220,6 +232,8 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         }
     } while (active_counts || (pending_counts && !skill_save_failed) || name_active || pending_name);
     const bool config_saved = service.close_and_wait();
+
+    file_log.close(bridge.file_log);
     return config_saved && !pending_counts && !name_save_failed;
 }
 

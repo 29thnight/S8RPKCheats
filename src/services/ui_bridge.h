@@ -10,6 +10,7 @@
 #include "config_save.h"
 #include "config_json.h"
 #include "service_wake.h"
+#include "file_log.h"
 
 #include <mutex>
 #include <array>
@@ -72,6 +73,7 @@ class UiBridge {
 public:
     CommandMailbox commands;
     ServiceWake config_wake;
+    FileLogChannel file_log{config_wake};
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
     std::atomic<int> officer_roster_scan_cursor{-1};

@@ -183,6 +183,7 @@ std::optional<domain::SkillCounts> UiBridge::take_skill_counts_save() {
 }
 
 void UiBridge::publish_notice(std::string message) {
+    file_log.push(message);
     PendingNotice incoming{std::move(message), 1};
 
     {
@@ -246,8 +247,14 @@ std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> UiBridge::take
 }
 
 void UiBridge::publish(UiSnapshot snapshot) {
-    std::lock_guard lock(mutex);
-    current = std::move(snapshot);
+    file_log.set_enabled(snapshot.config.features.get(domain::FeatureId::FileLog));
+    std::optional<UiSnapshot> incoming{std::move(snapshot)};
+
+    {
+        std::lock_guard lock(mutex);
+
+        current.swap(incoming);
+    }
 }
 
 std::optional<UiSnapshot> UiBridge::snapshot() {
