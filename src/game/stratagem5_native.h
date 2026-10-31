@@ -8,6 +8,8 @@
 
 namespace s8::game {
 
+inline constexpr std::size_t STRATAGEM5_NATIVE_QUARANTINE_LIMIT = 64;
+
 enum class Stratagem5NativeIssue {
     None,
     UnsupportedBuild,
@@ -17,6 +19,7 @@ enum class Stratagem5NativeIssue {
     WaitingModel,
     InvalidLayout,
     AllocationFailed,
+    AllocationBudgetExhausted,
     RegistryFailed,
     MemoryFailed
 };
@@ -27,6 +30,9 @@ struct Stratagem5NativeView {
     bool armed = false;
     bool registered = false;
     std::uint64_t layout_generation = 0;
+    std::uint64_t allocation_attempts = 0;
+    std::size_t quarantined_buttons = 0;
+    std::size_t quarantine_limit = STRATAGEM5_NATIVE_QUARANTINE_LIMIT;
     Stratagem5NativeIssue issue = Stratagem5NativeIssue::None;
     platform::windows::CodePatchResult patch_result = platform::windows::CodePatchResult::AlreadyApplied;
 };
@@ -67,6 +73,9 @@ bool quiesce_stratagem5_native(Stratagem5Native& state);
 void close_stratagem5_native_admission() noexcept;
 // Close admission first, then restore entry patches. Busy/failure retains all
 // state for retry. Published code is never freed while native callers may return.
+// Unconfirmed game allocations remain in a bounded session ledger. Only a
+// proven ID 7 ownership transfer permits retiring that ledger entry; no game
+// destructor/deallocator is inferred from the allocator's construction ABI.
 bool stop_stratagem5_native(Stratagem5Native& state);
 
 } // namespace s8::game

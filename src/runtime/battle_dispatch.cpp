@@ -192,6 +192,8 @@ std::string_view take_battle_dispatch_notice(BattleDispatch& state, std::uint64_
         return "책략 5칸: 현재 네이티브 UI 레이아웃/세대가 일치하지 않아 추가 버튼 연결을 보류했습니다.";
     case game::Stratagem5NativeIssue::AllocationFailed:
         return "책략 5칸: 게임 소유 버튼 메모리를 준비하지 못했습니다. 같은 UI 세대에서는 중복 할당하지 않습니다.";
+    case game::Stratagem5NativeIssue::AllocationBudgetExhausted:
+        return "책략 5칸: 복구 상태를 확인하지 못한 버튼 보관 한도에 도달했습니다. 새 버튼 할당을 보류하고 기존 UI를 유지합니다.";
     case game::Stratagem5NativeIssue::RegistryFailed:
         return "책략 5칸: 추가 버튼의 ID 7 등록 결과를 검증하지 못했습니다.";
     case game::Stratagem5NativeIssue::MemoryFailed:

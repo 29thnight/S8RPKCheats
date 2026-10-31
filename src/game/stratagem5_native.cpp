@@ -28,6 +28,41 @@ using SetVisible = void(__fastcall*)(std::uintptr_t, bool);
 using SetU32 = void(__fastcall*)(std::uintptr_t, std::uint32_t);
 using SetU64 = void(__fastcall*)(std::uintptr_t, std::uint64_t);
 
+constexpr std::size_t BUTTON_LEDGER_CAPACITY = STRATAGEM5_NATIVE_QUARANTINE_LIMIT;
+constexpr std::size_t NO_BUTTON_RECORD = BUTTON_LEDGER_CAPACITY;
+constexpr std::size_t BUTTON_SIZE = 0x1d8;
+constexpr std::uint32_t UNREGISTERED_BUTTON = 0xffffffffu;
+constexpr std::uint32_t READY_BUTTON = 1;
+
+enum class ButtonStage : std::uint8_t {
+    Empty,
+    Allocating,
+    Allocated,
+    Constructing,
+    Constructed,
+    Initializing,
+    Initialized,
+    Prepared,
+    Registering,
+    Registered
+};
+
+struct ButtonRecord {
+    // Owner-thread only. Volatile keeps stage/handle stores observable after
+    // Windows SEH from a foreign call; it is not a synchronization primitive.
+    volatile std::uintptr_t allocator = 0;
+    volatile std::uintptr_t raw = 0;
+    volatile std::uintptr_t button = 0;
+    std::uintptr_t layout = 0;
+    std::uintptr_t original_vtable = 0;
+    std::array<std::uintptr_t, 4> original_buttons{};
+    std::uint64_t epoch = 0;
+    std::uint64_t generation = 0;
+    volatile ButtonStage stage = ButtonStage::Empty;
+    bool retired = false;
+    bool quarantined = false;
+};
+
 struct LayoutGeneration {
     std::uintptr_t layout = 0;
     std::uintptr_t descriptors = 0;
@@ -37,10 +72,12 @@ struct LayoutGeneration {
     std::array<std::uint32_t, 5> descriptor_prefix{};
     std::array<std::uintptr_t, 4> original_buttons{};
     std::uintptr_t button = 0;
+    std::size_t button_record = NO_BUTTON_RECORD;
     bool helper_valid = false;
     bool attempted = false;
     bool initialized = false;
     bool registered = false;
+    bool registration_hidden = false;
 };
 
 struct NativeState {
@@ -49,6 +86,10 @@ struct NativeState {
     Stratagem5NativeCallbacks callbacks;
     Stratagem5NativeView view;
     LayoutGeneration layout;
+    // Value-owned bookkeeping, not a C++ owner of foreign game allocations.
+    // Uncertain entries never recycle; confirmed registry transfers recycle
+    // only after the corresponding native generation retires.
+    std::array<ButtonRecord, BUTTON_LEDGER_CAPACITY> buttons{};
     std::uintptr_t dialog = 0;
     std::uint64_t epoch = 0;
     bool metadata = false;
@@ -86,6 +127,59 @@ bool write_value(std::uintptr_t address, const T& value) {
     return platform::windows::write_memory(address, std::as_bytes(std::span(&value, 1)));
 }
 
+ButtonRecord* current_button_record() {
+    if (native.layout.button_record >= native.buttons.size()) {
+        return nullptr;
+    }
+    ButtonRecord& record = native.buttons[native.layout.button_record];
+
+    if (record.retired || record.stage == ButtonStage::Empty ||
+        record.layout != native.layout.layout || record.epoch != native.epoch ||
+        record.generation != native.view.layout_generation) {
+        return nullptr;
+    }
+    return &record;
+}
+
+void set_quarantined(ButtonRecord& record, bool quarantined) {
+    if (record.quarantined == quarantined) {
+        return;
+    }
+    record.quarantined = quarantined;
+    if (quarantined) {
+        ++native.view.quarantined_buttons;
+    } else {
+        --native.view.quarantined_buttons;
+    }
+}
+
+void release_button_record(ButtonRecord& record) {
+    set_quarantined(record, false);
+    record = {};
+}
+
+ButtonRecord* reserve_button_record(std::uintptr_t allocator, std::uintptr_t original_vtable) {
+    for (std::size_t index = 0; index < native.buttons.size(); ++index) {
+        ButtonRecord& record = native.buttons[index];
+
+        if (record.stage != ButtonStage::Empty) {
+            continue;
+        }
+        record.allocator = allocator;
+        record.layout = native.layout.layout;
+        record.original_vtable = original_vtable;
+        record.epoch = native.epoch;
+        record.generation = native.view.layout_generation;
+        record.stage = ButtonStage::Allocating;
+        set_quarantined(record, true);
+        native.layout.button_record = index;
+        ++native.view.allocation_attempts;
+        return &record;
+    }
+    native.view.issue = Stratagem5NativeIssue::AllocationBudgetExhausted;
+    return nullptr;
+}
+
 void unpublish_button() {
     native.active_layout.store(0, std::memory_order_release);
     native.active_button.store(0, std::memory_order_release);
@@ -95,6 +189,19 @@ void retire_layout() {
     // A new native initialization/epoch ends the old object's lifetime. Do not
     // call a virtual function or restore bytes through the previous addresses.
     unpublish_button();
+
+    ButtonRecord* const record = current_button_record();
+
+    if (record != nullptr) {
+        if (record->stage == ButtonStage::Registered) {
+            // Registry ownership was positively confirmed. Recycle metadata,
+            // never the game-owned button or its allocator's storage.
+            release_button_record(*record);
+        } else {
+            record->retired = true;
+            set_quarantined(*record, true);
+        }
+    }
     native.layout = {};
     native.dialog = 0;
     native.view.registered = false;
@@ -267,23 +374,67 @@ bool valid_helper(std::uintptr_t layout) {
         read_value(descriptors + 7 * 0x60, prefix) && prefix == generation.descriptor_prefix;
 }
 
-bool valid_registry(std::uintptr_t layout) {
+enum class RegistrationState { Unavailable, Unregistered, Owned, Foreign };
+
+RegistrationState inspect_registration(std::uintptr_t layout, const ButtonRecord& record) {
     const LayoutGeneration& generation = native.layout;
     std::array<std::uintptr_t, 4> buttons{};
-    std::uintptr_t owner = 0;
+    std::array<std::uint32_t, 5> prefix{};
+    std::uintptr_t descriptors = 0, helpers = 0, owner = 0, helper = 0, vtable = 0;
     std::uint32_t count = 0, id = 0, button_state = 0;
 
-    if (!layout || !generation.registered || generation.layout != layout || !generation.button ||
-        !read_value(layout + 0x1e0, buttons) || buttons != generation.original_buttons ||
+    if (!layout || generation.layout != layout || record.layout != layout || record.retired ||
+        record.epoch != native.epoch || record.generation != native.view.layout_generation || !record.button ||
+        !read_value(layout + 0x140, descriptors) || descriptors != generation.descriptors ||
+        !read_value(layout + 0x148, helpers) || helpers != generation.helpers ||
         !read_value(layout + 0x150, count) || count != 8 ||
         !read_value(layout + 0x158, owner) || owner != layout ||
-        !read_value(generation.button + 0x88, id) || id != 7 ||
-        !read_value(generation.button + 0x8c, button_state) || button_state != 1) {
-        return false;
+        !read_value(descriptors + 7 * 0x60, prefix) || prefix != generation.descriptor_prefix ||
+        !read_value(layout + 0x1e0, buttons) || buttons != record.original_buttons ||
+        !read_value(helpers + 7 * sizeof(std::uintptr_t), helper)) {
+        return RegistrationState::Unavailable;
     }
     const LookupLayout lookup = reinterpret_cast<LookupLayout>(native.code.module + 0x01d15440);
+    const std::uintptr_t maker = layout + 0x140;
+    const std::uintptr_t registered = lookup(maker, 7);
 
-    return lookup(layout + 0x140, 7) == generation.button;
+    if (registered && registered != record.button) {
+        return RegistrationState::Foreign;
+    }
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        if (!buttons[index] || lookup(maker, static_cast<int>(index) + 2) != buttons[index]) {
+            return RegistrationState::Unavailable;
+        }
+    }
+    if (!read_value(record.button, vtable) || vtable != record.original_vtable ||
+        !read_value(record.button + 0x88, id) ||
+        !read_value(record.button + 0x8c, button_state) || button_state != READY_BUTTON) {
+        return RegistrationState::Unavailable;
+    }
+    if (registered == record.button && !helper && id == 7) {
+        return RegistrationState::Owned;
+    }
+    if (!registered && helper == generation.helper && id == UNREGISTERED_BUTTON && valid_helper(layout)) {
+        return RegistrationState::Unregistered;
+    }
+    return RegistrationState::Unavailable;
+}
+
+void adopt_registered_button(ButtonRecord& record) {
+    record.stage = ButtonStage::Registered;
+    set_quarantined(record, false);
+    native.layout.button = record.button;
+    native.layout.original_buttons = record.original_buttons;
+    native.layout.initialized = true;
+    native.layout.registered = true;
+    native.view.registered = true;
+}
+
+bool valid_registry(std::uintptr_t layout) {
+    const ButtonRecord* const record = current_button_record();
+
+    return native.layout.registered && record != nullptr && record->stage == ButtonStage::Registered &&
+        inspect_registration(layout, *record) == RegistrationState::Owned;
 }
 
 bool position_buttons(std::uintptr_t layout, std::uint32_t total) {
@@ -341,24 +492,41 @@ bool create_button(std::uintptr_t layout) {
         std::uint32_t reserved;
         std::uintptr_t context;
     } tag{0x35, 0, 0};
-    const std::uintptr_t raw = reinterpret_cast<Allocate>(allocate)(allocator, 0x1d8, &tag);
+    ButtonRecord* const record = reserve_button_record(allocator, original_vtable);
 
-    if (!raw || !platform::windows::is_committed_memory(raw, 0x1d8)) {
+    if (record == nullptr) {
+        return false;
+    }
+    // The record precedes every foreign call and owns only its bookkeeping.
+    // If a call raises SEH, the completed stage and returned addresses survive
+    // in static storage; no guessed destructor/deallocator is ever invoked.
+    record->raw = reinterpret_cast<Allocate>(allocate)(allocator, BUTTON_SIZE, &tag);
+    record->stage = ButtonStage::Allocated;
+    if (!record->raw) {
+        release_button_record(*record);
+        generation.button_record = NO_BUTTON_RECORD;
         native.view.issue = Stratagem5NativeIssue::AllocationFailed;
         return false;
     }
-    const std::uintptr_t button = reinterpret_cast<ConstructButton>(module + 0x01e7fec0)(raw);
-
-    if (!button || !platform::windows::is_committed_memory(button, 0x1d8)) {
+    if (!platform::windows::is_committed_memory(record->raw, BUTTON_SIZE)) {
         native.view.issue = Stratagem5NativeIssue::AllocationFailed;
         return false;
     }
-    // A failed generation never allocates again. The game owns its allocator
-    // and successful registry objects; no foreign delete/destructor is assumed.
-    generation.button = button;
+    record->stage = ButtonStage::Constructing;
+    record->button = reinterpret_cast<ConstructButton>(module + 0x01e7fec0)(record->raw);
+    record->stage = ButtonStage::Constructed;
+    if (!record->button || !platform::windows::is_committed_memory(record->button, BUTTON_SIZE)) {
+        native.view.issue = Stratagem5NativeIssue::AllocationFailed;
+        return false;
+    }
+    const std::uintptr_t button = record->button;
     const int x = stratagem5_position(first + step * 3 / 2, step, 5, 4);
 
+    generation.button = button;
+    record->stage = ButtonStage::Initializing;
     reinterpret_cast<InitializeButton>(module + 0x01e7ff40)(button, x, y, layout);
+    record->stage = ButtonStage::Initialized;
+
     constexpr std::array<std::uint8_t, 2> INITIAL_FLAGS{0, 1};
     std::int32_t state = 0;
 
@@ -381,69 +549,81 @@ bool create_button(std::uintptr_t layout) {
             return false;
         }
     }
-    constexpr std::uint32_t UNREGISTERED = 0xffffffffu;
-    constexpr std::uint32_t READY = 1;
     std::uintptr_t vtable = 0;
 
-    if (!write_value(button + 0x88, UNREGISTERED) || !write_value(button + 0x8c, READY)) {
+    if (!write_value(button + 0x88, UNREGISTERED_BUTTON) || !write_value(button + 0x8c, READY_BUTTON)) {
         return false;
     }
     reinterpret_cast<SetTrickId>(module + 0x01e7fd90)(button, 5);
     generation.initialized = read_value(button, vtable) && vtable == original_vtable && set_visible(button, false);
+    if (generation.initialized) {
+        record->stage = ButtonStage::Prepared;
+    }
     return generation.initialized;
 }
 
 bool register_button(std::uintptr_t layout) {
     LayoutGeneration& generation = native.layout;
+    ButtonRecord* const record = current_button_record();
 
-    if (generation.registered) {
-        return valid_registry(layout);
-    }
-    if (!generation.button || !generation.initialized || !valid_helper(layout)) {
+    if (record == nullptr || !generation.button || !generation.initialized) {
         return false;
     }
-    const LookupLayout lookup = reinterpret_cast<LookupLayout>(native.code.module + 0x01d15440);
-    const RegisterLayout register_layout = reinterpret_cast<RegisterLayout>(native.code.module + 0x01d16aa0);
-    const std::uintptr_t maker = layout + 0x140;
-    std::array<std::uintptr_t, 4> originals{};
-
-    if (!read_value(layout + 0x1e0, originals) || lookup(maker, 7)) {
-        return false;
-    }
-    for (std::size_t index = 0; index < originals.size(); ++index) {
-        if (!originals[index] || lookup(maker, static_cast<int>(index) + 2) != originals[index]) {
+    if (record->stage == ButtonStage::Prepared) {
+        if (!valid_helper(layout)) {
             return false;
         }
-    }
-    register_layout(maker, 7, generation.button, 0x14, 1);
-    const bool hidden = set_visible(generation.button, false);
-    std::uintptr_t helper = 1;
-    std::uint32_t id = 0, state = 0;
+        const LookupLayout lookup = reinterpret_cast<LookupLayout>(native.code.module + 0x01d15440);
+        const RegisterLayout register_layout = reinterpret_cast<RegisterLayout>(native.code.module + 0x01d16aa0);
+        const std::uintptr_t maker = layout + 0x140;
+        std::array<std::uintptr_t, 4> originals{};
 
-    if (!hidden || !read_value(generation.helpers + 7 * sizeof(std::uintptr_t), helper) || helper ||
-        lookup(maker, 7) != generation.button || !read_value(generation.button + 0x88, id) || id != 7 ||
-        !read_value(generation.button + 0x8c, state) || state != 1) {
+        if (!read_value(layout + 0x1e0, originals) || lookup(maker, 7)) {
+            return false;
+        }
+        for (std::size_t index = 0; index < originals.size(); ++index) {
+            if (!originals[index] || lookup(maker, static_cast<int>(index) + 2) != originals[index]) {
+                return false;
+            }
+        }
+        record->original_buttons = originals;
+        generation.original_buttons = originals;
+        record->stage = ButtonStage::Registering;
+        // Registration may consume helper7 before returning or raising SEH.
+        // Never repeat this call. Later events only inspect/adopt its result.
+        register_layout(maker, 7, generation.button, 0x14, 1);
+    }
+    if ((record->stage != ButtonStage::Registering && record->stage != ButtonStage::Registered) ||
+        inspect_registration(layout, *record) != RegistrationState::Owned) {
         native.view.issue = Stratagem5NativeIssue::RegistryFailed;
         return false;
     }
-    generation.registered = true;
-    generation.original_buttons = originals;
-    native.view.registered = true;
+    adopt_registered_button(*record);
+    if (!set_visible(record->button, false)) {
+        native.view.issue = Stratagem5NativeIssue::MemoryFailed;
+        return false;
+    }
+    generation.registration_hidden = true;
     // Callback registration is a one-shot native event, possibly before the
     // model is readable. Publish the hidden fifth button for that binding now.
     native.active_button.store(generation.button, std::memory_order_release);
     native.active_layout.store(layout, std::memory_order_release);
-    return set_visible(generation.button, false);
+    return true;
 }
 
 bool prepare_layout(std::uintptr_t layout) {
     if (!native.view.armed || !native.metadata || !valid_session()) {
         return false;
     }
-    if (valid_registry(layout)) {
+    if (valid_registry(layout) && native.layout.registration_hidden) {
         return true;
     }
-    if (!valid_helper(layout) || !create_button(layout) || !register_button(layout)) {
+    const ButtonRecord* const record = current_button_record();
+    const bool registration_started = record != nullptr &&
+        (record->stage == ButtonStage::Registering || record->stage == ButtonStage::Registered);
+    const bool prepared = registration_started || (valid_helper(layout) && create_button(layout));
+
+    if (!prepared || !register_button(layout)) {
         if (native.view.issue == Stratagem5NativeIssue::None) {
             native.view.issue = Stratagem5NativeIssue::InvalidLayout;
         }
@@ -529,14 +709,42 @@ bool invoke_dialog(std::uintptr_t dialog) noexcept {
 
 bool hide_owned_button() noexcept {
     __try {
-        if (!native.layout.registered) {
+        ButtonRecord* const record = current_button_record();
+
+        if (record == nullptr) {
+            return !native.layout.registered;
+        }
+        if (record->stage == ButtonStage::Registering || record->stage == ButtonStage::Registered) {
+            const RegistrationState registration = inspect_registration(native.layout.layout, *record);
+
+            if (registration == RegistrationState::Owned) {
+                adopt_registered_button(*record);
+            } else if (registration != RegistrationState::Unregistered) {
+                // Neither an unreadable registry nor a foreign ID 7 proves
+                // our button dead. Retain its identity and retry without
+                // touching the foreign registration or repeating RegisterLayout.
+                native.view.issue = Stratagem5NativeIssue::RegistryFailed;
+                return false;
+            }
+            return set_visible(record->button, false);
+        }
+        if (record->stage == ButtonStage::Prepared) {
+            // Prepared buttons were hidden before any registration attempt.
             return true;
         }
-        if (!valid_registry(native.layout.layout)) {
-            retire_layout();
-            return true;
+        if (record->stage == ButtonStage::Initialized) {
+            std::uintptr_t vtable = 0;
+
+            if (!valid_helper(native.layout.layout) || !read_value(record->button, vtable) ||
+                vtable != record->original_vtable) {
+                native.view.issue = Stratagem5NativeIssue::MemoryFailed;
+                return false;
+            }
+            return set_visible(record->button, false);
         }
-        return set_visible(native.layout.button, false);
+        // Construction/Initialize did not complete. No method or destructor
+        // can safely be inferred for this object; quarantine its ledger entry.
+        return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         native.view.issue = Stratagem5NativeIssue::MemoryFailed;
         return false;
@@ -616,6 +824,11 @@ void __fastcall init_layouts(std::uintptr_t maker, const void* descriptors, int 
     ++native.view.layout_generation;
     if (!native.view.armed || !native.metadata || !valid_session() || !owner || maker != owner + 0x140 || count != 7 ||
         !platform::windows::is_committed_memory(owner, 0x2a8)) {
+        original(maker, descriptors, count, owner);
+        return;
+    }
+    if (native.view.quarantined_buttons >= BUTTON_LEDGER_CAPACITY) {
+        native.view.issue = Stratagem5NativeIssue::AllocationBudgetExhausted;
         original(maker, descriptors, count, owner);
         return;
     }
