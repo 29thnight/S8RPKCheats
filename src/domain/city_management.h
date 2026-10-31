@@ -12,6 +12,7 @@
 namespace s8::domain {
 
 inline constexpr std::size_t CITY_COUNT = 51;
+inline constexpr std::size_t CITY_FACTION_COUNT = 120;
 inline constexpr std::uint8_t NO_CITY = 0xff;
 inline constexpr std::uint16_t NO_CITY_OFFICER = 0xffff;
 inline constexpr std::array<std::string_view, CITY_COUNT> CITY_NAMES{
@@ -56,7 +57,10 @@ struct CitySupportRoutes {
     bool yearly_auto = false;
 };
 
-enum class CityAction : std::uint8_t { Refresh, Write, Maximize, ResetRevolt, Support, RunRoutes, Cancel };
+enum class CityAction : std::uint8_t {
+    Refresh, Write, Maximize, ResetRevolt, Support, RunRoutes, Cancel,
+    RefreshTechnology, WriteTechnology, MaximizeTechnology
+};
 
 struct CityRequest {
     CityAction action = CityAction::Refresh;
@@ -64,6 +68,7 @@ struct CityRequest {
     CityField field = CityField::Gold;
     std::uint32_t value = 0;
     std::uint16_t force_lord = NO_CITY_OFFICER;
+    std::uint8_t technology = 0;
     CitySupportRoute support;
 };
 
@@ -88,12 +93,22 @@ struct CityRow {
     bool frontline = false;
 };
 
+struct CityFactionTechnology {
+    std::uint16_t lord = NO_CITY_OFFICER;
+    std::array<std::uint8_t, 5> levels{};
+    bool valid = false;
+};
+
+inline constexpr std::array<std::uint8_t, 5> CITY_TECHNOLOGY_LIMITS{3, 3, 3, 5, 3};
+inline constexpr std::array<std::string_view, 5> CITY_TECHNOLOGY_NAMES{"보병", "기병", "궁병", "병기", "함선"};
+
 struct CitySnapshot {
     GameEpoch epoch{};
     std::uint64_t revision = 0;
     CitySettings settings;
     own::shared_owner<const CitySupportRoutes> routes;
     std::array<CityRow, CITY_COUNT> cities{};
+    std::array<CityFactionTechnology, CITY_FACTION_COUNT> factions{};
     CityWorkStatus status = CityWorkStatus::Ready;
     CityWorkStatus last_request = CityWorkStatus::Ready;
     std::uint16_t player_force_lord = NO_CITY_OFFICER;
@@ -107,10 +122,12 @@ struct CitySnapshot {
     bool available = false;
     bool busy = false;
     bool locks_commands = false;
+    bool technologies_loaded = false;
 };
 
 constexpr bool valid_city_settings(const CitySettings& value) noexcept {
-    return value.exchange_rate != 0;
+    return value.exchange_rate != 0 && value.exchange_rate <= 0x7fffffff &&
+        value.grain_limit <= 0x7fffffff && value.retained_grain <= 0x7fffffff;
 }
 
 constexpr bool valid_city_route(const CitySupportRoute& route) noexcept {

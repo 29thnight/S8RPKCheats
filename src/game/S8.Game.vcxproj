@@ -225,5 +225,9 @@
     <ClInclude Include="specialty_tools.h" />
     <ClCompile Include="specialty_tools.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="city_management.h" />
+    <ClCompile Include="city_management.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
