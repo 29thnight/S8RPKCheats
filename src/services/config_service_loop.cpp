@@ -3,13 +3,13 @@
 #include "config_save_service.h"
 #include "config_json.h"
 #include "../platform/windows/config_commit.h"
+#include "../platform/windows/speed_clock.h"
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
 #include <charconv>
 #include <chrono>
-#include <condition_variable>
 #include <fstream>
 #include <iterator>
-#include <mutex>
+#include <algorithm>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -19,6 +19,7 @@ namespace s8::services {
 
 bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                         std::optional<std::string> skill_baseline, std::stop_token stop) {
+    const platform::windows::RealClockScope real_clock;
     ConfigSaveService service(bridge, path);
     const auto skill_path = path.parent_path() / L"S8RPK_skill_counts.json";
     const auto names_path = path.parent_path() / L"S8RPK_cheat_char.json";
@@ -80,10 +81,10 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
             name_active = true;
         }
     };
-    std::condition_variable_any wake;
-    std::mutex mutex;
     while (!stop.stop_requested()) {
-        const auto now = std::chrono::steady_clock::now();
+        const std::uint64_t observed = bridge.config_wake.observe();
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
         if (now >= next_trait_check) {
             next_trait_check = now + std::chrono::seconds(2);
             std::error_code error;
@@ -181,16 +182,28 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         service.poll();
         poll_skills(false);
         poll_names();
-        std::unique_lock lock(mutex);
-        wake.wait_for(lock, stop, std::chrono::milliseconds(30), [] { return false; });
+        std::chrono::steady_clock::time_point deadline = next_trait_check;
+
+        if (!config_dispatched) {
+            deadline = std::min(deadline, next_config_attempt);
+        }
+        if (pending_counts && !active_counts && !skill_save_failed) {
+            const std::chrono::steady_clock::time_point debounce = last_change + std::chrono::milliseconds(300);
+
+            if (debounce > now) {
+                deadline = std::min(deadline, debounce);
+            }
+        }
+        bridge.config_wake.wait_until(observed, deadline, stop);
     }
     do {
+        const std::uint64_t observed = bridge.config_wake.observe();
+
         service.poll();
         poll_skills(true);
         poll_names();
         if (active_counts || (pending_counts && !skill_save_failed) || name_active || pending_name) {
-            std::unique_lock lock(mutex);
-            wake.wait_for(lock, std::chrono::milliseconds(30));
+            bridge.config_wake.wait_until(observed, std::chrono::steady_clock::time_point::max());
         }
     } while (active_counts || (pending_counts && !skill_save_failed) || name_active || pending_name);
     const bool config_saved = service.close_and_wait();

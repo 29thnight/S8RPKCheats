@@ -1,6 +1,7 @@
 #include "config_save_executor.h"
 #include "config_json.h"
 #include "../platform/windows/unicode.h"
+#include "../platform/windows/speed_clock.h"
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
 
 #include <utility>
@@ -10,6 +11,8 @@ namespace s8::services {
 void ConfigSaveExecutor::start_officer_name(std::filesystem::path path, int id, std::string name) {
     auto work = stdexec::starts_on(pool.get_scheduler(),
         stdexec::just() | stdexec::then([path = std::move(path), id, name = std::move(name)]() {
+            const platform::windows::RealClockScope real_clock;
+
             auto baseline = platform::windows::read_config_for_save(path);
             if (!baseline) {
                 return ConfigSaveResult{0, ConfigSaveStatus::Failed};
@@ -39,6 +42,9 @@ void ConfigSaveExecutor::start_officer_name(std::filesystem::path path, int id, 
                 completion = std::move(result);
             }
             completed.notify_one();
+            if (wake) {
+                wake->signal();
+            }
         });
     stdexec::spawn(std::move(work), scope.get_token());
 }
@@ -48,6 +54,8 @@ void ConfigSaveExecutor::start_skill_counts(std::filesystem::path path, std::opt
     auto work = stdexec::starts_on(pool.get_scheduler(),
         stdexec::just() | stdexec::then([path = std::move(path), baseline = std::move(baseline),
                                          counts = std::move(counts)]() {
+            const platform::windows::RealClockScope real_clock;
+
             auto json = nlohmann::json::object();
             for (const auto& [officer, skills] : counts) {
                 auto entries = nlohmann::json::object();
@@ -72,6 +80,9 @@ void ConfigSaveExecutor::start_skill_counts(std::filesystem::path path, std::opt
                 completion = std::move(result);
             }
             completed.notify_one();
+            if (wake) {
+                wake->signal();
+            }
         });
     stdexec::spawn(std::move(work), scope.get_token());
 }
@@ -81,6 +92,8 @@ void ConfigSaveExecutor::start(std::filesystem::path path, ConfigSaveJob job) {
     const auto token = stop.get_token();
     auto work = stdexec::starts_on(pool.get_scheduler(),
         stdexec::just() | stdexec::then([path = std::move(path), job = std::move(job), token]() {
+            const platform::windows::RealClockScope real_clock;
+
             return save_config(path, job.baseline, job.save, token);
         }))
         | stdexec::upon_error([revision](auto&&) noexcept {
@@ -95,6 +108,9 @@ void ConfigSaveExecutor::start(std::filesystem::path path, ConfigSaveJob job) {
                 completion = std::move(result);
             }
             completed.notify_one();
+            if (wake) {
+                wake->signal();
+            }
         });
     stdexec::spawn(std::move(work), scope.get_token());
 }
@@ -102,14 +118,16 @@ void ConfigSaveExecutor::start(std::filesystem::path path, ConfigSaveJob job) {
 ConfigSaveResult ConfigSaveExecutor::wait_completion() {
     std::unique_lock lock(mutex);
     completed.wait(lock, [this] { return completion.has_value(); });
-    auto result = std::move(*completion);
+    ConfigSaveResult result = std::move(*completion);
+
     completion.reset();
     return result;
 }
 
 std::optional<ConfigSaveResult> ConfigSaveExecutor::take_completion() {
     std::lock_guard lock(mutex);
-    auto result = std::move(completion);
+    std::optional<ConfigSaveResult> result = std::move(completion);
+
     completion.reset();
     return result;
 }

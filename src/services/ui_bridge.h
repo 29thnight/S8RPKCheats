@@ -8,6 +8,7 @@
 #include "../domain/ownership.h"
 #include "config_save.h"
 #include "config_json.h"
+#include "service_wake.h"
 
 #include <mutex>
 #include <array>
@@ -69,6 +70,7 @@ struct OfficerNameEdit {
 class UiBridge {
 public:
     CommandMailbox commands;
+    ServiceWake config_wake;
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
     std::atomic<int> officer_roster_scan_cursor{-1};

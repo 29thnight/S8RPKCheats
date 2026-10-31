@@ -65,11 +65,15 @@ own::shared_owner<const domain::CustomTraits> UiBridge::custom_traits_view() {
 }
 
 bool UiBridge::request_officer_name(OfficerNameEdit edit) {
-    std::lock_guard lock(mutex);
-    if (!officer_name_requests_open || pending_officer_name) {
-        return false;
+    {
+        std::lock_guard lock(mutex);
+
+        if (!officer_name_requests_open || pending_officer_name) {
+            return false;
+        }
+        pending_officer_name = std::move(edit);
     }
-    pending_officer_name = std::move(edit);
+    config_wake.signal();
     return true;
 }
 
@@ -141,8 +145,14 @@ own::shared_owner<const domain::SkillCounts> UiBridge::skill_counts_view() {
 }
 
 void UiBridge::request_skill_counts_save(domain::SkillCounts counts) {
-    std::lock_guard lock(mutex);
-    pending_skill_counts_save = std::move(counts);
+    std::optional<domain::SkillCounts> incoming{std::move(counts)};
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_skill_counts_save.swap(incoming);
+    }
+    config_wake.signal();
 }
 
 std::optional<domain::SkillCounts> UiBridge::take_skill_counts_save() {
@@ -227,8 +237,14 @@ std::optional<UiSnapshot> UiBridge::snapshot() {
 }
 
 void UiBridge::request_config_save(domain::ConfigSnapshot snapshot) {
-    std::lock_guard lock(mutex);
-    pending_save = std::move(snapshot);
+    std::optional<domain::ConfigSnapshot> incoming{std::move(snapshot)};
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_save.swap(incoming);
+    }
+    config_wake.signal();
 }
 
 std::optional<domain::ConfigSnapshot> UiBridge::take_config_save() {
@@ -245,8 +261,14 @@ bool UiBridge::has_config_save() {
 }
 
 void UiBridge::publish_config_baseline(ConfigBaseline baseline) {
-    std::lock_guard lock(mutex);
-    pending_baseline = std::move(baseline);
+    std::optional<ConfigBaseline> incoming{std::move(baseline)};
+
+    {
+        std::lock_guard lock(mutex);
+
+        pending_baseline.swap(incoming);
+    }
+    config_wake.signal();
 }
 
 void UiBridge::publish_config_load(ConfigLoad config) {
@@ -281,8 +303,12 @@ std::optional<ConfigSaveNotice> UiBridge::config_notice() {
 }
 
 void UiBridge::request_config_retry() {
-    std::lock_guard lock(mutex);
-    retry_requested = true;
+    {
+        std::lock_guard lock(mutex);
+
+        retry_requested = true;
+    }
+    config_wake.signal();
 }
 
 bool UiBridge::take_config_retry() {

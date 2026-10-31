@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config_save_pump.h"
+#include "service_wake.h"
 
 #include "../../third_party/stdexec/include/exec/static_thread_pool.hpp"
 #include "../../third_party/stdexec/include/stdexec/execution.hpp"
@@ -16,7 +17,7 @@ namespace s8::services {
 // One job at a time. The owner drains the scope outside callbacks before destruction.
 class ConfigSaveExecutor {
 public:
-    ConfigSaveExecutor() = default;
+    explicit ConfigSaveExecutor(ServiceWake* wake = nullptr) : wake(wake) {}
     ConfigSaveExecutor(const ConfigSaveExecutor&) = delete;
     ConfigSaveExecutor& operator=(const ConfigSaveExecutor&) = delete;
 
@@ -30,6 +31,7 @@ public:
     void close_and_wait();
 
 private:
+    ServiceWake* wake = nullptr;
     exec::static_thread_pool pool{1};
     stdexec::counting_scope scope;
     std::stop_source stop;

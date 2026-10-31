@@ -5,7 +5,7 @@
 namespace s8::services {
 
 ConfigSaveService::ConfigSaveService(UiBridge& bridge, std::filesystem::path path)
-    : bridge(bridge), path(std::move(path)) {}
+    : bridge(bridge), path(std::move(path)), executor(&bridge.config_wake) {}
 
 void ConfigSaveService::poll() {
     if (auto completion = executor.take_completion()) {
