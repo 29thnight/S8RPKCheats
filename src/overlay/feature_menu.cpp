@@ -1856,12 +1856,19 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     }
 
     if (!menu.ready) {
-        ImGui::TextDisabled("설정을 불러오는 중입니다.");
+        if (menu.save_notice && menu.save_notice->status == services::ConfigSaveStatus::InvalidData) {
+            ImGui::TextWrapped("S8RPK_cheat_config.json의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
+        } else if (menu.save_notice && menu.save_notice->status == services::ConfigSaveStatus::Failed) {
+            ImGui::Text("설정을 불러오지 못했습니다. 파일 접근 권한 또는 설정 서비스를 확인해 주세요. 오류 %u",
+                menu.save_notice->native_code);
+        } else {
+            ImGui::TextDisabled("설정을 불러오는 중입니다.");
+        }
     } else if (menu.pending) {
         ImGui::TextDisabled("변경 사항을 적용하는 중입니다.");
     }
 
-    if (menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
+    if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
         ImGui::Text("설정 저장 실패 (%d, %u)", static_cast<int>(menu.save_notice->status),
                     menu.save_notice->native_code);
 

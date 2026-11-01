@@ -115,17 +115,24 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
                                                 std::move(terrain_bonus), std::move(features), std::move(def_building),
                                                 std::move(scalars)});
                     config_dispatched = true;
+                    bridge.publish_config_notice({0, ConfigSaveStatus::Completed, 0});
 
                     if (config_failure_reported) {
                         bridge.publish_notice("설정 파일을 다시 읽었습니다.");
                     }
-                } else if (!config_failure_reported) {
-                    bridge.publish_notice("설정 파일의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
+                } else {
+                    bridge.publish_config_notice({0, ConfigSaveStatus::InvalidData, lines.error().native_code});
+                    if (!config_failure_reported) {
+                        bridge.publish_notice("설정 파일의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
+                    }
                     config_failure_reported = true;
                 }
-            } else if (!config_failure_reported) {
-                bridge.publish_notice("설정 파일을 읽지 못했습니다. 파일 접근 권한을 확인해 주세요. 오류 " +
-                    std::to_string(baseline.error().native_code));
+            } else {
+                bridge.publish_config_notice({0, ConfigSaveStatus::Failed, baseline.error().native_code});
+                if (!config_failure_reported) {
+                    bridge.publish_notice("설정 파일을 읽지 못했습니다. 파일 접근 권한을 확인해 주세요. 오류 " +
+                        std::to_string(baseline.error().native_code));
+                }
                 config_failure_reported = true;
             }
             next_config_attempt = now + std::chrono::milliseconds(500);

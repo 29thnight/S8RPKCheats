@@ -83,7 +83,9 @@ domain::Result<std::string> update_config_json(std::string_view source, std::spa
     if (!nlohmann::json::accept(source.begin(), source.end())) {
         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
     }
-    std::size_t position = 0;
+    // The JSON parser accepts a UTF-8 BOM. Skip it in our member scanner too,
+    // while leaving it in source so a save preserves the original prefix.
+    std::size_t position = source.starts_with("\xEF\xBB\xBF") ? 3 : 0;
     skip_space(source, position);
     if (source[position] != '{') {
         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});

@@ -460,6 +460,17 @@ void config_json_update() {
     assert(!flags.get(domain::FeatureId::InfiniteAp) && flags.get(domain::FeatureId::FastJewel));
     assert(game::read_legacy_int(*lines, "\"iStratagem5Power1\"") == -40);
     assert(!services::config_lines_for_load(R"({"key":1,"key":2})"));
+
+    const std::string bom_source = std::string("\xEF\xBB\xBF") + source;
+    const auto bom_updated = services::update_config_json(bom_source, changes);
+    assert(bom_updated && *bom_updated == std::string("\xEF\xBB\xBF") + *updated);
+    const auto bom_lines = services::config_lines_for_load(
+        "\xEF\xBB\xBF" "{\"bInfiniteAP\":true,\"iStratagem5Power1\":-40}");
+    assert(bom_lines);
+    domain::load_feature_flags(flags, *bom_lines);
+    assert(flags.get(domain::FeatureId::InfiniteAp));
+    assert(game::read_legacy_int(*bom_lines, "\"iStratagem5Power1\"") == -40);
+    assert(!services::config_lines_for_load("\xEF\xBB\xBF" "{\"key\":1,\"key\":2}"));
 }
 
 void terrain_bonus_config_and_modes() {

@@ -46,14 +46,14 @@ struct RuntimeSession {
     std::uintptr_t plugin_module = 0;
     std::uintptr_t game_module = 0;
     std::atomic<HWND> window{nullptr};
-    HHOOK attach_hook = nullptr;
+    HHOOK message_hook = nullptr;
     HWINEVENTHOOK window_events = nullptr;
     UINT attach_message = 0;
     UINT update_message = 0;
     std::atomic<bool> attach_finished{false};
     std::atomic<bool> attaching{true};
     std::atomic<bool> candidate_destroyed{false};
-    std::atomic<unsigned> attach_callbacks{0};
+    std::atomic<unsigned> message_callbacks{0};
     std::atomic<UINT_PTR> attach_generation{0};
     std::atomic<bool> running{false};
     std::atomic<bool> update_pending{false};
@@ -74,6 +74,17 @@ std::atomic<RuntimeSession*> active_session{nullptr};
 
 void wake_coordinator(RuntimeSession& session) noexcept {
     SetEvent(session.wake.get());
+}
+
+bool remove_message_hook(RuntimeSession& session) noexcept {
+    if (!session.message_hook) {
+        return true;
+    }
+    if (!UnhookWindowsHookEx(session.message_hook)) {
+        return false;
+    }
+    session.message_hook = nullptr;
+    return true;
 }
 
 void post_update(RuntimeSession& session) noexcept {
@@ -189,6 +200,10 @@ void dispatch_game_jobs(RuntimeSession& session) {
     constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
     const domain::WorkBudget dispatch_budget{std::chrono::steady_clock::now() + DISPATCH_BUDGET};
     const std::uint64_t now_ms = GetTickCount64();
+
+    // Deliver the initial settings even if root observation consumes the
+    // dispatch budget. This only initializes owned values and publishes UI data.
+    load_ui_configuration(session.runtime, session.services.overlay.bridge, session.game_module);
 
     // Root/epoch observation precedes all consumers. Work below shares one
     // deadline; native calls and started write transactions complete in place.
@@ -325,25 +340,53 @@ bool dispatch_window_message(void* context, HWND, UINT message, WPARAM wparam,
     return update || stop_key || retry;
 }
 
-LRESULT CALLBACK attach_on_window_thread(int code, WPARAM removal, LPARAM parameter) {
+LRESULT CALLBACK dispatch_on_window_thread(int code, WPARAM removal, LPARAM parameter) {
     RuntimeSession* const session = active_session.load(std::memory_order_acquire);
 
-    if (code >= 0 && removal == PM_REMOVE && session && parameter) {
-        session->attach_callbacks.fetch_add(1, std::memory_order_acq_rel);
-        MSG& message = *reinterpret_cast<MSG*>(parameter);
+    if (code < 0 || removal != PM_REMOVE || !session || !parameter) {
+        return CallNextHookEx(nullptr, code, removal, parameter);
+    }
+    MSG& message = *reinterpret_cast<MSG*>(parameter);
+    const bool attachment_message = message.message == session->attach_message;
+    const bool update_message = message.message == session->update_message;
 
-        if (message.hwnd == session->window.load(std::memory_order_acquire) &&
-            message.message == session->attach_message &&
-            message.wParam == session->attach_generation.load(std::memory_order_acquire)) {
-            overlay::install_window_subclass(message.hwnd, session->services.overlay.overlay);
-            message.message = WM_NULL;
-            session->attach_finished.store(true, std::memory_order_release);
-            wake_coordinator(*session);
-        }
-        session->attach_callbacks.fetch_sub(1, std::memory_order_release);
+    if (!attachment_message && !update_message) {
+        return CallNextHookEx(nullptr, code, removal, parameter);
+    }
+    // Register before inspecting mutable candidate state. Failed attachment
+    // attempts unhook and drain this count before selecting another window.
+    session->message_callbacks.fetch_add(1, std::memory_order_acq_rel);
+    const bool target_window = message.hwnd == session->window.load(std::memory_order_acquire);
+    const bool attach = target_window && attachment_message &&
+        session->attaching.load(std::memory_order_acquire) &&
+        message.wParam == session->attach_generation.load(std::memory_order_acquire);
+    const bool update = target_window && update_message;
+
+    if (attach) {
+        overlay::install_window_subclass(message.hwnd, session->services.overlay.overlay);
+        session->attach_finished.store(true, std::memory_order_release);
+    } else if (update) {
+        LRESULT result = 0;
+
+        // A game can remove registered messages without DispatchMessage. Run
+        // our update on this owning thread before the game can discard it.
+        dispatch_window_message(session, message.hwnd, message.message,
+            message.wParam, message.lParam, &result);
+    }
+    // PM_NOREMOVE never enters this path, and a later DispatchMessage must not
+    // execute the same update again through the window subclass.
+    if (attach || update) {
+        message.message = WM_NULL;
+    }
+    const LRESULT result = CallNextHookEx(nullptr, code, removal, parameter);
+
+    session->message_callbacks.fetch_sub(1, std::memory_order_release);
+    if (attachment_message || session->attaching.load(std::memory_order_acquire) ||
+        session->stop_requested.load(std::memory_order_acquire) ||
+        session->window_destroyed.load(std::memory_order_acquire)) {
         wake_coordinator(*session);
     }
-    return CallNextHookEx(nullptr, code, removal, parameter);
+    return result;
 }
 
 void CALLBACK window_shown(HWINEVENTHOOK, DWORD event, HWND window, LONG object, LONG child, DWORD, DWORD) {
@@ -412,6 +455,15 @@ bool wait_for_work(RuntimeSession& session, HANDLE watched_thread = nullptr) noe
     return true;
 }
 
+bool wait_for_message_callbacks(RuntimeSession& session) noexcept {
+    while (session.message_callbacks.load(std::memory_order_acquire) != 0) {
+        if (!wait_for_work(session)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool attach_dispatcher(RuntimeSession& session) {
     session.window_events = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_SHOW, nullptr,
         window_shown, GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT);
@@ -447,8 +499,8 @@ bool attach_dispatcher(RuntimeSession& session) {
 
         // A zero thread ID would create a desktop-wide hook. This hook is
         // strictly thread-specific and same-process, so hMod must be null.
-        session.attach_hook = SetWindowsHookExW(WH_GETMESSAGE, attach_on_window_thread, nullptr, window_thread);
-        if (!session.attach_hook) {
+        session.message_hook = SetWindowsHookExW(WH_GETMESSAGE, dispatch_on_window_thread, nullptr, window_thread);
+        if (!session.message_hook) {
             return false;
         }
         const bool posted = PostMessageW(search.window, session.attach_message, generation, 0) != FALSE;
@@ -463,14 +515,27 @@ bool attach_dispatcher(RuntimeSession& session) {
         }
 
         session.attach_generation.fetch_add(1, std::memory_order_acq_rel);
-        if (!UnhookWindowsHookEx(session.attach_hook)) {
+        const bool attached = wait_succeeded && posted &&
+            !session.candidate_destroyed.load(std::memory_order_acquire) && IsWindow(search.window) &&
+            session.services.overlay.overlay.window_attached.load(std::memory_order_acquire);
+
+        if (!attached && !remove_message_hook(session)) {
             return false;
         }
-        session.attach_hook = nullptr;
-        while (session.attach_callbacks.load(std::memory_order_acquire) != 0) {
-            if (!wait_for_work(session)) {
-                return false;
-            }
+        if (!wait_for_message_callbacks(session)) {
+            return false;
+        }
+        if (attached && !session.candidate_destroyed.load(std::memory_order_acquire) &&
+            IsWindow(search.window) && session.services.overlay.overlay.window_attached.load(std::memory_order_acquire)) {
+            // Keep WH_GETMESSAGE until shutdown so update delivery does not
+            // depend on the game's treatment of registered window messages.
+            session.attaching.store(false, std::memory_order_release);
+            UnhookWinEvent(session.window_events);
+            session.window_events = nullptr;
+            return true;
+        }
+        if (!remove_message_hook(session) || !wait_for_message_callbacks(session)) {
+            return false;
         }
         if (!wait_succeeded) {
             return false;
@@ -479,14 +544,7 @@ bool attach_dispatcher(RuntimeSession& session) {
             session.services.overlay.overlay.window_attached.store(false, std::memory_order_release);
             continue;
         }
-        if (!posted || !session.services.overlay.overlay.window_attached.load(std::memory_order_acquire)) {
-            return false;
-        }
-
-        session.attaching.store(false, std::memory_order_release);
-        UnhookWinEvent(session.window_events);
-        session.window_events = nullptr;
-        return true;
+        return false;
     }
 }
 
@@ -494,17 +552,25 @@ bool attach_dispatcher(RuntimeSession& session) {
     // Disabled code may still have a returning native caller. Keep its owner
     // alive on a dormant coordinator; this path has no periodic wake or sleep.
     bool services_finished = false;
+    bool message_hook_failure_reported = false;
 
     for (;;) {
         if (!services_finished && !session.dispatch_active.load(std::memory_order_acquire) &&
             (session.game_stopped.load(std::memory_order_acquire) ||
                                    session.window_destroyed.load(std::memory_order_acquire))) {
-            try {
-                stop_runtime_entries(session.services);
-                finish_runtime_services(session.services);
-                services_finished = true;
-            } catch (...) {
-                OutputDebugStringW(L"S8RPKCheats: service shutdown failed; retaining owners.\n");
+            if (!remove_message_hook(session)) {
+                if (!message_hook_failure_reported) {
+                    OutputDebugStringW(L"S8RPKCheats: message hook removal failed; retaining services.\n");
+                    message_hook_failure_reported = true;
+                }
+            } else if (session.message_callbacks.load(std::memory_order_acquire) == 0) {
+                try {
+                    stop_runtime_entries(session.services);
+                    finish_runtime_services(session.services);
+                    services_finished = true;
+                } catch (...) {
+                    OutputDebugStringW(L"S8RPKCheats: service shutdown failed; retaining owners.\n");
+                }
             }
         }
         if (session.game_stopped.load(std::memory_order_acquire) &&

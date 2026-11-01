@@ -9,6 +9,10 @@
 
 namespace s8::runtime {
 
+// Initial settings and their first snapshot must not wait for game observation
+// or a scheduler slice. Call only on the runtime's owning window thread.
+void load_ui_configuration(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module);
+
 // Invoke only from the verified game commit context. Completion acknowledges
 // a setting request; deferred game effects have their own lifecycle.
 std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,

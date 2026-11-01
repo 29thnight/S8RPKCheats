@@ -7,15 +7,15 @@
 - 구현 기준: 원본의 실제 `MainColumn* → MenuSections*` 호출과 게임 기능의 사용 경로. 원본의 진단용 분기와 사용되지 않는 실험 코드를 기능 완료의 근거로 세지 않는다.
 - 이 문서는 **소스 구현·연결 상태**를 기록한다. `AGENTS.md`에 따라 빌드, 테스트, 게임 실행, FPS 측정은 하지 않았다. 실행 시 기능의 일대일 동작과 60FPS 유지는 아직 입증하지 않았다.
 
-원본의 메뉴 배치를 복제하지는 않았다. 동일한 조작은 현재 메뉴·편집 패널·명령을 거쳐 실행되며, 변경 전 값과 대상의 수명을 확인하는 절차를 추가했다.
+원본의 주요 기능군은 현재 메뉴·편집 패널·명령에 연결되어 있으며, 변경 전 값과 대상의 수명을 확인하는 절차를 추가했다. 이 표는 모든 세부 조작의 이관 완료를 뜻하지 않는다. 세력 색상 편집, 선택 무장 관계 표, 배우자 관계 순서 교환과 상세 바로가기의 누락은 [2026-11-01 비교 조사](Upstream_Comparison_2026-11-01.md)에 기록했다.
 
 ## 기능 대응
 
-아래 경로는 이 저장소 루트 기준이다. 기존에 구현된 기본 기능은 유지하고, 누락된 사용자 진입점과 실행·저장·종료 경로를 연결했다.
+아래 경로는 이 저장소 루트 기준이다. 기본 기능과 주요 사용자 진입점의 실행·저장·종료 경로를 정리한 표이며, 세부 기능의 잔여 항목은 비교 조사를 함께 확인한다.
 
 | 원본 기능 | 현재 주요 구현 | 구현 및 개선 |
 |---|---|---|
-| 실행 진입점, 입력, 메뉴, 종료 | `src/runtime/game_loop.cpp`, `src/overlay/window_subclass.cpp`, `src/runtime/game_stop.cpp` | loader lock 밖의 초기화, 창 소유 스레드의 메시지 처리, 중복 실행 방지, 단계별 종료·복구. Present는 갱신 메시지를 합쳐 보낸다. |
+| 실행 진입점, 입력, 메뉴, 종료 | `src/runtime/game_loop.cpp`, `src/overlay/window_subclass.cpp`, `src/runtime/game_stop.cpp` | loader lock 밖의 초기화, 창 소유 스레드의 메시지 처리, 중복 실행 방지, 단계별 종료·복구. Present는 갱신 메시지를 합쳐 보내고, 유지되는 `WH_GETMESSAGE` hook이 제거된 자체 메시지를 처리한다. |
 | DX11 오버레이·크기 변경 | `src/overlay/dx11_overlay.cpp`, `src/overlay/overlay_present.cpp` | RTV를 보관하고 크기 변경·장치/스왑체인 변경 때 무효화한다. 매 Present마다 RTV를 생성하지 않는다. |
 | 설정과 로그 | `src/services/config_service_loop.cpp`, `src/services/config_changes.cpp`, `src/services/file_log.cpp` | 파일 처리는 서비스에서 수행한다. 요청·완료 알림과 deadline으로 깨우며 고정 주기 sleep을 사용하지 않는다. 로그 생산자는 짧은 try-lock과 유한 큐를 사용한다. |
 | 게임 배속 | `src/platform/windows/speed_clock.cpp`, `src/runtime/legacy_feature_control.cpp` | 1.0–5.0배, 0.5배 간격. 플러그인 작업에는 실제 시각을 사용하고 게임 시각의 연속성을 유지한다. 설치 요청은 다른 패치와 순환 처리한다. |
@@ -53,7 +53,7 @@
 
 | 경로 | 한 번의 처리 상한 또는 재사용 방식 |
 |---|---|
-| 창 메시지의 전체 갱신 | 공통 1,500µs deadline. Game/Battle/UI/Debug/Specialty/OfficerNames 6개 그룹을 순환하며 그룹당 최대 250µs slice를 남은 전체 예산으로 제한 |
+| 창 메시지의 전체 갱신 | 공통 1,500µs deadline. 최초 설정·스냅샷 전달 후 게임 상태를 관측한다. Game/Battle/UI/Debug/Specialty/OfficerNames 6개 그룹을 순환하며 그룹당 최대 250µs slice를 남은 전체 예산으로 제한 |
 | UI 명령 | 최대 4개. UI 그룹의 남은 deadline을 사용하며 명령 외 서비스도 같은 예산에 포함 |
 | 일반 설치 | legacy/native/trait controller 중 한 번에 한 작업 그룹. legacy 내부 27개 그룹을 순환하며 실패별 deadline 적용 |
 | AI 성장 | 최대 8명 단위 |

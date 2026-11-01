@@ -881,12 +881,7 @@ void service_pending_trait(Runtime& runtime, services::UiBridge& ui, std::uintpt
 }
 
 void consume_ui_configuration(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
-    if (!runtime.config_loaded) {
-        if (std::optional<services::ConfigLoad> config = ui.take_config_load()) {
-            apply_config(runtime, std::move(*config), game_module);
-            runtime.config_loaded = true;
-        }
-    }
+    load_ui_configuration(runtime, ui, game_module);
     if (std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> definitions = ui.take_named_specialties()) {
         runtime.named_specialties = std::move(definitions->first);
         runtime.specialty_random.seed(definitions->second);
@@ -1106,6 +1101,20 @@ void publish_runtime_view(Runtime& runtime, services::UiBridge& ui) {
 }
 
 } // namespace
+
+void load_ui_configuration(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
+    if (runtime.stopping || runtime.config_loaded) {
+        return;
+    }
+    if (std::optional<services::ConfigLoad> config = ui.take_config_load()) {
+        apply_config(runtime, std::move(*config), game_module);
+        runtime.config_loaded = true;
+        ui.publish_config_baseline({runtime.config_baseline});
+        runtime.config_baseline_published = true;
+        // Do not use publish_runtime_view here: it also performs game writes.
+        ui.publish({runtime.epoch, config_snapshot(runtime)});
+    }
+}
 
 std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
     std::uintptr_t game_module, std::size_t max_commands,

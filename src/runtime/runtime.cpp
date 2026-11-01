@@ -789,7 +789,9 @@ void apply_config(Runtime& runtime, services::ConfigLoad config, std::uintptr_t)
         }
     }
     request_stratagem5(runtime, scalars.stratagem5_enabled);
-    set_stratagem5_settings(runtime, stratagem5);
+    // Loading settings must not access a game table before context observation.
+    // The stratagem lifecycle applies these values when its binding is ready.
+    runtime.stratagem5.runtime.settings = domain::normalize_stratagem5(stratagem5);
     if (scalars.reinforcement_arrival) {
         runtime.reinforcement_arrival_enabled = *scalars.reinforcement_arrival;
     }
