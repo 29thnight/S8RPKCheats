@@ -19,7 +19,7 @@ void require(bool condition, const char* expression, int line) {
 #define CHECK(condition) require((condition), #condition, __LINE__)
 
 struct FrameResult { bool pressed; ImGuiID id; ImVec2 minimum, maximum; };
-enum class Control { Action, Navigation, Launcher };
+enum class Control { Action, Navigation, Launcher, Back };
 
 FrameResult frame(const UiAtlasTextures& atlases, Control control, bool disabled = false) {
     ImGui::NewFrame();
@@ -43,7 +43,10 @@ FrameResult frame(const UiAtlasTextures& atlases, Control control, bool disabled
             result.pressed = menu_sprites::navigation_row(atlases, "Action##stable", ImVec2(170, 34), true);
             break;
         case Control::Launcher:
-            result.pressed = menu_sprites::launcher_button(atlases, "Action##stable", 36.0f, 1.0f);
+            result.pressed = menu_sprites::launcher_button(atlases, "Action##stable", 56.0f, 1.0f);
+            break;
+        case Control::Back:
+            result.pressed = menu_sprites::back_button(atlases, "Action##stable", 56.0f, 1.0f);
             break;
         }
         result.id = ImGui::GetItemID();
@@ -96,7 +99,7 @@ void check_control(Control control) {
     io.Fonts->SetTexID(reinterpret_cast<void*>(1));
     UiAtlasTextures loaded{{{reinterpret_cast<void*>(2), 1024, 512},
         {reinterpret_cast<void*>(3), 1024, 512}, {reinterpret_cast<void*>(4), 2048, 2048},
-        {reinterpret_cast<void*>(5), 2048, 1024}, {reinterpret_cast<void*>(6), 1024, 256}}};
+        {reinterpret_cast<void*>(5), 2048, 1024}, {reinterpret_cast<void*>(6), 1024, 512}}};
     UiAtlasTextures missing{};
     const auto initial = frame(loaded, control);
     const auto ready = frame(loaded, control);
@@ -140,5 +143,6 @@ int main() {
     check_control(Control::Action);
     check_control(Control::Navigation);
     check_control(Control::Launcher);
-    std::puts("PASS: action, navigation and launcher mouse/keyboard activation, disabled input, fallback ID/focus continuity, finite clipped UV geometry, and ThemeScope restoration.");
+    check_control(Control::Back);
+    std::puts("PASS: action, navigation, launcher and back controls: mouse/keyboard activation, disabled input, fallback ID/focus continuity, finite clipped UV geometry, and ThemeScope restoration.");
 }

@@ -1,0 +1,33 @@
+# Actual snapshot queue: ronin/recruit/death share the bottom notification stack.
+expect-shell icon
+officer-notices first
+expect-notices 3
+expect-history 3
+expect-toast-stack 3
+shot "out/ui-preview/screenshots/officer-notifications.png"
+# The same producer sequences must not replay their events.
+officer-notices repeat
+expect-notices 3
+expect-history 3
+# Disabled features retain event history without adding visible notifications.
+officer-notices disabled
+expect-notices 3
+expect-history 6
+notice "일반 알림은 시나리오를 바꿔도 표시 시간이 유지됩니다."
+expect-notices 4
+expect-history 7
+new-epoch
+expect-notices 1
+expect-history 7
+expect-toast-stack 1
+# A late old-session snapshot must not reintroduce the expired session notices.
+officer-notices stale
+expect-notices 1
+expect-history 7
+officer-notices first
+expect-notices 4
+expect-history 10
+expect-toast-stack 4
+officer-notices repeat
+expect-notices 4
+expect-history 10

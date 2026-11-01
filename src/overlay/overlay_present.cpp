@@ -104,10 +104,9 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         request_feature_menu_toggle(state.menu);
     }
     update_feature_menu(state.menu, state.bridge);
-    const UINT dpi = GetDpiForWindow(state.target_window);
-
-    state.menu.dpi_scale = dpi ? static_cast<float>(dpi) / 96.0f : 1.0f;
-    state.menu.dpi_scale *= state.menu.snapshot.ui_scale;
+    // Match the game's client-pixel HUD and the preview. Applying Windows
+    // desktop DPI here enlarged a 900 x 620 menu to 1350 x 930 at 150% DPI.
+    state.menu.dpi_scale = state.menu.snapshot.ui_scale;
     const bool rendered = render_dx11_overlay(state.renderer, swap_chain, [](void* value) {
         OverlayPresent& state = *static_cast<OverlayPresent*>(value);
 
@@ -143,13 +142,9 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
             draw_debug_tools(state.menu.debug_tools, state.bridge.debug_tools, state.menu.epoch);
             draw_specialty_tools(state.menu.specialty_tools, state.bridge, state.menu.epoch,
                 state.menu.officer_names ? &*state.menu.officer_names : nullptr);
-            draw_notifications(state.menu.notifications, state.bridge, state.menu.snapshot.notification_speed);
         }
-        if (state.menu.officer_notices.epoch == state.menu.epoch) {
-            draw_officer_notice_panel(state.menu.officer_notices,
-                state.menu.snapshot.features.get(domain::FeatureId::MonitorRonin),
-                state.menu.officer_names ? &*state.menu.officer_names : nullptr, state.menu.dpi_scale);
-        }
+        draw_notifications(state.menu.notifications, state.bridge, state.menu.snapshot.notification_speed,
+            state.menu.ui_atlases, state.menu.epoch);
     }, &state);
     if (rendered) {
         if (state.menu.open) {

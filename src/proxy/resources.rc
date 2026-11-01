@@ -13,6 +13,6 @@
 204 RCDATA "../../resources/speciality_definitions.json"
 301 RCDATA "../../resources/ui/menu_controls.png"
 302 RCDATA "../../resources/ui/status_badges.png"
-303 RCDATA "../../resources/ui/panel_frame.png"
+303 RCDATA "../../resources/ui/paper_panels.png"
 304 RCDATA "../../resources/ui/compact_controls.png"
-305 RCDATA "../../resources/ui/navigation_controls.png"
+305 RCDATA "../../resources/ui/return_controls.png"

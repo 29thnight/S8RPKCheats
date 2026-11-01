@@ -1,13 +1,20 @@
-# Click every actual minimize path and restore through the small shared icon.
+# Drive the native-style menu, its back flow, and the persistent fixed HUD icon.
 expect-shell expanded
+expect-home yes
 expect-compact
-expect-nav-tight
+expect-navigation-fit
+expect-launcher-fit
+remember-launcher
+shot "out/ui-preview/screenshots/home.png"
 click "기재 · 성장"
+expect-home no
 expect-page traits
+expect-navigation-fit
 remember-workbench
 click "-##workbench_minimize"
 expect-shell icon
 expect-launcher-fit
+expect-launcher-unchanged
 expect-page traits
 move 12x80
 expect-mouse-capture no
@@ -15,33 +22,49 @@ shot "out/ui-preview/screenshots/minimized.png"
 click "편집 도구 열기##launcher"
 expect-shell expanded
 expect-workbench-restored
+expect-launcher-unchanged
 expect-page traits
 shot "out/ui-preview/screenshots/restored.png"
-click "workbench-collapse"
+# The icon stays in the same place and can also minimize an expanded menu.
+click "편집 도구 열기##launcher"
 expect-shell icon
+expect-launcher-unchanged
 click "편집 도구 열기##launcher"
 expect-shell expanded
 expect-workbench-restored
-click "workbench-close"
+click "뒤로##workbench_back"
+expect-home yes
+expect-navigation-fit
+expect-launcher-unchanged
+click "뒤로##workbench_back"
 expect-shell icon
 click "편집 도구 열기##launcher"
 expect-shell expanded
-expect-workbench-restored
+expect-home yes
 key Backquote
 expect-shell icon
 key Backquote
 expect-shell expanded
-expect-page traits
-expect-workbench-restored
+expect-home yes
+expect-launcher-unchanged
 key Backquote
 expect-shell icon
 resize 640x480
 expect-launcher-fit
+remember-launcher
 move 12x80
 expect-mouse-capture no
 shot "out/ui-preview/screenshots/minimized-small-viewport.png"
 click "편집 도구 열기##launcher"
 expect-shell expanded
+expect-home yes
+expect-window-fit
+expect-navigation-fit
+expect-launcher-unchanged
+click "기재 · 성장"
+expect-home no
 expect-page traits
 expect-window-fit
+expect-navigation-fit
+expect-launcher-unchanged
 shot "out/ui-preview/screenshots/restored-small-viewport.png"

@@ -35,10 +35,10 @@ overlay::MenuPage page_from_name(const std::string& name) {
 
 struct Options {
     std::string scenario = "ready", font, screenshot, dump, script, open;
-    fs::path resources;
+    fs::path resources, background;
     overlay::MenuPage page = overlay::MenuPage::Overview;
-    int frames = 0, width = 1120, height = 760, delay_frames = 0;
-    bool no_atlas = false, minimized = false, auto_load = false;
+    int frames = 0, width = 1120, height = 760, delay_frames = 0, background_crop_top = 0;
+    bool no_atlas = false, minimized = false, auto_load = false, game_view = false, explicit_page = false;
     float scale = 1.0f;
 };
 
@@ -49,6 +49,7 @@ Options parse_options(int argc, char** argv) {
         if (key == "--no-atlas") { result.no_atlas = true; continue; }
         if (key == "--minimized") { result.minimized = true; continue; }
         if (key == "--auto-load") { result.auto_load = true; continue; }
+        if (key == "--game-view") { result.game_view = true; continue; }
         if (key == "--help") {
             std::cout << "S8RPK shared ImGui UI preview (sample data only)\n"
                 "  --scenario ready|title|loading|errors|external\n"
@@ -58,16 +59,20 @@ Options parse_options(int argc, char** argv) {
                 "  --frames 8 --screenshot FILE.png --dump-items FILE.txt --script FILE\n"
                 "  --no-atlas --delay-frames 20 (fallback / pending-input checks)\n"
                 "  --minimized --auto-load (launcher / real startup path)\n"
+                "  --game-view (hide the preview toolbar; still sample data)\n"
+                "  --background FILE.png --background-crop-top PIXELS (static reference only)\n"
                 "F2 saves preview.png; backtick minimizes/restores the main menu.\n";
             std::exit(0);
         }
         if (i + 1 == argc) throw std::runtime_error("Missing value for " + key);
         const std::string value = argv[++i];
         if (key == "--scenario") result.scenario = value;
-        else if (key == "--page") result.page = page_from_name(value);
+        else if (key == "--page") { result.page = page_from_name(value); result.explicit_page = true; }
         else if (key == "--open") result.open = value;
         else if (key == "--font") result.font = value;
         else if (key == "--resources") result.resources = value;
+        else if (key == "--background") result.background = value;
+        else if (key == "--background-crop-top") result.background_crop_top = std::stoi(value);
         else if (key == "--screenshot") result.screenshot = value;
         else if (key == "--dump-items") result.dump = value;
         else if (key == "--script") result.script = value;
@@ -84,7 +89,8 @@ Options parse_options(int argc, char** argv) {
     if (result.scenario != "ready" && result.scenario != "title" && result.scenario != "loading"
         && result.scenario != "errors" && result.scenario != "external") throw std::runtime_error("Unknown scenario");
     if (!std::isfinite(result.scale) || result.scale < 0.5f || result.scale > 2.0f
-        || result.width < 640 || result.height < 480 || result.frames < 0 || result.delay_frames < 0)
+        || result.width < 640 || result.height < 480 || result.frames < 0 || result.delay_frames < 0
+        || result.background_crop_top < 0 || (result.background.empty() && result.background_crop_top != 0))
         throw std::runtime_error("Invalid scale or window size");
     return result;
 }
@@ -111,8 +117,10 @@ void load_font(const Options& options) {
     for (const auto& candidate : candidates) {
         if (!fs::exists(candidate)) continue;
         ImFontConfig font_config;
-        font_config.OversampleH = 1;
+        font_config.OversampleH = 2;
         font_config.OversampleV = 1;
+        font_config.PixelSnapH = true;
+        font_config.GlyphExtraSpacing.x = -1.0f;
         if (io.Fonts->AddFontFromFileTTF(candidate.string().c_str(), 18.0f,
             &font_config, io.Fonts->GetGlyphRangesKorean())) return;
     }
@@ -175,12 +183,8 @@ void render_shared_ui(overlay::FeatureMenu& menu, services::UiBridge& bridge) {
             bridge.commands, menu.epoch, menu.next_request, names);
         overlay::draw_debug_tools(menu.debug_tools, bridge.debug_tools, menu.epoch);
         overlay::draw_specialty_tools(menu.specialty_tools, bridge, menu.epoch, names);
-        overlay::draw_notifications(menu.notifications, bridge, menu.snapshot.notification_speed);
     }
-    if (menu.officer_notices.epoch == menu.epoch)
-        overlay::draw_officer_notice_panel(menu.officer_notices,
-            menu.snapshot.features.get(domain::FeatureId::MonitorRonin),
-            menu.officer_names ? &*menu.officer_names : nullptr, menu.dpi_scale);
+    overlay::draw_notifications(menu.notifications, bridge, menu.snapshot.notification_speed, menu.ui_atlases, menu.epoch);
 }
 
 void preview_menu(std::unique_ptr<overlay::FeatureMenu>& menu,
@@ -229,6 +233,7 @@ void preview_menu(std::unique_ptr<overlay::FeatureMenu>& menu,
         const auto atlases = menu->ui_atlases;
         const auto ranges = menu->range_textures;
         const auto page = menu->page;
+        const bool home_screen = menu->home_screen;
         const float scale = session->config.ui_scale;
         session = std::make_unique<preview::SampleSession>(next_scenario);
         session->config.ui_scale = scale;
@@ -237,6 +242,7 @@ void preview_menu(std::unique_ptr<overlay::FeatureMenu>& menu,
         menu->ui_atlases = atlases;
         menu->range_textures = ranges;
         menu->page = page;
+        menu->home_screen = home_screen;
         menu->open = true;
         menu->auto_load_applied = true;
         scenario = next_scenario;
@@ -248,6 +254,7 @@ void preview_menu(std::unique_ptr<overlay::FeatureMenu>& menu,
 
 struct Script {
     std::vector<std::string> lines;
+    std::optional<domain::OfficerNoticesSnapshot> officer_notice_sample;
     std::size_t cursor = 0;
     int wait_frames = 5;
     bool release_mouse = false;
@@ -361,6 +368,9 @@ struct Script {
         else if (verb == "expect-page") {
             if (menu.page != page_from_name(value)) throw std::runtime_error("Wrong active page: " + value);
             ++checks;
+        } else if (verb == "expect-home") {
+            if (menu.home_screen != (value == "yes")) throw std::runtime_error("Unexpected home menu state");
+            ++checks;
         } else if (verb == "expect-enabled" || verb == "expect-disabled") {
             const auto item = preview::find_item(value);
             if (!item || item->enabled != (verb == "expect-enabled")) throw std::runtime_error("Unexpected enabled state: " + value);
@@ -382,6 +392,57 @@ struct Script {
             ++checks;
         } else if (verb == "expect-pending") {
             if (menu.pending.has_value() != (value == "yes")) throw std::runtime_error("Unexpected pending command state");
+            ++checks;
+        } else if (verb == "notice") {
+            session.bridge.publish_notice(value);
+            wait_frames = 3;
+        } else if (verb == "officer-notices") {
+            // Sample events travel through the same snapshot queue and menu
+            // update path as real officer notifications, including epoch checks.
+            if (value == "first" || value == "disabled") {
+                const auto sequence = value == "disabled" && officer_notice_sample
+                    ? officer_notice_sample->view.ronin_sequence + 1 : 1;
+                officer_notice_sample.emplace();
+                auto& sample = *officer_notice_sample;
+                sample.view.epoch = menu.epoch;
+                sample.view.ronin_sequence = sequence;
+                sample.view.changes_sequence = sequence;
+                sample.view.ronins[0] = {domain::OfficerNoticeKind::Ronin, 9, 0, 0, 0, false, false};
+                sample.view.ronin_count = sample.view.total_ronins = 1;
+                sample.history[0] = {domain::OfficerNoticeKind::Recruited, 3, 0, 2, 1, false, true};
+                sample.history[1] = {domain::OfficerNoticeKind::Died, 13, 1, 0, 2, true, false};
+                sample.history_count = 2;
+                sample.history_sequence = sequence * 2;
+                sample.view.recruits[0] = sample.history[0];
+                sample.view.deaths[0] = sample.history[1];
+                sample.view.recruit_count = sample.view.total_recruits = 1;
+                sample.view.death_count = sample.view.total_deaths = 1;
+                session.config.features.set(domain::FeatureId::MonitorRonin, value == "first");
+                session.config.features.set(domain::FeatureId::OfficerChangeNotify, value == "first");
+            } else if (value != "repeat" && value != "stale") {
+                throw std::runtime_error("Unknown officer notice sample");
+            }
+            if (!officer_notice_sample || !session.bridge.officer_notices.publish(*officer_notice_sample))
+                throw std::runtime_error("Could not publish the officer notice sample");
+            wait_frames = 3;
+        } else if (verb == "new-epoch") {
+            ++session.epoch.value;
+            wait_frames = 3;
+        } else if (verb == "expect-notices") {
+            if (menu.notifications.active_count != static_cast<std::size_t>(std::stoul(value)))
+                throw std::runtime_error("Unexpected active notification count");
+            ++checks;
+        } else if (verb == "expect-notice-duration") {
+            if (menu.notifications.active_count == 0) throw std::runtime_error("No notification lifetime to check");
+            for (std::size_t offset = 0; offset < menu.notifications.active_count; ++offset) {
+                const auto& notice = menu.notifications.active[(menu.notifications.active_begin + offset) % menu.notifications.active.size()];
+                if (std::abs(notice.lifetime_seconds - std::stof(value)) > 0.05f)
+                    throw std::runtime_error("Notification did not use the requested display duration");
+            }
+            ++checks;
+        } else if (verb == "expect-history") {
+            if (menu.notifications.history_count != static_cast<std::size_t>(std::stoul(value)))
+                throw std::runtime_error("Unexpected retained notification history count");
             ++checks;
         } else if (verb == "expect-modal") {
             bool open = false;
@@ -411,6 +472,9 @@ struct Script {
         } else if (verb == "resize") {
             const auto split = value.find('x');
             SDL_SetWindowSize(window, std::stoi(value.substr(0, split)), std::stoi(value.substr(split + 1)));
+            // Keep scripted mouse warps on the physical virtual display after
+            // growing the host. SDL cannot warp to a point outside that screen.
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
             wait_frames = 4;
         } else if (verb == "scroll") {
             SDL_WarpMouseInWindow(window, static_cast<int>(ImGui::GetIO().DisplaySize.x * 0.75f),
@@ -453,6 +517,18 @@ int main(int argc, char** argv) {
         ImGui_ImplSDLRenderer2_Init(renderer);
         {
             Textures textures;
+            SDL_Texture* background = nullptr;
+            SDL_Rect background_source{};
+            if (!options.background.empty()) {
+                int width = 0, height = 0;
+                background = textures.load(renderer, options.background, &width, &height);
+                if (!background) throw std::runtime_error("Cannot load static reference background: " + options.background.string());
+                if (options.background_crop_top >= height)
+                    throw std::runtime_error("Background top crop must leave at least one image row");
+                background_source = {0, options.background_crop_top, width, height - options.background_crop_top};
+                std::cout << "STATIC_REFERENCE " << options.background.string() << " source=" << width << 'x' << height
+                    << " crop_top=" << options.background_crop_top << " shared_ui=SAMPLE_DATA\n";
+            }
             auto session = std::make_unique<preview::SampleSession>(options.scenario);
             auto menu = std::make_unique<overlay::FeatureMenu>();
             session->config.ui_scale = options.scale;
@@ -466,13 +542,14 @@ int main(int argc, char** argv) {
                 menu->auto_load_applied = false;
             }
             menu->page = options.page;
+            menu->home_screen = !options.explicit_page;
             menu->officer_list_open = options.open == "roster";
             menu->trait_text_editor.open = options.open == "traits";
             menu->city_management.open = options.open == "city";
             menu->protagonist_detail = options.open == "protagonist";
             const auto resources = resource_directory(options);
-            constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "panel_frame.png",
-                "compact_controls.png", "navigation_controls.png"};
+            constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "paper_panels.png",
+                "compact_controls.png", "return_controls.png"};
             for (std::size_t i = 0; i < atlas_files.size(); ++i) {
                 int width = 0, height = 0;
                 auto* texture = textures.load(renderer, resources / "ui" / atlas_files[i], &width, &height);
@@ -500,11 +577,14 @@ int main(int argc, char** argv) {
                 ImGui_ImplSDL2_NewFrame();
                 preview::begin_probe_frame();
                 ImGui::NewFrame();
-                preview_menu(menu, session, scenario, window, capture, options.delay_frames);
+                if (!options.game_view)
+                    preview_menu(menu, session, scenario, window, capture, options.delay_frames);
                 render_shared_ui(*menu, session->bridge);
                 ImGui::Render();
                 SDL_SetRenderDrawColor(renderer, 19, 22, 26, 255);
                 SDL_RenderClear(renderer);
+                if (background && SDL_RenderCopy(renderer, background, &background_source, nullptr) != 0)
+                    throw std::runtime_error("Static reference render failed: " + std::string(SDL_GetError()));
                 ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
                 if (capture) screenshot(renderer, "preview.png");
                 script.step(window, renderer, *menu, *session);

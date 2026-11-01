@@ -1,8 +1,13 @@
 # Actual mouse events through SDL; selectors come from the shared ImGui widgets.
 expect-roster 16
 expect-page overview
+expect-home yes
+expect-navigation-fit
+shot "out/ui-preview/screenshots/home-ready.png"
 click "무장"
 expect-page officers
+expect-home no
+expect-navigation-fit
 shot "out/ui-preview/screenshots/officers.png"
 click "기재 · 성장"
 expect-page traits
@@ -39,4 +44,5 @@ expect-page settings
 shot "out/ui-preview/screenshots/settings.png"
 click "개요"
 expect-page overview
+expect-home no
 shot "out/ui-preview/screenshots/overview-ready.png"

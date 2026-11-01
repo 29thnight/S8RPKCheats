@@ -6,7 +6,9 @@ expect-mouse-capture no
 shot "out/ui-preview/screenshots/autoload-icon.png"
 click "편집 도구 열기##launcher"
 expect-shell expanded
+expect-home yes
 expect-compact
+expect-navigation-fit
 expect-window-fit
 expect-page overview
 click "무장"

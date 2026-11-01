@@ -1,0 +1,31 @@
+# The editor's explicit scale must not change the game HUD anchor or hit area.
+expect-shell expanded
+expect-home yes
+expect-launcher-fit
+remember-launcher
+click "배율" "##MainMenuBar"
+click "150%"
+wait 4
+expect-scale 1.5
+expect-launcher-unchanged
+expect-navigation-fit
+click "편집 도구 열기##launcher"
+expect-shell icon
+click "배율" "##MainMenuBar"
+click "100%"
+wait 4
+expect-scale 1
+expect-launcher-unchanged
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-home yes
+expect-launcher-unchanged
+resize 1920x1080
+expect-launcher-fit
+remember-launcher
+click "편집 도구 열기##launcher"
+expect-shell icon
+expect-launcher-unchanged
+move 12x180
+expect-mouse-capture no
+shot "out/ui-preview/screenshots/launcher-1080.png"

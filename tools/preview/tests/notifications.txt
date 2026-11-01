@@ -1,0 +1,29 @@
+# Publish through the production UiBridge; real steady-clock expiry keeps history.
+expect-shell icon
+click "편집 도구 열기##launcher"
+click "환경설정"
+ctrl-click "알림 표시 시간"
+text "2.5"
+key Enter
+expect-commands 1
+expect-item-fit "알림 표시 시간"
+click "-##workbench_minimize"
+expect-shell icon
+expect-notices 0
+expect-history 0
+notice "알림 표시 위치를 확인합니다."
+notice "새로운 알림은 화면 아래쪽에 쌓입니다."
+notice "무장 정보가 갱신되었습니다."
+expect-notices 3
+expect-notice-duration 2.5
+expect-history 3
+expect-toast-stack 3
+shot "out/ui-preview/screenshots/notifications-stacked.png"
+move 560x640
+expect-mouse-capture no
+# The user-set 2.5-second lifetime expires through real SDL frames and time.
+wait 200
+expect-notices 0
+expect-history 3
+expect-toast-stack 0
+shot "out/ui-preview/screenshots/notifications-expired.png"

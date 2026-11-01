@@ -1,0 +1,22 @@
+# Client area of the supplied game screenshot, with its 36 px title bar excluded.
+expect-shell icon
+expect-launcher-fit
+expect-launcher-reference
+remember-launcher
+move 12x180
+expect-mouse-capture no
+shot "out/ui-preview/screenshots/launcher-reference.png"
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-home yes
+expect-navigation-fit
+expect-launcher-reference
+expect-launcher-unchanged
+shot "out/ui-preview/screenshots/home-reference.png"
+click "무장"
+expect-home no
+expect-page officers
+expect-navigation-fit
+expect-launcher-reference
+expect-launcher-unchanged
+shot "out/ui-preview/screenshots/officers-reference.png"

@@ -64,6 +64,7 @@ struct FeatureMenu {
     std::array<void*, 11> range_textures{};
     UiAtlasTextures ui_atlases{};
     MenuPage page = MenuPage::Overview;
+    bool home_screen = true;
     int status_filter = 0;
     float dpi_scale = 1.0f;
     domain::ConfigSnapshot snapshot;
@@ -98,7 +99,6 @@ struct FeatureMenu {
     bool toggle_collapse = false;
     bool auto_load_applied = false;
     bool auto_load_collapse = false;
-    bool compact_layout_checked = false;
     float window_x = 0;
     float window_y = 0;
     bool retry_save_requested = false;

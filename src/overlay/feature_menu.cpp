@@ -71,7 +71,7 @@ void draw_previous_request_error(FeatureMenu& menu) {
         return;
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.68f, 0.18f, 0.10f, 1.0f));
     ImGui::TextWrapped("이전 요청 실패 · %s", request_error_text(*menu.error));
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) {
@@ -106,7 +106,7 @@ void draw_legacy_status(const domain::ConfigSnapshot& snapshot, domain::LegacyFe
         ImGui::TextDisabled("적용됨");
         break;
     case domain::LegacyFeaturePhase::Retrying:
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f), "적용 실패 · 재시도 대기");
+        ImGui::TextColored(ImVec4(0.68f, 0.18f, 0.10f, 1.0f), "적용 실패 · 재시도 대기");
         break;
     default:
         break;
@@ -325,8 +325,12 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
         if (!notices) {
             break;
         }
-        update_officer_notice_panel(menu.officer_notices, *notices, menu.notifications,
-            menu.officer_names ? &*menu.officer_names : nullptr);
+        if (notices->view.epoch == menu.epoch) {
+            update_officer_notice_panel(menu.officer_notices, *notices, menu.notifications,
+                menu.officer_names ? &*menu.officer_names : nullptr, menu.snapshot.notification_speed,
+                menu.snapshot.features.get(domain::FeatureId::MonitorRonin),
+                menu.snapshot.features.get(domain::FeatureId::OfficerChangeNotify));
+        }
     }
     if (!menu.pending && !menu.pending_officer_edits.empty()) {
         if (menu.officer_edit_epoch != menu.epoch) {
@@ -435,7 +439,7 @@ struct FeatureMenuDraw {
 };
 
 void draw_menu_heading(const char* label) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.65f, 0.25f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.25f, 0.10f, 1.0f));
     ImGui::SeparatorText(label);
     ImGui::PopStyleColor();
 }
@@ -569,7 +573,7 @@ void FeatureMenuDraw::draw_feature(const FeatureItem& item) {
     if (item.id == domain::FeatureId::FileLog) {
 
         if (menu.file_log_failed) {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f),
+            ImGui::TextColored(ImVec4(0.68f, 0.18f, 0.10f, 1.0f),
                 "파일 로그 저장 실패: 옵션을 껐다 켜면 다시 시도합니다.");
         }
 
@@ -607,7 +611,7 @@ void FeatureMenuDraw::draw_feature(const FeatureItem& item) {
         } else if (status.phase == domain::NativeFeaturePhase::Disabled) {
             ImGui::TextDisabled("해제됨");
         } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f), "%s: %s",
+            ImGui::TextColored(ImVec4(0.68f, 0.18f, 0.10f, 1.0f), "%s: %s",
                 status.phase == domain::NativeFeaturePhase::Uncertain ? "복구 확인 필요" : "적용 실패",
                 domain::native_feature_error_text(status.error));
 
@@ -989,6 +993,20 @@ void FeatureMenuDraw::draw_secondary_jewels() {
 }
 
 void FeatureMenuDraw::draw_domestic() {
+    draw_menu_heading("도시 · 군단 편집");
+    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "명품 관리", tool_size)) {
+        menu.specialty_tools.open = true;
+    }
+
+    if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리 / 후방 지원", tool_size)) {
+        menu.city_management.open = true;
+    }
+
+    if (menu_sprites::sprite_button(menu.ui_atlases, "군단 배치 / 도시 무장 이동", tool_size)) {
+        menu.corps_deployment.open = true;
+    }
+    ImGui::Spacing();
     draw_menu_heading("내정");
 
     constexpr std::array FEATURES{
@@ -1080,18 +1098,7 @@ void FeatureMenuDraw::draw_domestic() {
         draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::TechCityVisibility, false);
     }
 
-    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale);
-    if (menu_sprites::sprite_button(menu.ui_atlases, "명품 관리", tool_size)) {
-        menu.specialty_tools.open = true;
-    }
 
-    if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리 / 후방 지원", tool_size)) {
-        menu.city_management.open = true;
-    }
-
-    if (menu_sprites::sprite_button(menu.ui_atlases, "군단 배치 / 도시 무장 이동", tool_size)) {
-        menu.corps_deployment.open = true;
-    }
 }
 
 void FeatureMenuDraw::draw_player_options() {
@@ -1785,9 +1792,13 @@ void FeatureMenuDraw::draw_footer(float content_width) {
         ImGui::PushID(slider_epoch_id.data());
         ImGui::BeginDisabled(!menu.ready);
         const float notification_slider_width = ImGui::GetContentRegionAvail().x -
-            ImGui::CalcTextSize("알림 속도").x - ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::CalcTextSize("알림 표시 시간").x - ImGui::GetStyle().ItemInnerSpacing.x;
         ImGui::SetNextItemWidth(std::clamp(notification_slider_width, 60.0f * menu.dpi_scale, 150.0f * menu.dpi_scale));
-        ImGui::SliderFloat("알림 속도", &menu.notification_speed_draft.value, 20.0f, 500.0f, "%.0f px/s");
+        float notification_seconds = notification_duration_seconds(menu.notification_speed_draft.value);
+        if (ImGui::SliderFloat("알림 표시 시간", &notification_seconds, 2.5f, 15.0f, "%.1f초", ImGuiSliderFlags_AlwaysClamp)) {
+            // Keep the existing configuration key and request acknowledgement path.
+            menu.notification_speed_draft.value = 600.0f / notification_seconds;
+        }
         menu.notification_speed_draft.editing = ImGui::IsItemActive();
         menu.notification_speed_draft.commit_requested = ImGui::IsItemDeactivatedAfterEdit() || menu.notification_speed_draft.commit_requested;
         ImGui::EndDisabled();
@@ -1888,6 +1899,7 @@ constexpr std::array<MenuPageInfo, static_cast<std::size_t>(MenuPage::Count)> ME
 }};
 
 void select_menu_page(FeatureMenu& menu, MenuPage page) {
+    menu.home_screen = false;
     if (menu.page != page) {
         menu.page = page;
         // Hidden sliders no longer get a deactivation frame. Release their
@@ -2133,9 +2145,9 @@ void FeatureMenuDraw::draw_overview() {
                     MENU_PAGES[static_cast<std::size_t>(report.page)].label);
             }
             ImGui::TableSetColumnIndex(1);
-            const ImVec4 color = report.state == ReportState::Attention ? ImVec4(1.0f, 0.48f, 0.4f, 1.0f) :
-                report.state == ReportState::Waiting ? ImVec4(1.0f, 0.78f, 0.3f, 1.0f) :
-                report.state == ReportState::Applied ? ImVec4(0.57f, 0.84f, 0.61f, 1.0f) : ImVec4(0.72f, 0.72f, 0.76f, 1.0f);
+            const ImVec4 color = report.state == ReportState::Attention ? ImVec4(0.68f, 0.18f, 0.10f, 1.0f) :
+                report.state == ReportState::Waiting ? ImVec4(0.54f, 0.36f, 0.05f, 1.0f) :
+                report.state == ReportState::Applied ? ImVec4(0.19f, 0.39f, 0.22f, 1.0f) : ImVec4(0.39f, 0.37f, 0.34f, 1.0f);
             constexpr std::array STATE_LABELS{"꺼짐", "적용됨", "대기", "확인 필요", "외부 관리"};
             ImGui::TextColored(color, "%s", STATE_LABELS[static_cast<std::size_t>(report.state)]);
             ImGui::TableSetColumnIndex(2);
@@ -2149,16 +2161,84 @@ void FeatureMenuDraw::draw_overview() {
     }
 }
 
-void draw_menu_launcher(FeatureMenu& menu) {
+void minimize_workbench(FeatureMenu& menu) {
+    menu.collapsed = true;
+    menu.toggle_collapse = false;
+    menu.auto_load_collapse = false;
+    menu.ui_scale_draft.editing = false;
+    menu.notification_speed_draft.editing = false;
+    ImGui::SetWindowFocus(nullptr);
+}
+
+void draw_home_menu(FeatureMenu& menu, bool popup_open, float scale) {
+    constexpr std::array ORDER{MenuPage::Officers, MenuPage::Traits, MenuPage::Domestic,
+        MenuPage::CouncilSocial, MenuPage::Battle, MenuPage::Scenario, MenuPage::Settings, MenuPage::Overview};
+    const float available = ImGui::GetContentRegionAvail().x;
+    const float grid_width = std::min(600.0f * scale, available);
+    const float left = ImGui::GetCursorPosX() + (available - grid_width) * 0.5f;
+    ImGui::SetCursorPosX(left);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f * scale, 5.0f * scale));
+    ImGui::BeginDisabled(popup_open);
+    if (ImGui::BeginTable("##home_categories", 2,
+            ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings, ImVec2(grid_width, 0))) {
+        for (const auto page : ORDER) {
+            ImGui::TableNextColumn();
+            const auto& info = MENU_PAGES[static_cast<std::size_t>(page)];
+            if (menu_sprites::sprite_button(menu.ui_atlases, info.label,
+                    ImVec2(ImGui::GetContentRegionAvail().x, 38.0f * scale))) {
+                select_menu_page(menu, page);
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+                ImGui::SetTooltip("%s", info.description);
+            }
+        }
+        ImGui::EndTable();
+    }
+    ImGui::EndDisabled();
+    ImGui::PopStyleVar();
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    const float history_width = std::min(240.0f * scale, ImGui::GetContentRegionAvail().x);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - history_width) * 0.5f);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "알림 내역", ImVec2(history_width, 32.0f * scale))) {
+        menu.notifications.show_history = true;
+    }
+}
+
+void draw_category_tabs(FeatureMenu& menu, bool popup_open, float scale) {
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    const float gap = 3.0f * scale;
+    ImGui::BeginDisabled(popup_open);
+    for (std::size_t index = 0; index < MENU_PAGES.size(); ++index) {
+        const auto& info = MENU_PAGES[index];
+        const float width = ImGui::CalcTextSize(info.label).x + 20.0f * scale;
+        if (index != 0 && ImGui::GetItemRectMax().x + gap + width <= right) {
+            ImGui::SameLine(0, gap);
+        }
+        if (menu_sprites::navigation_row(menu.ui_atlases, info.label,
+                ImVec2(std::min(width, ImGui::GetContentRegionAvail().x), 34.0f * scale),
+                menu.page == static_cast<MenuPage>(index))) {
+            select_menu_page(menu, static_cast<MenuPage>(index));
+        }
+    }
+    ImGui::EndDisabled();
+}
+
+void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
     const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-    const float scale = menu.dpi_scale;
-    const float edge = 36.0f * scale;
-    const float margin = 8.0f * scale;
-    const ImVec2 lower(viewport.WorkPos.x + margin, viewport.WorkPos.y + margin);
-    const ImVec2 upper(std::max(lower.x, viewport.WorkPos.x + viewport.WorkSize.x - edge - margin),
-                       std::max(lower.y, viewport.WorkPos.y + viewport.WorkSize.y - edge - margin));
-    const ImVec2 position(std::clamp(menu.window_x, lower.x, upper.x),
-                          std::clamp(menu.window_y, lower.y, upper.y));
+    // Measured against the 1920 x 1080 in-game HUD: the settings circle is
+    // centred 40px from the right. Its next row begins at client y=106.
+    // Neither the editor position, Windows DPI nor the user's text scale moves it.
+    const float hud_scale = std::clamp(std::min(viewport.Size.x / 1920.0f,
+        viewport.Size.y / 1080.0f), 0.1f, 3.0f);
+    const float edge = std::min(std::max(48.0f, 56.0f * hud_scale),
+        std::max(1.0f, std::min(viewport.Size.x, viewport.Size.y) - 8.0f));
+    const ImVec2 lower(viewport.Pos.x + 4.0f, viewport.Pos.y + 4.0f);
+    const ImVec2 upper(std::max(lower.x, viewport.Pos.x + viewport.Size.x - edge - 4.0f),
+                       std::max(lower.y, viewport.Pos.y + viewport.Size.y - edge - 4.0f));
+    const ImVec2 position(std::clamp(viewport.Pos.x + viewport.Size.x - 40.0f * hud_scale - edge * 0.5f, lower.x, upper.x),
+                          std::clamp(viewport.Pos.y + 106.0f * hud_scale, lower.y, upper.y));
     ImGui::SetNextWindowPos(position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(edge, edge), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -2167,13 +2247,19 @@ void draw_menu_launcher(FeatureMenu& menu) {
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
     if (ImGui::Begin("###S8RPK.Launcher", nullptr, flags)) {
-        if (menu_sprites::launcher_button(menu.ui_atlases, "편집 도구 열기##launcher", edge, scale)) {
-            menu.collapsed = false;
-            menu.toggle_collapse = false;
-            menu.auto_load_collapse = false;
+        ImGui::BeginDisabled(popup_open);
+        if (menu_sprites::launcher_button(menu.ui_atlases, "편집 도구 열기##launcher", edge, hud_scale)) {
+            if (menu.collapsed) {
+                menu.collapsed = false;
+                menu.toggle_collapse = false;
+                menu.auto_load_collapse = false;
+            } else {
+                minimize_workbench(menu);
+            }
         }
+        ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-            ImGui::SetTooltip("편집 도구 열기\n클릭: 복원 · 우클릭: 바로가기 · `: 열기/최소화");
+            ImGui::SetTooltip("편집 도구 %s\n우클릭: 바로가기 · `: 열기/최소화", menu.collapsed ? "열기" : "최소화");
         }
         if (ImGui::BeginPopupContextItem("##launcher_shortcuts")) {
             if (ImGui::MenuItem("편집 도구 열기")) {
@@ -2240,192 +2326,144 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         }
     }
     if (menu.collapsed) {
-        draw_menu_launcher(menu);
+        draw_menu_launcher(menu, popup_open);
         return;
     }
 
     const ImGuiViewport& viewport = *ImGui::GetMainViewport();
     const ImGuiStyle& style = ImGui::GetStyle();
     const float scale = menu.dpi_scale;
-    const float margin = 12.0f * scale;
-    const ImVec2 maximum(std::max(1.0f, viewport.WorkSize.x - margin * 2.0f),
-                        std::max(1.0f, viewport.WorkSize.y - margin * 2.0f));
-    const ImVec2 minimum(std::min(640.0f * scale, maximum.x),
-                         std::min(420.0f * scale, maximum.y));
-    constexpr const char* window_name = "S8RPK · 편집 도구###S8RPK.Workbench";
-    const ImVec2 default_size(std::min(900.0f * scale, maximum.x), std::min(620.0f * scale, maximum.y));
-    ImGui::SetNextWindowSize(default_size, ImGuiCond_FirstUseEver);
-    if (!menu.compact_layout_checked) {
-        menu.compact_layout_checked = true;
-        ImVec2 previous_size;
-        if (const ImGuiWindow* previous = ImGui::FindWindowByName(window_name)) {
-            previous_size = previous->SizeFull;
-        } else if (const ImGuiWindowSettings* saved = ImGui::FindWindowSettingsByID(ImHashStr(window_name))) {
-            previous_size = ImVec2(static_cast<float>(saved->Size.x), static_cast<float>(saved->Size.y));
-        }
-        // Migrate only the previous default, retaining any custom-sized window.
-        const bool previous_default =
-            (std::abs(previous_size.x - 1100.0f * scale) < 1.0f &&
-             std::abs(previous_size.y - 790.0f * scale) < 1.0f) ||
-            (previous_size.x == 1100.0f && previous_size.y == 790.0f);
-        if (previous_default) {
-            ImGui::SetNextWindowSize(default_size, ImGuiCond_Always);
-        }
-    }
-    ImGui::SetNextWindowSizeConstraints(minimum, maximum);
+    const bool drawn_home = menu.home_screen;
+    const float margin = 12.0f;
+    const ImVec2 maximum(std::max(1.0f, viewport.WorkSize.x - margin * 2),
+                        std::max(1.0f, viewport.WorkSize.y - margin * 2));
+    const ImVec2 size(std::min((drawn_home ? 740.0f : 920.0f) * scale, maximum.x),
+                      std::min((drawn_home ? 520.0f : 620.0f) * scale, maximum.y));
+    // Keep navigation and the home chooser usable on a small client even when
+    // content text is enlarged. Detail pages retain the requested user scale.
+    const float chrome_scale = std::min(scale, std::max(0.5f, std::min(size.x / 640.0f, size.y / 480.0f)));
+    const float chrome_font_scale = chrome_scale / scale;
+    constexpr const char* window_name = "편집 도구###S8RPK.Workbench";
     ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x + viewport.WorkSize.x * 0.5f,
-                                 viewport.WorkPos.y + viewport.WorkSize.y * 0.5f),
-                           ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-    // Resizing the host or increasing UI scale also constrains the old position.
-    // Do this before Begin so the title bar, hit boxes and background move together.
-    if (const ImGuiWindow* window = ImGui::FindWindowByName(window_name)) {
-        const ImVec2 size(std::clamp(window->SizeFull.x, minimum.x, maximum.x),
-                          std::clamp(window->SizeFull.y, minimum.y, maximum.y));
-        const ImVec2 lower(viewport.WorkPos.x + margin, viewport.WorkPos.y + margin);
-        const ImVec2 upper(std::max(lower.x, viewport.WorkPos.x + viewport.WorkSize.x - margin - size.x),
-                           std::max(lower.y, viewport.WorkPos.y + viewport.WorkSize.y - margin - size.y));
-        const ImVec2 position(std::clamp(window->Pos.x, lower.x, upper.x),
-                              std::clamp(window->Pos.y, lower.y, upper.y));
-        if (position.x != window->Pos.x || position.y != window->Pos.y) {
-            ImGui::SetNextWindowPos(position, ImGuiCond_Always);
-        }
-    }
-    // Native collapse is only an input affordance. Its persistent title strip is
-    // replaced by the launcher, and restoring keeps SizeFull, position and page.
+        viewport.WorkPos.y + viewport.WorkSize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
     ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-    bool keep_expanded = true;
-    const bool expanded = ImGui::Begin(window_name, &keep_expanded, flags);
-    menu.collapsed = ImGui::IsWindowCollapsed() || !keep_expanded;
-    menu.window_x = ImGui::GetWindowPos().x;
-    menu.window_y = ImGui::GetWindowPos().y;
-    if (!expanded || menu.collapsed) {
-        if (menu.collapsed) {
-            ImGui::SetWindowFocus(nullptr);
-        }
-        ImGui::End();
-        return;
-    }
-    if (static_cast<std::size_t>(menu.page) >= MENU_PAGES.size()) {
-        menu.page = MenuPage::Overview;
-    }
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f * chrome_scale, 14.0f * chrome_scale));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBringToFrontOnFocus;
+    if (ImGui::Begin(window_name, nullptr, flags)) {
+        menu.window_x = ImGui::GetWindowPos().x;
+        menu.window_y = ImGui::GetWindowPos().y;
+        if (static_cast<std::size_t>(menu.page) >= MENU_PAGES.size()) menu.page = MenuPage::Overview;
+        const ImVec2 origin = ImGui::GetWindowPos();
+        const float footer_height = 76.0f * chrome_scale;
+        menu_sprites::draw_panel(menu.ui_atlases, origin,
+            ImVec2(origin.x + size.x, origin.y + size.y - footer_height), chrome_scale);
+        ImGui::SetWindowFontScale(chrome_font_scale);
 
-    std::array<char, 192> connection{};
-    if (menu.snapshot.protagonist_id && menu.snapshot.game_memory_status == domain::GameMemoryStatus::Ready) {
-        std::snprintf(connection.data(), connection.size(), "주인공 ID %u 연결됨", *menu.snapshot.protagonist_id);
-    } else if (menu.snapshot.game_memory_status == domain::GameMemoryStatus::ModuleReadFailed ||
-        menu.snapshot.game_memory_status == domain::GameMemoryStatus::RootReadFailed ||
-        menu.snapshot.game_memory_status == domain::GameMemoryStatus::PlayerReadFailed) {
-        std::snprintf(connection.data(), connection.size(), "%s", "게임 데이터 조회 재시도 · 개요에서 상태 확인");
-    } else {
-        std::snprintf(connection.data(), connection.size(), "%s", "시나리오 연결 대기 · 공용 데이터는 별도 조회");
-    }
-    const ImVec2 status_position = ImGui::GetCursorScreenPos();
-    const float minimize_width = ImGui::CalcTextSize("-").x + style.FramePadding.x * 2.0f;
-    const float status_width = std::max(1.0f, ImGui::GetContentRegionAvail().x - minimize_width - style.ItemSpacing.x);
-    ImGui::SetCursorScreenPos(ImVec2(status_position.x + status_width + style.ItemSpacing.x, status_position.y));
-    ImGui::BeginDisabled(popup_open);
-    if (ImGui::SmallButton("-##workbench_minimize")) {
-        menu.collapsed = true;
-        ImGui::SetWindowFocus(nullptr);
-    }
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("최소화 · 작은 아이콘으로 접기");
-    }
-    ImGui::SetCursorScreenPos(status_position);
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + status_width);
-    ImGui::TextWrapped("%s  ·  %s%s", menu.ready ? "설정 준비됨" : "설정 불러오는 중",
-        connection.data(), menu.pending ? "  ·  요청 처리 중" : "");
-    ImGui::PopTextWrapPos();
-    draw_previous_request_error(menu);
-    if (!menu.ready && menu.save_notice) {
-        if (menu.save_notice->status == services::ConfigSaveStatus::InvalidData) {
-            ImGui::TextWrapped("설정 파일의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
-        } else if (menu.save_notice->status == services::ConfigSaveStatus::Failed) {
-            ImGui::TextWrapped("설정을 읽지 못했습니다. 파일 접근 또는 설정 서비스를 확인해 주세요. 오류 %u", menu.save_notice->native_code);
-        }
-    }
-    if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
-        ImGui::TextColored(ImVec4(1.0f, 0.48f, 0.4f, 1.0f), "설정 저장 확인 필요 (%d, %u)",
-            static_cast<int>(menu.save_notice->status), menu.save_notice->native_code);
-        if ((menu.save_notice->status == services::ConfigSaveStatus::Failed ||
-             menu.save_notice->status == services::ConfigSaveStatus::Cancelled) && ImGui::SmallButton("저장 다시 시도")) {
-            menu.retry_save_requested = true;
-        }
-    }
-    ImGui::Separator();
-
-    const ImVec2 available = ImGui::GetContentRegionAvail();
-    const float nav_width = std::min(170.0f * scale, available.x * 0.28f);
-    const float gap = 6.0f * scale;
-    const float body_height = std::max(1.0f, available.y);
-    const ImVec2 navigation_min = ImGui::GetCursorScreenPos();
-    menu_sprites::navigation_background(menu.ui_atlases, navigation_min,
-        ImVec2(navigation_min.x + nav_width, navigation_min.y + body_height), scale);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(1.0f * scale, 3.0f * scale));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    if (ImGui::BeginChild("##workbench_navigation", ImVec2(nav_width, body_height),
-            ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoBackground)) {
+        // Native menu structure: title, raised tabs, paper content, a separate
+        // octagonal return control. No desktop title bar or persistent sidebar.
+        const ImVec2 heading = ImGui::GetCursorScreenPos();
+        const float heading_height = 30.0f * chrome_scale;
+        ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 24.0f * chrome_scale, heading,
+            ImGui::GetColorU32(ImGuiCol_Text), "편집 도구");
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + size.x - 50.0f * chrome_scale, heading.y));
         ImGui::BeginDisabled(popup_open);
-        for (std::size_t index = 0; index < MENU_PAGES.size(); ++index) {
-            const auto page = static_cast<MenuPage>(index);
-            const auto& info = MENU_PAGES[index];
-            if (menu_sprites::navigation_row(menu.ui_atlases, info.label,
-                    ImVec2(ImGui::GetContentRegionAvail().x, 34.0f * scale), menu.page == page)) {
-                select_menu_page(menu, page);
+        if (menu_sprites::sprite_button(menu.ui_atlases, "-##workbench_minimize", ImVec2(30.0f * chrome_scale, 26.0f * chrome_scale))) {
+            minimize_workbench(menu);
+        }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("최소화 · 우측 고정 아이콘으로 다시 열기");
+        ImGui::SetCursorScreenPos(ImVec2(heading.x, heading.y + heading_height));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", drawn_home ? "원하는 항목을 선택해 주십시오." :
+            MENU_PAGES[static_cast<std::size_t>(menu.page)].description);
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+
+        if (drawn_home) {
+            menu_sprites::navigation_row(menu.ui_atlases, "전체 메뉴##home_tab", ImVec2(110.0f * chrome_scale, 34.0f * chrome_scale), true);
+        } else {
+            draw_category_tabs(menu, popup_open, chrome_scale);
+        }
+        ImGui::SetWindowFontScale(1.0f);
+        const ImVec2 body_min = ImGui::GetCursorScreenPos();
+        const float body_bottom = origin.y + size.y - footer_height - 16.0f * chrome_scale;
+        const ImVec2 body_size(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, body_bottom - body_min.y));
+        ImGui::GetWindowDrawList()->AddRectFilled(body_min,
+            ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), ImGui::GetColorU32(ImVec4(0.94f, 0.93f, 0.87f, 0.72f)));
+        ImGui::GetWindowDrawList()->AddRect(body_min,
+            ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), ImGui::GetColorU32(ImGuiCol_Border));
+        const MenuPage drawn_page = menu.page;
+        ImGui::PushID(drawn_home ? -1 : static_cast<int>(drawn_page));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f * chrome_scale, 12.0f * chrome_scale));
+        if (!drawn_home) {
+            ImGui::SetNextWindowContentSize(ImVec2(std::max(440.0f * scale,
+                body_size.x - style.ScrollbarSize - 32.0f * chrome_scale), 0));
+        }
+        if (ImGui::BeginChild("##workbench_page", body_size, ImGuiChildFlags_AlwaysUseWindowPadding,
+                ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_HorizontalScrollbar)) {
+            ImGui::SetWindowFontScale(drawn_home ? chrome_font_scale : 1.0f);
+            draw_previous_request_error(menu);
+            if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
+                ImGui::TextColored(ImVec4(0.68f, 0.18f, 0.10f, 1.0f), "설정 저장 확인 필요 (%d, %u)",
+                    static_cast<int>(menu.save_notice->status), menu.save_notice->native_code);
+                if ((menu.save_notice->status == services::ConfigSaveStatus::Failed ||
+                     menu.save_notice->status == services::ConfigSaveStatus::Cancelled) && ImGui::SmallButton("저장 다시 시도")) {
+                    menu.retry_save_requested = true;
+                }
+            } else if (!menu.ready && menu.save_notice) {
+                ImGui::TextWrapped("설정 파일을 확인해 주세요. 형식 또는 파일 접근 문제가 해결되면 자동으로 다시 읽습니다.");
             }
-            if ((popup_open || menu.page != page) &&
-                ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-                ImGui::SetTooltip("%s%s", info.description, popup_open ? "\n열린 설정창을 닫으면 메뉴를 이동할 수 있습니다." : "");
+            if (drawn_home) {
+                draw_home_menu(menu, popup_open, chrome_scale);
+            } else {
+                ImGui::PushItemWidth(std::min(280.0f * scale, ImGui::GetContentRegionAvail().x * 0.48f));
+                ImGui::PushTextWrapPos(0.0f);
+                switch (drawn_page) {
+                case MenuPage::Overview: draw.draw_overview(); break;
+                case MenuPage::Officers: draw.draw_officer_edit(); break;
+                case MenuPage::Traits: draw.draw_traits(); break;
+                case MenuPage::Domestic: draw.draw_domestic(); break;
+                case MenuPage::CouncilSocial: draw.draw_council(); draw.draw_social(); break;
+                case MenuPage::Battle: draw.draw_war(); draw.draw_stratagem(); break;
+                case MenuPage::Scenario: draw.draw_scenario(); break;
+                case MenuPage::Settings: draw.draw_footer(ImGui::GetContentRegionAvail().x); break;
+                case MenuPage::Count: break;
+                }
+                ImGui::PopTextWrapPos();
+                ImGui::PopItemWidth();
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopID();
+
+        ImGui::SetWindowFontScale(chrome_font_scale);
+        const float return_edge = 56.0f * chrome_scale;
+        const float footer_y = origin.y + size.y - footer_height + 8.0f * chrome_scale;
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + (size.x - return_edge) * 0.5f, footer_y));
+        ImGui::BeginDisabled(popup_open);
+        if (menu_sprites::back_button(menu.ui_atlases, "뒤로##workbench_back", return_edge, chrome_scale)) {
+            if (drawn_home) minimize_workbench(menu);
+            else {
+                menu.home_screen = true;
+                menu.ui_scale_draft.editing = false;
+                menu.notification_speed_draft.editing = false;
+                menu.mission_appointment_limit_editing = false;
             }
         }
         ImGui::EndDisabled();
-        ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY() + 12.0f * scale,
-            ImGui::GetWindowHeight() - 37.0f * scale));
-        if (menu_sprites::navigation_row(menu.ui_atlases, "알림 내역",
-                ImVec2(ImGui::GetContentRegionAvail().x, 34.0f * scale), false)) {
-            menu.notifications.show_history = true;
-        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", drawn_home ? "편집 도구 최소화" : "전체 메뉴로 돌아가기");
+        ImGui::SetWindowFontScale(1.0f);
     }
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::SameLine(0.0f, gap);
-
-    const ImVec2 body_size(std::max(1.0f, ImGui::GetContentRegionAvail().x), body_height);
-    const ImVec2 body_min = ImGui::GetCursorScreenPos();
-    menu_sprites::draw_panel(menu.ui_atlases, body_min, ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), scale);
-    // Page-specific IDs keep each page's scroll position and popup scope stable.
-    const MenuPage drawn_page = menu.page;
-    ImGui::PushID(static_cast<int>(drawn_page));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * scale, 8.0f * scale));
-    ImGui::SetNextWindowContentSize(ImVec2(std::max(440.0f * scale, body_size.x - style.ScrollbarSize - 20.0f * scale), 0));
-    if (ImGui::BeginChild("##workbench_page", body_size, ImGuiChildFlags_AlwaysUseWindowPadding,
-                         ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_HorizontalScrollbar)) {
-        const auto& info = MENU_PAGES[static_cast<std::size_t>(drawn_page)];
-        ImGui::TextColored(ImVec4(0.96f, 0.79f, 0.43f, 1.0f), "%s", info.label);
-        ImGui::TextWrapped("%s", info.description);
-        ImGui::Separator();
-        ImGui::PushItemWidth(std::min(280.0f * scale, ImGui::GetContentRegionAvail().x * 0.48f));
-        ImGui::PushTextWrapPos(0.0f);
-        switch (drawn_page) {
-        case MenuPage::Overview: draw.draw_overview(); break;
-        case MenuPage::Officers: draw.draw_officer_edit(); break;
-        case MenuPage::Traits: draw.draw_traits(); break;
-        case MenuPage::Domestic: draw.draw_domestic(); break;
-        case MenuPage::CouncilSocial: draw.draw_council(); draw.draw_social(); break;
-        case MenuPage::Battle: draw.draw_war(); draw.draw_stratagem(); break;
-        case MenuPage::Scenario: draw.draw_scenario(); break;
-        case MenuPage::Settings: draw.draw_footer(ImGui::GetContentRegionAvail().x); break;
-        case MenuPage::Count: break;
-        }
-        ImGui::PopTextWrapPos();
-        ImGui::PopItemWidth();
-    }
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::PopID();
     ImGui::End();
+    ImGui::PopStyleVar(2);
+    // Keep the HUD control at its calibrated position even while a page is open.
+    draw_menu_launcher(menu, popup_open);
 }
 
 void draw_officer_name_input(FeatureMenu& menu, services::UiBridge& bridge, std::uint16_t id) {

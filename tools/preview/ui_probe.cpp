@@ -13,20 +13,16 @@ namespace {
 std::vector<s8::preview::UiItem> items;
 std::unordered_map<ImGuiID, std::size_t> indices;
 std::optional<ImRect> remembered_workbench;
+std::optional<ImRect> remembered_launcher;
 
 ImGuiWindow* workbench_window() { return ImGui::FindWindowByName("###S8RPK.Workbench"); }
 ImGuiWindow* launcher_window() { return ImGui::FindWindowByName("###S8RPK.Launcher"); }
 bool drawn(const ImGuiWindow* window) { return window && window->Active && !window->Hidden; }
+ImRect window_bounds(const ImGuiWindow* window) {
+    return ImRect(window->Pos, ImVec2(window->Pos.x + window->Size.x, window->Pos.y + window->Size.y));
+}
 void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
-}
-void require_window_fit(const ImGuiWindow* window) {
-    const auto& viewport = *ImGui::GetMainViewport();
-    require(drawn(window), "Expected a visible window for bounds check");
-    require(window->Pos.x >= viewport.WorkPos.x - 1 && window->Pos.y >= viewport.WorkPos.y - 1
-        && window->Pos.x + window->Size.x <= viewport.WorkPos.x + viewport.WorkSize.x + 1
-        && window->Pos.y + window->Size.y <= viewport.WorkPos.y + viewport.WorkSize.y + 1,
-        "Visible window extends outside the viewport work area");
 }
 }
 
@@ -101,39 +97,28 @@ bool probe_assertion(std::string_view verb, std::string_view value) {
             require(!drawn(workbench), "Minimized workbench still renders a window or title bar");
             require(drawn(launcher), "Minimized launcher is missing");
             require(find_item("편집 도구 열기##launcher").has_value(), "Launcher has no clickable item");
-            require(!find_item("개요", "workbench_navigation"), "Hidden navigation remains interactive");
+            require(!find_item("개요", "S8RPK.Workbench"), "Hidden navigation remains interactive");
         } else if (value == "expanded") {
             require(drawn(workbench) && !workbench->Collapsed, "Workbench was not restored");
-            require(!drawn(launcher), "Launcher remains visible over the expanded workbench");
+            require(drawn(launcher), "Fixed launcher is missing while the menu is expanded");
         } else throw std::runtime_error("Unknown shell state");
     } else if (verb == "expect-compact") {
         require(drawn(workbench) && !workbench->Collapsed, "Compact layout needs an expanded workbench");
-        require(workbench->Size.x <= 920.0f * scale + 1 && workbench->Size.y <= 640.0f * scale + 1,
+        require(workbench->Size.x <= 940.0f * scale + 1 && workbench->Size.y <= 640.0f * scale + 1,
             "Default workbench exceeds the compact size budget");
-    } else if (verb == "expect-nav-tight") {
+    } else if (verb == "expect-navigation-fit") {
         constexpr std::array labels{"개요", "무장", "기재 · 성장", "도시 · 내정",
             "평정 · 교류", "전투", "시나리오", "환경설정"};
-        std::optional<UiItem> previous;
         for (const auto* label : labels) {
-            const auto item = find_item(label, "workbench_navigation");
-            require(item.has_value(), "A category row is missing from the compact sidebar");
-            require(item->max.y - item->min.y <= 36.0f * scale + 1,
-                "A category row is taller than the compact budget");
-            require(item->max.x - item->min.x <= 180.0f * scale + 1,
-                "Sidebar is wider than the compact budget");
-            if (previous) {
-                require(std::abs(item->min.x - previous->min.x) <= 1
-                    && std::abs(item->max.x - previous->max.x) <= 1,
-                    "Category rows do not share a continuous column");
-                require(item->min.y >= previous->max.y - 1 && item->min.y - previous->max.y <= scale + 1,
-                    "Excess vertical whitespace remains between category rows");
-            }
-            previous = item;
+            const auto item = find_item(label, "S8RPK.Workbench");
+            require(item.has_value(), "A category is missing from the menu or upper tabs");
+            require(item->fits_clip, "A category button is clipped by its panel");
+            require(item->max.y - item->min.y <= 56.0f * scale + 1,
+                "A category button is taller than the compact menu budget");
         }
     } else if (verb == "remember-workbench") {
         require(drawn(workbench) && !workbench->Collapsed, "Cannot remember hidden workbench geometry");
-        remembered_workbench = ImRect(workbench->Pos,
-            ImVec2(workbench->Pos.x + workbench->Size.x, workbench->Pos.y + workbench->Size.y));
+        remembered_workbench = window_bounds(workbench);
     } else if (verb == "expect-workbench-restored") {
         require(drawn(workbench) && !workbench->Collapsed && remembered_workbench.has_value(),
             "No restored workbench geometry to compare");
@@ -144,9 +129,65 @@ bool probe_assertion(std::string_view verb, std::string_view value) {
             && std::abs(workbench->Size.y - saved.GetHeight()) <= 1,
             "Minimize/restore changed the main window position or size");
     } else if (verb == "expect-launcher-fit") {
-        require_window_fit(launcher);
-        require(launcher->Size.x <= 48.0f * scale + 1 && launcher->Size.y <= 48.0f * scale + 1,
-            "Minimized launcher is larger than a small icon");
+        require(drawn(launcher), "Fixed launcher is missing");
+        const auto& viewport = *ImGui::GetMainViewport();
+        require(launcher->Pos.x >= viewport.Pos.x - 1 && launcher->Pos.y >= viewport.Pos.y - 1
+            && launcher->Pos.x + launcher->Size.x <= viewport.Pos.x + viewport.Size.x + 1
+            && launcher->Pos.y + launcher->Size.y <= viewport.Pos.y + viewport.Size.y + 1,
+            "Fixed launcher extends outside the game client viewport");
+        require(launcher->Size.x >= 48.0f - 1 && launcher->Size.x <= 168.0f + 1
+            && std::abs(launcher->Size.x - launcher->Size.y) <= 1,
+            "Launcher is too small to click or is no longer a square HUD control");
+        const auto target = find_item("편집 도구 열기##launcher");
+        require(target && target->fits_clip, "Launcher click target is missing or clipped");
+    } else if (verb == "remember-launcher") {
+        require(drawn(launcher), "Cannot remember a hidden launcher");
+        remembered_launcher = window_bounds(launcher);
+    } else if (verb == "expect-launcher-unchanged") {
+        require(drawn(launcher) && remembered_launcher.has_value(), "No fixed launcher geometry to compare");
+        const auto& saved = *remembered_launcher;
+        require(std::abs(launcher->Pos.x - saved.Min.x) <= 1
+            && std::abs(launcher->Pos.y - saved.Min.y) <= 1
+            && std::abs(launcher->Size.x - saved.GetWidth()) <= 1
+            && std::abs(launcher->Size.y - saved.GetHeight()) <= 1,
+            "Opening, closing, or scaling the editor moved the fixed launcher");
+    } else if (verb == "expect-launcher-reference") {
+        require(drawn(launcher), "Reference comparison needs a visible launcher");
+        const auto& viewport = *ImGui::GetMainViewport();
+        require(std::abs(viewport.Size.x - 2048) <= 1 && std::abs(viewport.Size.y - 1151) <= 1,
+            "Reference comparison requires the supplied screenshot's 2048 x 1151 client area");
+        // Measured from the supplied game's settings gear, after excluding its
+        // 36 px operating-system title bar. Allow raster rounding at its edges.
+        const float center_x = launcher->Pos.x + launcher->Size.x * 0.5f - viewport.Pos.x;
+        require(std::abs(center_x - 2006) <= 2 && std::abs(launcher->Pos.y - viewport.Pos.y - 113) <= 2
+            && std::abs(launcher->Size.x - 60) <= 2 && std::abs(launcher->Size.y - 60) <= 2,
+            "Launcher does not align below the supplied screenshot's settings gear");
+    } else if (verb == "expect-toast-stack") {
+        const int count = std::stoi(std::string(value));
+        const auto& viewport = *ImGui::GetMainViewport();
+        const float center_x = viewport.Pos.x + viewport.Size.x * 0.5f;
+        const ImGuiWindow* lower = nullptr;
+        for (int index = 0; index < 4; ++index) {
+            const auto name = "##NotificationToast" + std::to_string(index);
+            const auto* toast = ImGui::FindWindowByName(name.c_str());
+            if (index >= count) {
+                require(!drawn(toast), "Expired or excess notification remains visible");
+                continue;
+            }
+            require(drawn(toast), "Expected notification strip is missing");
+            require((toast->Flags & ImGuiWindowFlags_NoInputs) == ImGuiWindowFlags_NoInputs,
+                "Notification strip can intercept game input");
+            require(std::abs(toast->Pos.x + toast->Size.x * 0.5f - center_x) <= 1,
+                "Notification strip is not horizontally centered");
+            require(toast->Pos.x >= viewport.Pos.x - 1 && toast->Pos.x + toast->Size.x <= viewport.Pos.x + viewport.Size.x + 1
+                && toast->Pos.y >= viewport.Pos.y - 1 && toast->Pos.y + toast->Size.y <= viewport.Pos.y + viewport.Size.y + 1,
+                "Notification strip is clipped by the game client");
+            if (lower) require(toast->Pos.y + toast->Size.y <= lower->Pos.y,
+                "Stacked notification strips overlap");
+            else require(toast->Pos.y + toast->Size.y >= viewport.Pos.y + viewport.Size.y * 0.75f,
+                "Newest notification does not appear near the bottom");
+            lower = toast;
+        }
     } else if (verb == "expect-mouse-capture") {
         require(ImGui::GetIO().WantCaptureMouse == (value == "yes"),
             "Unexpected mouse capture outside the minimized launcher");

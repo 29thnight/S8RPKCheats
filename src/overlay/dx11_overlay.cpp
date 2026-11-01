@@ -76,6 +76,38 @@ bool create_render_target(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     if (FAILED(swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), buffer.put_void()))) {
         return false;
     }
+
+    // ImGui colors and the UI PNGs already contain display-encoded RGB. A
+    // default view inherits an sRGB back buffer and encodes those values again,
+    // turning dark brown into washed-out gray. Use the compatible UNORM view
+    // for our pass only; the game's render-target bindings are restored below.
+    D3D11_TEXTURE2D_DESC buffer_description{};
+    buffer->GetDesc(&buffer_description);
+    D3D11_RENDER_TARGET_VIEW_DESC view_description{};
+    switch (buffer_description.Format) {
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        view_description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        break;
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        view_description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        break;
+    case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+        view_description.Format = DXGI_FORMAT_B8G8R8X8_UNORM;
+        break;
+    default:
+        // Retain the original behavior for already-UNORM and other formats.
+        return SUCCEEDED(overlay.device->CreateRenderTargetView(buffer.get(), nullptr, overlay.render_target.put()));
+    }
+    view_description.ViewDimension = buffer_description.SampleDesc.Count > 1
+        ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
+    if (SUCCEEDED(overlay.device->CreateRenderTargetView(buffer.get(), &view_description, overlay.render_target.put()))) {
+        return true;
+    }
+    // Older drivers may reject a reinterpreted swap-chain view. Keep the menu
+    // available rather than failing overlay initialization on those devices.
     return SUCCEEDED(overlay.device->CreateRenderTargetView(buffer.get(), nullptr, overlay.render_target.put()));
 }
 
@@ -146,9 +178,10 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     colors[ImGuiCol_Tab] = ImVec4(1.00f, 0.75f, 0.00f, 0.18f);
     colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.75f, 0.00f, 0.42f);
     colors[ImGuiCol_TabSelected] = ImVec4(1.00f, 0.75f, 0.00f, 0.58f);
-    const UINT dpi = GetDpiForWindow(description.OutputWindow);
-
-    load_korean_font(15.0f * (dpi ? static_cast<float>(dpi) / 96.0f : 1.0f));
+    // Game HUD coordinates are client pixels, not Windows desktop DIPs. Keep
+    // the same 18 px base as the standalone preview; user scaling is applied
+    // once through FontGlobalScale together with the layout scale.
+    load_korean_font(18.0f);
     overlay.window = description.OutputWindow;
     if (!ImGui_ImplWin32_Init(overlay.window)) {
         ImGui::DestroyContext(overlay.imgui);

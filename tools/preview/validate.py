@@ -52,7 +52,7 @@ def display_environment():
                            and not Path(f"/tmp/.X{number}-lock").exists())
             # Local disposable display contains only sample UI; TCP is disabled.
             log = open(Path(temporary) / "xvfb.log", "w+")
-            process = subprocess.Popen(["Xvfb", f":{display}", "-screen", "0", "1920x1200x24",
+            process = subprocess.Popen(["Xvfb", f":{display}", "-screen", "0", "2560x1440x24",
                                         "-nolisten", "tcp", "-ac"], stdout=log, stderr=log)
             for _ in range(100):
                 if process.poll() is not None:
@@ -100,11 +100,15 @@ def main():
             ("loading", "loading", ["--scenario", "loading"]),
             ("settings", "settings", []),
             ("host-scenarios", "host-scenarios", []),
-            ("status-links", "status-links", ["--scenario", "errors"]),
+            ("status-links", "status-links", ["--scenario", "errors", "--page", "overview"]),
             ("minimize", "minimize", []),
             ("minimize-150", "minimize", ["--scale", "1.5"]),
             ("autoload", "autoload", ["--auto-load", "--scenario", "title"]),
             ("minimize-fallback", "minimize", ["--no-atlas"]),
+            ("launcher-scale", "launcher-scale", []),
+            ("launcher-reference", "launcher-reference", ["--game-view", "--minimized", "--size", "2048x1151"]),
+            ("notifications", "notifications", ["--game-view", "--minimized", "--frames", "800"]),
+            ("officer-notifications", "officer-notifications", ["--game-view", "--minimized"]),
             ("fallback", "navigation", ["--no-atlas"]),
         ]
         for name, script_name, options in cases:
@@ -128,7 +132,7 @@ def main():
 
         for scenario in ("ready", "title", "errors", "external"):
             path = screenshots / ("overview-" + scenario + ".png")
-            command = [str(executable), "--scenario", scenario, "--frames", "8", "--screenshot", str(path)]
+            command = [str(executable), "--scenario", scenario, "--page", "overview", "--frames", "8", "--screenshot", str(path)]
             result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=30)
             passed = result.returncode == 0 and path.exists()
             results.append({"case": "render-" + scenario, "passed": passed, "exit_code": result.returncode})
