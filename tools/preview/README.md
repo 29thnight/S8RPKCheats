@@ -16,6 +16,19 @@ Windows 배포 ZIP을 받았다면 압축을 푼 뒤 `s8_ui_preview.exe` 또는
 `start-preview.cmd`를 실행합니다. SDL DLL, `resources`, `fonts` 폴더를 함께 둡니다.
 추가 콘솔 창 없이 UI 창만 열립니다.
 
+기본 편집 창은 100% 배율에서 **900 × 620**, 왼쪽 분류는 **170px 폭 / 34px 행**입니다.
+분류 사이에 빈 버튼 간격을 두지 않고 선택한 행만 강조합니다. 리소스 분석과 변경
+내용은 [작은 편집 창과 최소화 아이콘](../../docs/design/UI_Compact_2026-11-01.md)에 있습니다.
+
+창의 **−**, 제목 표시줄의 접기 또는 **X**를 누르면 제목줄 대신 작은 목록 아이콘만
+남습니다. **아이콘 클릭** 또는 **백틱(`)**으로 직전 분류·스크롤·위치·크기를 복원합니다.
+아이콘 우클릭에서는 설정한 알림/주인공/모든 무장 바로가기를 사용할 수 있습니다.
+이미 별도로 연 편집창은 독립적으로 사용할 수 있습니다. 설정 팝업이 열려 있을 때
+백틱을 누르면 팝업을 닫은 후 최소화합니다.
+
+배포 ZIP의 `start-minimized.cmd` 또는 `--auto-load`는 실제 시작 설정 경로로
+작은 아이콘부터 표시합니다. 실행 중인 게임을 사용하지 않습니다.
+
 창 상단의 **상태** 메뉴로 다음 화면을 전환할 수 있습니다.
 
 | 샘플 | 확인할 내용 |
@@ -27,8 +40,8 @@ Windows 배포 ZIP을 받았다면 압축을 푼 뒤 `s8_ui_preview.exe` 또는
 | 확장 기재 외부 관리 | 확장 기재를 다른 런타임이 관리하는 상태 |
 
 **배율** 메뉴는 100%, 125%, 150%를 지원합니다. 실제 환경설정 페이지의 배율
-슬라이더도 조작할 수 있습니다. **메뉴 열기** 또는 백틱 키로 닫은 기본 창을
-다시 열고, **PNG 저장** 또는 `F2`로 현재 창을 `preview.png`에 저장합니다.
+슬라이더도 조작할 수 있습니다. **메뉴 열기**는 기본 창을 펼치며, 백틱 키는
+최소화와 복원을 전환합니다. **PNG 저장** 또는 `F2`로 현재 창을 `preview.png`에 저장합니다.
 샘플 전환은 기존 요청과 편집 상태를 초기화하며 현재 분류와 배율을 유지합니다.
 설정 팝업이 열려 있으면 먼저 닫아야 상태를 전환할 수 있습니다.
 
@@ -85,6 +98,9 @@ python3 tools/preview/validate.py out/ui-preview/s8_ui_preview
 - 설정 준비 전 비활성, 요청 대기 중 중복 편집 방지
 - 전투 설정 팝업 열기/닫기와 팝업 중 분류 이동 방지
 - 실제 배율 슬라이더의 숫자 입력·완료, 125%/150%, 창 축소
+- 최소화 버튼·native 접기·X·백틱으로 아이콘 전환, 클릭 복원 및 분류·위치·크기 보존
+- 자동 불러오기 설정에서 아이콘으로 시작, 아이콘 밖 마우스 비점유, 작은 화면 안 위치 보정
+- 연속 분류 행의 간격·크기 및 125%/150%의 슬라이더 레이블 잘림 검사
 - 샘플 상태 전환, atlas 없는 ImGui 기본 버튼 동작
 - helper 별도 테스트의 마우스·키보드·비활성·ID·UV·스타일 복원
 
@@ -95,6 +111,8 @@ out/ui-preview/s8_ui_preview --scenario title --page officers --frames 8 --scree
 out/ui-preview/s8_ui_preview --scenario errors --frames 8 --screenshot errors.png
 out/ui-preview/s8_ui_preview --page settings --scale 1.5 --size 1100x800
 out/ui-preview/s8_ui_preview --no-atlas
+out/ui-preview/s8_ui_preview --auto-load --scenario title
+out/ui-preview/s8_ui_preview --minimized --frames 8 --screenshot icon.png
 ```
 
 표시 장치가 없는 경우 단일 실행도 `xvfb-run -a`로 감싸거나 `validate.py`를 사용합니다.

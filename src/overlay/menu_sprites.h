@@ -26,6 +26,19 @@ inline constexpr std::array BUTTONS{
     SpriteRect{54, 286, 186, 334},
 };
 
+// compact_controls.png: the supplied 105 x 34 controls, not scaled large cards.
+// Keep the same normal, hover, selected, pressed, disabled state order.
+inline constexpr std::array COMPACT_BUTTONS{
+    SpriteRect{1760, 82, 1865, 116}, SpriteRect{1867, 82, 1972, 116},
+    SpriteRect{1867, 82, 1972, 116}, SpriteRect{1502, 86, 1607, 120},
+    SpriteRect{1609, 106, 1714, 139},
+};
+inline constexpr SpriteRect NAVIGATION_SELECTED{592, 174, 992, 222};
+inline constexpr std::array LAUNCHER_ICONS{
+    SpriteRect{787, 111, 849, 159}, SpriteRect{853, 111, 915, 159},
+    SpriteRect{919, 111, 981, 159}, SpriteRect{655, 123, 717, 171},
+};
+
 struct IconSprites {
     SpriteRect normal, active, disabled;
 };
@@ -154,6 +167,24 @@ inline constexpr std::array THEME_COLORS{
     ThemeColor{ImGuiCol_NavHighlight, {1.0f, 0.95f, 0.72f, 1.0f}},
 };
 
+// Use a real button for capture, keyboard navigation, disabled state and IDs.
+// Only its paint is supplied by the sprite/list helpers below.
+inline bool button_item(const char* label, ImVec2 size) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGui::PushOverrideID(ImGui::GetID(label));
+    const bool pressed = ImGui::Button("", size);
+    ImGui::PopID();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
+    [[maybe_unused]] ImGuiContext& g = *GImGui;
+    IMGUI_TEST_ENGINE_ITEM_INFO(ImGui::GetItemID(), label, ImGui::GetItemStatusFlags());
+    return pressed;
+}
+
 } // namespace detail
 
 // Scope this around all overlay windows. No global font, cursor or style state
@@ -165,13 +196,13 @@ public:
         for (const auto& color : detail::THEME_COLORS) {
             ImGui::PushStyleColor(color.target, color.value);
         }
-        push(ImGuiStyleVar_WindowPadding, ImVec2(14 * scale, 12 * scale));
-        push(ImGuiStyleVar_FramePadding, ImVec2(9 * scale, 4 * scale));
-        push(ImGuiStyleVar_ItemSpacing, ImVec2(10 * scale, 8 * scale));
-        push(ImGuiStyleVar_ItemInnerSpacing, ImVec2(7 * scale, 4 * scale));
-        push(ImGuiStyleVar_CellPadding, ImVec2(7 * scale, 5 * scale));
-        push(ImGuiStyleVar_WindowRounding, 8 * scale);
-        push(ImGuiStyleVar_ChildRounding, 6 * scale);
+        push(ImGuiStyleVar_WindowPadding, ImVec2(10 * scale, 8 * scale));
+        push(ImGuiStyleVar_FramePadding, ImVec2(7 * scale, 3 * scale));
+        push(ImGuiStyleVar_ItemSpacing, ImVec2(7 * scale, 4 * scale));
+        push(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5 * scale, 3 * scale));
+        push(ImGuiStyleVar_CellPadding, ImVec2(5 * scale, 3 * scale));
+        push(ImGuiStyleVar_WindowRounding, 4 * scale);
+        push(ImGuiStyleVar_ChildRounding, 3 * scale);
         push(ImGuiStyleVar_PopupRounding, 6 * scale);
         push(ImGuiStyleVar_FrameRounding, 4 * scale);
         push(ImGuiStyleVar_GrabRounding, 4 * scale);
@@ -214,8 +245,11 @@ inline bool sprite_button(const UiAtlasTextures& atlases, const char* label, ImV
         size.x = text_size.x + style.FramePadding.x * 2 +
             (has_icon ? std::max(0.0f, size.y * 0.6f) + style.ItemInnerSpacing.x : 0.0f);
     }
-    const auto& atlas = atlases[0];
-    if (!detail::available(atlas, detail::BUTTONS[3])) {
+    const bool compact = detail::available(atlases[3], detail::COMPACT_BUTTONS[1]) &&
+        detail::available(atlases[3], detail::COMPACT_BUTTONS[4]);
+    const auto& atlas = atlases[compact ? 3 : 0];
+    const auto& buttons = compact ? detail::COMPACT_BUTTONS : detail::BUTTONS;
+    if (!detail::available(atlas, buttons[3])) {
         if (selected) {
             ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_HeaderActive]);
         }
@@ -226,20 +260,7 @@ inline bool sprite_button(const UiAtlasTextures& atlases, const char* label, ImV
         return pressed;
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-    // Keep Button's native keyboard/mouse behavior and original ID. Its empty
-    // label avoids the bundled Button's custom hover text drawing underneath.
-    ImGui::PushOverrideID(ImGui::GetID(label));
-    const bool pressed = ImGui::Button("", size);
-    ImGui::PopID();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
-    ImGuiContext& g = *GImGui;
-    IMGUI_TEST_ENGINE_ITEM_INFO(ImGui::GetItemID(), label, ImGui::GetItemStatusFlags());
+    const bool pressed = detail::button_item(label, size);
     if (!ImGui::IsItemVisible()) {
         return pressed;
     }
@@ -252,26 +273,27 @@ inline bool sprite_button(const UiAtlasTextures& atlases, const char* label, ImV
     const ImVec2 maximum = ImGui::GetItemRectMax();
     const float width = maximum.x - minimum.x;
     const float height = maximum.y - minimum.y;
-    const float scale = height / 48.0f;
-    const float padding = std::min(12 * scale, width * 0.25f);
+    const float scale = height / (compact ? 34.0f : 48.0f);
+    const float padding = std::min((compact ? 9 : 12) * scale, width * 0.25f);
     float text_left = minimum.x + padding;
     const float text_right = maximum.x - padding;
     ImDrawList& draw = *ImGui::GetWindowDrawList();
     const ImU32 tint = ImGui::GetColorU32(ImVec4(1, 1, 1, 1));
-    detail::nine_slice(draw, atlas, detail::BUTTONS[state], minimum, maximum, 12, 10, scale, tint);
+    detail::nine_slice(draw, atlas, buttons[state], minimum, maximum,
+        compact ? 10 : 12, compact ? 7 : 10, scale, tint);
     if (has_icon && width > 44 * scale) {
         const auto& icons = detail::ICONS[static_cast<std::size_t>(icon)];
         const auto rect = disabled ? icons.disabled : (selected || hovered) ? icons.active : icons.normal;
-        const float side = std::min(28 * scale, std::max(0.0f, width - padding * 2));
+        const float side = std::min((compact ? 21 : 28) * scale, std::max(0.0f, width - padding * 2));
         const float top = minimum.y + (height - side) * 0.5f;
-        detail::image(draw, atlas, rect, ImVec2(text_left, top), ImVec2(text_left + side, top + side), tint);
-        text_left += side + 8 * scale;
+        detail::image(draw, atlases[0], rect, ImVec2(text_left, top), ImVec2(text_left + side, top + side), tint);
+        text_left += side + (compact ? 5 : 8) * scale;
     }
     if (text_right > text_left) {
         const float text_x = has_icon ? text_left : std::max(text_left, minimum.x + (width - text_size.x) * 0.5f);
         const ImVec4 clip(text_left, minimum.y, text_right, maximum.y);
         const ImVec4 ink = disabled ? ImVec4(0.90f, 0.89f, 0.85f, 1.0f)
-            : held ? ImVec4(1.0f, 0.97f, 0.88f, 1.0f) : ImVec4(0.08f, 0.06f, 0.025f, 1.0f);
+            : held && !compact ? ImVec4(1.0f, 0.97f, 0.88f, 1.0f) : ImVec4(0.08f, 0.06f, 0.025f, 1.0f);
         draw.AddText(ImGui::GetFont(), ImGui::GetFontSize(),
             ImVec2(text_x, minimum.y + (height - text_size.y) * 0.5f),
             ImGui::GetColorU32(ink), label, text_end, 0, &clip);
@@ -282,6 +304,76 @@ inline bool sprite_button(const UiAtlasTextures& atlases, const char* label, ImV
     if (text_size.x > text_right - text_left && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
         ImGui::SetTooltip("%.*s", static_cast<int>(text_end - label), label);
     }
+    return pressed;
+}
+
+// A shared sidebar background, with no separate frames around unselected rows.
+inline void navigation_background(const UiAtlasTextures&, ImVec2 minimum, ImVec2 maximum, float) {
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    const ImU32 top = ImGui::GetColorU32(ImVec4(0.19f, 0.15f, 0.09f, 1.0f));
+    const ImU32 bottom = ImGui::GetColorU32(ImVec4(0.12f, 0.10f, 0.065f, 1.0f));
+    draw.AddRectFilledMultiColor(minimum, maximum, top, top, bottom, bottom);
+    draw.AddLine(ImVec2(maximum.x - 0.5f, minimum.y), ImVec2(maximum.x - 0.5f, maximum.y),
+        ImGui::GetColorU32(ImVec4(0.50f, 0.41f, 0.24f, 1.0f)));
+}
+
+inline bool navigation_row(const UiAtlasTextures& atlases, const char* label, ImVec2 size, bool selected) {
+    if (ImGui::GetCurrentWindow()->SkipItems) return false;
+    const bool pressed = detail::button_item(label, size);
+    if (!ImGui::IsItemVisible()) return pressed;
+    const ImVec2 minimum = ImGui::GetItemRectMin(), maximum = ImGui::GetItemRectMax();
+    const bool disabled = (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled) != 0;
+    const bool hovered = ImGui::IsItemHovered();
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    if (selected) {
+        draw.AddRectFilled(minimum, maximum, ImGui::GetColorU32(ImVec4(0.28f, 0.12f, 0.17f, 1.0f)));
+        detail::nine_slice(draw, atlases[4], detail::NAVIGATION_SELECTED, minimum, maximum, 10, 2, 1.0f,
+            ImGui::GetColorU32(ImVec4(1, 1, 1, 1)));
+        draw.AddRect(ImVec2(minimum.x + 0.5f, minimum.y + 0.5f),
+            ImVec2(maximum.x - 0.5f, maximum.y - 0.5f),
+            ImGui::GetColorU32(ImVec4(0.77f, 0.66f, 0.39f, 1.0f)));
+    } else if (hovered || ImGui::IsItemActive()) {
+        draw.AddRectFilled(minimum, maximum, ImGui::GetColorU32(ImVec4(0.58f, 0.47f, 0.24f, 0.24f)));
+    }
+    const char* end = ImGui::FindRenderedTextEnd(label);
+    const ImVec2 text = ImGui::CalcTextSize(label, end);
+    const float inset = std::min(8.0f, size.x * 0.2f);
+    const ImVec4 clip(minimum.x + inset, minimum.y, maximum.x - inset, maximum.y);
+    const ImU32 ink = ImGui::GetColorU32(disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+    draw.AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+        ImVec2(std::max(clip.x, minimum.x + (size.x - text.x) * 0.5f),
+            minimum.y + (size.y - text.y) * 0.5f), ink, label, end, 0, &clip);
+    if (!disabled) ImGui::RenderNavHighlight(ImRect(minimum, maximum), ImGui::GetItemID(), ImGuiNavHighlightFlags_Compact);
+    return pressed;
+}
+
+inline bool launcher_button(const UiAtlasTextures& atlases, const char* label, float edge, float scale) {
+    if (ImGui::GetCurrentWindow()->SkipItems) return false;
+    const bool pressed = detail::button_item(label, ImVec2(edge, edge));
+    if (!ImGui::IsItemVisible()) return pressed;
+    const bool disabled = (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled) != 0;
+    const bool hovered = ImGui::IsItemHovered();
+    const std::size_t state = disabled ? 3 : ImGui::IsItemActive() ? 2 : hovered ? 1 : 0;
+    const ImVec2 minimum = ImGui::GetItemRectMin(), maximum = ImGui::GetItemRectMax();
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    scale = detail::positive_scale(scale);
+    const float width = std::max(1.0f, edge - 4.0f * scale);
+    const float height = width * 48.0f / 62.0f;
+    const ImVec2 icon_min(minimum.x + (edge - width) * 0.5f, minimum.y + (edge - height) * 0.5f);
+    const ImVec2 icon_max(icon_min.x + width, icon_min.y + height);
+    if (detail::available(atlases[4], detail::LAUNCHER_ICONS[state])) {
+        detail::image(draw, atlases[4], detail::LAUNCHER_ICONS[state], icon_min, icon_max,
+            ImGui::GetColorU32(ImVec4(1, 1, 1, 1)));
+    } else {
+        draw.AddRectFilled(icon_min, icon_max, ImGui::GetColorU32(hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button), 3 * scale);
+        draw.AddRect(icon_min, icon_max, ImGui::GetColorU32(ImGuiCol_Border), 3 * scale);
+        const ImU32 ink = ImGui::GetColorU32(disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        for (int line = 0; line < 3; ++line) {
+            const float y = icon_min.y + height * (0.3f + 0.2f * line);
+            draw.AddLine(ImVec2(icon_min.x + width * 0.25f, y), ImVec2(icon_min.x + width * 0.75f, y), ink, scale);
+        }
+    }
+    if (!disabled) ImGui::RenderNavHighlight(ImRect(minimum, maximum), ImGui::GetItemID(), ImGuiNavHighlightFlags_Compact);
     return pressed;
 }
 
@@ -311,10 +403,10 @@ inline void status_badge(const UiAtlasTextures& atlases, const char* label, Stat
     scale = detail::positive_scale(scale);
     const char* text_end = ImGui::FindRenderedTextEnd(label);
     const ImVec2 text_size = ImGui::CalcTextSize(label, text_end);
-    const float padding = 14 * scale;
+    const float padding = 10 * scale;
     const float wanted_width = std::max(54 * scale, text_size.x + padding * 2);
     const float width = std::max(1.0f, std::min(wanted_width, ImGui::GetContentRegionAvail().x));
-    const float height = std::max(28 * scale, text_size.y + 8 * scale);
+    const float height = std::max(24 * scale, text_size.y + 6 * scale);
     ImGui::Dummy(ImVec2(width, height));
     if (!ImGui::IsItemVisible()) {
         return;

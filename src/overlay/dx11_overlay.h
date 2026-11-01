@@ -24,7 +24,7 @@ struct Dx11Overlay {
     winrt::com_ptr<ID3D11RenderTargetView> render_target;
     std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 11> range_textures;
     bool range_textures_loaded = false;
-    std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 3> ui_atlas_textures;
+    std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 5> ui_atlas_textures;
     bool ui_atlases_loaded = false;
     std::uint64_t ui_atlas_retry_ms = 0;
     ImGuiContext* imgui = nullptr;

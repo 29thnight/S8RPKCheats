@@ -4,12 +4,14 @@ ctrl-click "UI 배율"
 text "1.25"
 key Enter
 expect-scale 1.25
+expect-item-fit "알림 속도"
 expect-commands 1
 shot "out/ui-preview/screenshots/settings-125.png"
 click "배율" "##MainMenuBar"
 click "150%"
 wait 4
 expect-scale 1.5
+expect-item-fit "알림 속도"
 shot "out/ui-preview/screenshots/settings-150.png"
 resize 1100x800
 expect-window-fit

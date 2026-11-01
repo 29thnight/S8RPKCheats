@@ -67,7 +67,7 @@ struct RangeImage {
     std::vector<std::byte> pixels;
 };
 using RangeImages = std::array<RangeImage, 11>;
-using UiAtlasImages = std::array<RangeImage, 3>;
+using UiAtlasImages = std::array<RangeImage, 5>;
 struct OfficerNameEdit {
     int id;
     std::string name;

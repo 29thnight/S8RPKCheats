@@ -37,8 +37,8 @@ struct Options {
     std::string scenario = "ready", font, screenshot, dump, script, open;
     fs::path resources;
     overlay::MenuPage page = overlay::MenuPage::Overview;
-    int frames = 0, width = 1440, height = 1000, delay_frames = 0;
-    bool no_atlas = false;
+    int frames = 0, width = 1120, height = 760, delay_frames = 0;
+    bool no_atlas = false, minimized = false, auto_load = false;
     float scale = 1.0f;
 };
 
@@ -47,15 +47,18 @@ Options parse_options(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string key = argv[i];
         if (key == "--no-atlas") { result.no_atlas = true; continue; }
+        if (key == "--minimized") { result.minimized = true; continue; }
+        if (key == "--auto-load") { result.auto_load = true; continue; }
         if (key == "--help") {
             std::cout << "S8RPK shared ImGui UI preview (sample data only)\n"
                 "  --scenario ready|title|loading|errors|external\n"
                 "  --page overview|officers|traits|domestic|council|battle|scenario|settings\n"
                 "  --open roster|traits|city|protagonist\n"
-                "  --scale 1.0 --size 1440x1000 --font FONT --resources DIRECTORY\n"
+                "  --scale 1.0 --size 1120x760 --font FONT --resources DIRECTORY\n"
                 "  --frames 8 --screenshot FILE.png --dump-items FILE.txt --script FILE\n"
                 "  --no-atlas --delay-frames 20 (fallback / pending-input checks)\n"
-                "F2 saves preview.png; backtick reopens the main menu.\n";
+                "  --minimized --auto-load (launcher / real startup path)\n"
+                "F2 saves preview.png; backtick minimizes/restores the main menu.\n";
             std::exit(0);
         }
         if (i + 1 == argc) throw std::runtime_error("Missing value for " + key);
@@ -211,7 +214,12 @@ void preview_menu(std::unique_ptr<overlay::FeatureMenu>& menu,
         }
         ImGui::EndMenu();
     }
-    if (ImGui::MenuItem("메뉴 열기")) menu->open = true;
+    if (ImGui::MenuItem("메뉴 열기")) {
+        menu->open = true;
+        menu->collapsed = false;
+        menu->toggle_collapse = false;
+        menu->auto_load_collapse = false;
+    }
     if (ImGui::MenuItem("PNG 저장", "F2")) capture = true;
     ImGui::EndDisabled();
     ImGui::Separator();
@@ -338,7 +346,8 @@ struct Script {
             wait_frames = 3;
         } else if (verb == "key") {
             const SDL_Keycode keycode = value == "Enter" ? SDLK_RETURN : value == "Tab" ? SDLK_TAB
-                : value == "Escape" ? SDLK_ESCAPE : value == "Space" ? SDLK_SPACE : SDLK_UNKNOWN;
+                : value == "Escape" ? SDLK_ESCAPE : value == "Space" ? SDLK_SPACE
+                : value == "Backquote" ? SDLK_BACKQUOTE : SDLK_UNKNOWN;
             if (keycode == SDLK_UNKNOWN) throw std::runtime_error("Unsupported test key");
             SDL_Event event{};
             event.type = SDL_KEYDOWN;
@@ -388,6 +397,17 @@ struct Script {
                 || workbench->Pos.y + workbench->Size.y > display.y + 1)
                 throw std::runtime_error("Workbench extends outside the resized display");
             ++checks;
+        } else if (verb == "move") {
+            const auto split = value.find('x');
+            const int x = std::stoi(value.substr(0, split)), y = std::stoi(value.substr(split + 1));
+            SDL_WarpMouseInWindow(window, x, y);
+            SDL_Event motion{};
+            motion.type = SDL_MOUSEMOTION;
+            motion.motion.windowID = SDL_GetWindowID(window);
+            motion.motion.x = x;
+            motion.motion.y = y;
+            SDL_PushEvent(&motion);
+            wait_frames = 4;
         } else if (verb == "resize") {
             const auto split = value.find('x');
             SDL_SetWindowSize(window, std::stoi(value.substr(0, split)), std::stoi(value.substr(split + 1)));
@@ -401,7 +421,8 @@ struct Script {
             event.wheel.y = std::stoi(value);
             SDL_PushEvent(&event);
             wait_frames = 4;
-        } else throw std::runtime_error("Unknown script operation: " + verb);
+        } else if (preview::probe_assertion(verb, value)) ++checks;
+        else throw std::runtime_error("Unknown script operation: " + verb);
         std::cout << "STEP " << cursor << ' ' << line << '\n';
     }
 };
@@ -438,13 +459,20 @@ int main(int argc, char** argv) {
             session->response_delay_frames = options.delay_frames;
             menu->open = true;
             menu->auto_load_applied = true;
+            menu->collapsed = options.minimized;
+            if (options.auto_load) {
+                session->config.features.set(domain::FeatureId::AutoLoadMenu, true);
+                menu->open = false;
+                menu->auto_load_applied = false;
+            }
             menu->page = options.page;
             menu->officer_list_open = options.open == "roster";
             menu->trait_text_editor.open = options.open == "traits";
             menu->city_management.open = options.open == "city";
             menu->protagonist_detail = options.open == "protagonist";
             const auto resources = resource_directory(options);
-            constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "panel_frame.png"};
+            constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "panel_frame.png",
+                "compact_controls.png", "navigation_controls.png"};
             for (std::size_t i = 0; i < atlas_files.size(); ++i) {
                 int width = 0, height = 0;
                 auto* texture = textures.load(renderer, resources / "ui" / atlas_files[i], &width, &height);
@@ -464,7 +492,8 @@ int main(int argc, char** argv) {
                     ImGui_ImplSDL2_ProcessEvent(&event);
                     if (event.type == SDL_QUIT) running = false;
                     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F2) capture = true;
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_BACKQUOTE) menu->open = true;
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_BACKQUOTE && !event.key.repeat)
+                        overlay::request_feature_menu_toggle(*menu);
                 }
                 session->pump();
                 ImGui_ImplSDLRenderer2_NewFrame();

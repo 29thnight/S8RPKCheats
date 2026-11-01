@@ -1,0 +1,47 @@
+# Click every actual minimize path and restore through the small shared icon.
+expect-shell expanded
+expect-compact
+expect-nav-tight
+click "기재 · 성장"
+expect-page traits
+remember-workbench
+click "-##workbench_minimize"
+expect-shell icon
+expect-launcher-fit
+expect-page traits
+move 12x80
+expect-mouse-capture no
+shot "out/ui-preview/screenshots/minimized.png"
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-workbench-restored
+expect-page traits
+shot "out/ui-preview/screenshots/restored.png"
+click "workbench-collapse"
+expect-shell icon
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-workbench-restored
+click "workbench-close"
+expect-shell icon
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-workbench-restored
+key Backquote
+expect-shell icon
+key Backquote
+expect-shell expanded
+expect-page traits
+expect-workbench-restored
+key Backquote
+expect-shell icon
+resize 640x480
+expect-launcher-fit
+move 12x80
+expect-mouse-capture no
+shot "out/ui-preview/screenshots/minimized-small-viewport.png"
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-page traits
+expect-window-fit
+shot "out/ui-preview/screenshots/restored-small-viewport.png"

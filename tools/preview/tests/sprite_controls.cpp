@@ -19,8 +19,9 @@ void require(bool condition, const char* expression, int line) {
 #define CHECK(condition) require((condition), #condition, __LINE__)
 
 struct FrameResult { bool pressed; ImGuiID id; ImVec2 minimum, maximum; };
+enum class Control { Action, Navigation, Launcher };
 
-FrameResult frame(const UiAtlasTextures& atlases, bool disabled = false) {
+FrameResult frame(const UiAtlasTextures& atlases, Control control, bool disabled = false) {
     ImGui::NewFrame();
     const int colors_before = GImGui->ColorStack.Size;
     const int variables_before = GImGui->StyleVarStack.Size;
@@ -33,8 +34,18 @@ FrameResult frame(const UiAtlasTextures& atlases, bool disabled = false) {
         ImGui::SetNextWindowSize(ImVec2(780, 580));
         ImGui::Begin("Sprite smoke", nullptr, ImGuiWindowFlags_NoSavedSettings);
         ImGui::BeginDisabled(disabled);
-        result.pressed = menu_sprites::sprite_button(atlases, "Action##stable", ImVec2(200, 48),
-            true, menu_sprites::Officer);
+        switch (control) {
+        case Control::Action:
+            result.pressed = menu_sprites::sprite_button(atlases, "Action##stable", ImVec2(200, 30),
+                true, menu_sprites::Officer);
+            break;
+        case Control::Navigation:
+            result.pressed = menu_sprites::navigation_row(atlases, "Action##stable", ImVec2(170, 34), true);
+            break;
+        case Control::Launcher:
+            result.pressed = menu_sprites::launcher_button(atlases, "Action##stable", 36.0f, 1.0f);
+            break;
+        }
         result.id = ImGui::GetItemID();
         CHECK(result.id == ImGui::GetID("Action##stable"));
         result.minimum = ImGui::GetItemRectMin();
@@ -44,6 +55,7 @@ FrameResult frame(const UiAtlasTextures& atlases, bool disabled = false) {
             menu_sprites::Settings);
         const ImVec2 cursor = ImGui::GetCursorScreenPos();
         menu_sprites::draw_panel(atlases, ImVec2(500, 400), ImVec2(500.2f, 400.3f), 0.01f);
+        menu_sprites::navigation_background(atlases, ImVec2(500, 400), ImVec2(500.2f, 400.3f), 0.01f);
         const ImVec2 after_panel = ImGui::GetCursorScreenPos();
         CHECK(cursor.x == after_panel.x && cursor.y == after_panel.y);
         menu_sprites::status_badge(atlases, "Ready", menu_sprites::StatusTone::Good, 0.5f);
@@ -71,7 +83,7 @@ FrameResult frame(const UiAtlasTextures& atlases, bool disabled = false) {
     return result;
 }
 
-int main() {
+void check_control(Control control) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
@@ -83,43 +95,50 @@ int main() {
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     io.Fonts->SetTexID(reinterpret_cast<void*>(1));
     UiAtlasTextures loaded{{{reinterpret_cast<void*>(2), 1024, 512},
-        {reinterpret_cast<void*>(3), 1024, 512}, {reinterpret_cast<void*>(4), 2048, 2048}}};
+        {reinterpret_cast<void*>(3), 1024, 512}, {reinterpret_cast<void*>(4), 2048, 2048},
+        {reinterpret_cast<void*>(5), 2048, 1024}, {reinterpret_cast<void*>(6), 1024, 256}}};
     UiAtlasTextures missing{};
-    const auto initial = frame(loaded);
-    const auto ready = frame(loaded);
+    const auto initial = frame(loaded, control);
+    const auto ready = frame(loaded, control);
     io.AddMousePosEvent((ready.minimum.x + ready.maximum.x) / 2,
         (ready.minimum.y + ready.maximum.y) / 2);
-    frame(loaded);
+    frame(loaded, control);
     io.AddMouseButtonEvent(0, true);
-    CHECK(!frame(loaded).pressed);
+    CHECK(!frame(loaded, control).pressed);
     io.AddMouseButtonEvent(0, false);
-    CHECK(frame(loaded).pressed);
-    frame(loaded, true);
+    CHECK(frame(loaded, control).pressed);
+    frame(loaded, control, true);
     io.AddMouseButtonEvent(0, true);
-    CHECK(!frame(loaded, true).pressed);
+    CHECK(!frame(loaded, control, true).pressed);
     io.AddMouseButtonEvent(0, false);
-    CHECK(!frame(loaded, true).pressed);
+    CHECK(!frame(loaded, control, true).pressed);
     io.AddMousePosEvent(-100, -100);
-    frame(loaded);
+    frame(loaded, control);
     // Native keyboard navigation must first become visible (the public focus
     // API intentionally preserves mouse mode and is not a substitute for Tab).
     for (int attempt = 0; attempt < 3; ++attempt) {
         io.AddKeyEvent(ImGuiKey_Tab, true);
-        frame(loaded);
+        frame(loaded, control);
         io.AddKeyEvent(ImGuiKey_Tab, false);
-        frame(loaded);
+        frame(loaded, control);
         if (GImGui->NavId == initial.id && !GImGui->NavDisableHighlight) break;
     }
     CHECK(GImGui->NavId == initial.id);
     CHECK(!GImGui->NavDisableHighlight);
     io.AddKeyEvent(ImGuiKey_Space, true);
-    const bool keyboard_press = frame(loaded).pressed;
+    const bool keyboard_press = frame(loaded, control).pressed;
     io.AddKeyEvent(ImGuiKey_Space, false);
-    const bool keyboard_release = frame(loaded).pressed;
+    const bool keyboard_release = frame(loaded, control).pressed;
     CHECK(keyboard_press || keyboard_release);
-    CHECK(frame(missing).id == initial.id);
+    CHECK(frame(missing, control).id == initial.id);
     CHECK(GImGui->NavId == initial.id);
-    CHECK(frame(loaded).id == initial.id);
+    CHECK(frame(loaded, control).id == initial.id);
     ImGui::DestroyContext();
-    std::puts("PASS: native mouse and keyboard activation, disabled input, fallback ID/focus continuity, finite clipped UV geometry, and ThemeScope restoration.");
+}
+
+int main() {
+    check_control(Control::Action);
+    check_control(Control::Navigation);
+    check_control(Control::Launcher);
+    std::puts("PASS: action, navigation and launcher mouse/keyboard activation, disabled input, fallback ID/focus continuity, finite clipped UV geometry, and ThemeScope restoration.");
 }

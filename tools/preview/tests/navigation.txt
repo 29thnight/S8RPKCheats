@@ -22,8 +22,15 @@ click "전투 환경 설정"
 expect-modal yes
 expect-disabled "환경설정"
 shot "out/ui-preview/screenshots/battle-modal.png"
+key Backquote
+expect-shell expanded
+expect-modal yes
 click "닫기" "전투 환경"
 expect-modal no
+expect-shell icon
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-page battle
 click "시나리오"
 expect-page scenario
 shot "out/ui-preview/screenshots/scenario.png"

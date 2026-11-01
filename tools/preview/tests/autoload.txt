@@ -1,0 +1,16 @@
+# --auto-load exercises the actual update_feature_menu config startup path.
+expect-shell icon
+expect-launcher-fit
+move 12x80
+expect-mouse-capture no
+shot "out/ui-preview/screenshots/autoload-icon.png"
+click "편집 도구 열기##launcher"
+expect-shell expanded
+expect-compact
+expect-window-fit
+expect-page overview
+click "무장"
+expect-page officers
+expect-enabled "모든 무장 편집"
+expect-disabled "주인공 무장 편집"
+shot "out/ui-preview/screenshots/autoload-title-restored.png"

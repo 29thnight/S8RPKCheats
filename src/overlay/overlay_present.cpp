@@ -101,8 +101,7 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         return;
     }
     if (state.toggle_requests.exchange(0) % 2 != 0) {
-        state.menu.open = true;
-        state.menu.toggle_collapse = true;
+        request_feature_menu_toggle(state.menu);
     }
     update_feature_menu(state.menu, state.bridge);
     const UINT dpi = GetDpiForWindow(state.target_window);
@@ -134,57 +133,6 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         upload_ui_atlases(state, GetTickCount64());
         draw_feature_menu(state.menu, state.bridge.commands);
         if (state.menu.open) {
-            if (state.menu.collapsed && state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetNotif)) {
-                const ImVec2 label_size = ImGui::CalcTextSize("알림확인");
-
-                ImGui::SetNextWindowPos(ImVec2(state.menu.window_x - label_size.x - 23.0f,
-                                              state.menu.window_y), ImGuiCond_Always);
-                ImGui::SetNextWindowBgAlpha(0.6f);
-                constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-                if (ImGui::Begin("##notification_badge", nullptr, flags)) {
-                    if (ImGui::Button("알림확인")) {
-                        state.menu.notifications.show_history = !state.menu.notifications.show_history;
-                    }
-                }
-                ImGui::End();
-            }
-            if (state.menu.collapsed && state.menu.snapshot.protagonist_id &&
-                state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetHero)) {
-                const ImVec2 label_size = ImGui::CalcTextSize("주인공");
-                const float notification_width = state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetNotif)
-                    ? ImGui::CalcTextSize("알림확인").x + 28.0f : 0.0f;
-                ImGui::SetNextWindowPos(ImVec2(state.menu.window_x - label_size.x - 23.0f - notification_width,
-                                              state.menu.window_y), ImGuiCond_Always);
-                ImGui::SetNextWindowBgAlpha(0.6f);
-                constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-                if (ImGui::Begin("##protagonist_badge", nullptr, flags)) {
-                    if (ImGui::Button("주인공")) {
-                        state.menu.protagonist_detail = !state.menu.protagonist_detail;
-                    }
-                }
-                ImGui::End();
-            }
-            if (state.menu.collapsed && state.menu.snapshot.protagonist_id &&
-                state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetAllOfficers)) {
-                const ImVec2 label_size = ImGui::CalcTextSize("모든무장");
-                const float notification_width = state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetNotif)
-                    ? ImGui::CalcTextSize("알림확인").x + 28.0f : 0.0f;
-                const float hero_width = state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetHero)
-                    ? ImGui::CalcTextSize("주인공").x + 28.0f : 0.0f;
-                ImGui::SetNextWindowPos(ImVec2(state.menu.window_x - label_size.x - 23.0f - notification_width - hero_width,
-                                              state.menu.window_y), ImGuiCond_Always);
-                ImGui::SetNextWindowBgAlpha(0.6f);
-                constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-                if (ImGui::Begin("##officer_roster_badge", nullptr, flags)) {
-                    if (ImGui::Button("모든무장")) {
-                        state.menu.officer_list_open = !state.menu.officer_list_open;
-                    }
-                }
-                ImGui::End();
-            }
             draw_officer_roster(state.menu, state.bridge);
             draw_protagonist_abilities(state.menu, state.bridge);
             draw_officer_tools(state.menu, state.bridge);

@@ -16,6 +16,7 @@ struct UiItem {
     ImVec2 min{}, max{};
     bool enabled = false;
     bool visible = false;
+    bool fits_clip = false;
 };
 
 // Read-only instrumentation through ImGui's existing test hooks. Actual input
@@ -24,5 +25,8 @@ void begin_probe_frame();
 const std::vector<UiItem>& ui_items();
 std::optional<UiItem> find_item(std::string_view label, std::string_view window = {});
 void dump_items(const std::string& path);
+// Additional read-only assertions used by the SDL script driver. Returns false
+// for an unrecognized verb; recognized checks throw on failure.
+bool probe_assertion(std::string_view verb, std::string_view value);
 
 } // namespace s8::preview

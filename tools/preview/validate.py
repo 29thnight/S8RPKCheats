@@ -101,11 +101,15 @@ def main():
             ("settings", "settings", []),
             ("host-scenarios", "host-scenarios", []),
             ("status-links", "status-links", ["--scenario", "errors"]),
+            ("minimize", "minimize", []),
+            ("minimize-150", "minimize", ["--scale", "1.5"]),
+            ("autoload", "autoload", ["--auto-load", "--scenario", "title"]),
+            ("minimize-fallback", "minimize", ["--no-atlas"]),
             ("fallback", "navigation", ["--no-atlas"]),
         ]
         for name, script_name, options in cases:
             text = (root / "tools/preview/tests" / (script_name + ".txt")).read_text(encoding="utf-8")
-            destination = output / "fallback" if name == "fallback" else output
+            destination = output / name if name != script_name else output
             (destination / "screenshots").mkdir(parents=True, exist_ok=True)
             text = text.replace("out/ui-preview", destination.as_posix())
             script = temporary / (name + ".txt")

@@ -98,6 +98,7 @@ struct FeatureMenu {
     bool toggle_collapse = false;
     bool auto_load_applied = false;
     bool auto_load_collapse = false;
+    bool compact_layout_checked = false;
     float window_x = 0;
     float window_y = 0;
     bool retry_save_requested = false;
@@ -172,6 +173,7 @@ struct FeatureMenu {
 // Snapshot and completions are delivered by the owner of the Present context.
 void on_feature_menu_completion(FeatureMenu& menu, const services::CommandCompletion& completion);
 void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge);
+void request_feature_menu_toggle(FeatureMenu& menu);
 void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox);
 void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge);
 void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge);
