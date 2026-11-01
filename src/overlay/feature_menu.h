@@ -12,6 +12,7 @@
 #include "city_management_panel.h"
 #include "corps_deployment_panel.h"
 #include "officer_notice_panel.h"
+#include "ui_atlas.h"
 
 #include <cstdint>
 #include <optional>
@@ -55,8 +56,15 @@ struct OfficerRosterIndices {
     }
 };
 
+enum class MenuPage : std::uint8_t {
+    Overview, Officers, Traits, Domestic, CouncilSocial, Battle, Scenario, Settings, Count
+};
+
 struct FeatureMenu {
     std::array<void*, 11> range_textures{};
+    UiAtlasTextures ui_atlases{};
+    MenuPage page = MenuPage::Overview;
+    int status_filter = 0;
     float dpi_scale = 1.0f;
     domain::ConfigSnapshot snapshot;
     own::shared_owner<const domain::SkillCounts> skill_counts;

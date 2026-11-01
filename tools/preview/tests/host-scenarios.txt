@@ -1,0 +1,13 @@
+click "무장"
+click "상태" "##MainMenuBar"
+click "타이틀 · 주인공 없음"
+wait 4
+expect-page officers
+expect-disabled "주인공 무장 편집"
+expect-enabled "모든 무장 편집"
+expect-roster 16
+click "상태" "##MainMenuBar"
+click "시나리오 연결"
+wait 4
+expect-enabled "주인공 무장 편집"
+expect-page officers

@@ -67,6 +67,7 @@ struct RangeImage {
     std::vector<std::byte> pixels;
 };
 using RangeImages = std::array<RangeImage, 11>;
+using UiAtlasImages = std::array<RangeImage, 3>;
 struct OfficerNameEdit {
     int id;
     std::string name;
@@ -141,6 +142,8 @@ public:
     std::optional<ConfigSaveStatus> take_officer_name_result();
     void publish_range_images(RangeImages images);
     own::shared_owner<const RangeImages> range_images_view();
+    void publish_ui_atlas_images(UiAtlasImages images);
+    own::shared_owner<const UiAtlasImages> ui_atlas_images_view();
     void request_skill_counts_save(domain::SkillCounts counts);
     std::optional<domain::SkillCounts> take_skill_counts_save();
     void publish_notice(std::string message);
@@ -190,6 +193,7 @@ private:
     bool officer_name_requests_open = true;
     std::optional<ConfigSaveStatus> officer_name_result;
     own::shared_owner<const RangeImages> current_range_images;
+    own::shared_owner<const UiAtlasImages> current_ui_atlas_images;
     std::optional<domain::SkillCounts> pending_skill_counts_save;
     static constexpr std::size_t notice_capacity = 128;
     std::array<PendingNotice, notice_capacity> notices{};

@@ -1,0 +1,9 @@
+expect-roster 16
+click "무장"
+expect-page officers
+expect-enabled "모든 무장 편집"
+expect-disabled "주인공 무장 편집"
+click "모든 무장 편집"
+expect-open roster
+shot "out/ui-preview/screenshots/title-roster.png"
+dump "out/ui-preview/title-roster-items.txt"

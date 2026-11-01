@@ -1,0 +1,6 @@
+click "기재 · 성장"
+click "기재 이름·설명 편집"
+expect-open traits
+expect-enabled "기본 72개"
+expect-enabled "파일 다시 읽기 (편집 취소)"
+shot "out/ui-preview/screenshots/title-traits.png"

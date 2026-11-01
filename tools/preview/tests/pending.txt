@@ -1,0 +1,9 @@
+click "도시 · 내정"
+click "행동력 무제한"
+expect-pending yes
+expect-disabled "견문 시 민심 최대"
+shot "out/ui-preview/screenshots/pending.png"
+wait 30
+expect-pending no
+expect-enabled "견문 시 민심 최대"
+expect-commands 1

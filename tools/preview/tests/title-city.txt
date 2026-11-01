@@ -1,0 +1,7 @@
+click "도시 · 내정"
+click "도시 관리 / 후방 지원"
+expect-open city
+expect-enabled "도시 리스트"
+expect-enabled "##value"
+shot "out/ui-preview/screenshots/title-city.png"
+dump "out/ui-preview/title-city-items.txt"

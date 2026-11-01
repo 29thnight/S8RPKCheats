@@ -400,7 +400,7 @@ void draw_pregnancy(OfficerToolsPanel& panel, const domain::OfficerToolsView& vi
             selected.spouse, panel.pregnancy_spouse});
     }
     ImGui::EndDisabled();
-    ImGui::TextWrapped("임신 중이 아니고 남은 개월과 자녀가 모두 없는 슬롯만 교체할 수 있습니다. 교체 직후 가능성은 0%로 초기화됩니다.");
+    ImGui::TextWrapped("임신 중이 아니고 남은 개월과 자녀가 모두 없는 슬롯만 교체할 수 있습니다. 교체 직후 가능성은 0%%로 초기화됩니다.");
 }
 
 void draw_scenario(OfficerToolsPanel& panel, const domain::OfficerToolsView& view,

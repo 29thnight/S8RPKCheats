@@ -214,6 +214,14 @@ void release_dx11_render_target(Dx11Overlay& overlay) {
     overlay.render_target = nullptr;
 }
 
+void release_dx11_ui_atlases(Dx11Overlay& overlay) {
+    for (winrt::com_ptr<ID3D11ShaderResourceView>& texture : overlay.ui_atlas_textures) {
+        texture = nullptr;
+    }
+    overlay.ui_atlases_loaded = false;
+    overlay.ui_atlas_retry_ms = 0;
+}
+
 void shutdown_dx11_overlay(Dx11Overlay& overlay) {
     if (overlay.imgui) {
         ImGui::SetCurrentContext(overlay.imgui);
@@ -233,6 +241,7 @@ void shutdown_dx11_overlay(Dx11Overlay& overlay) {
         texture = nullptr;
     }
     overlay.range_textures_loaded = false;
+    release_dx11_ui_atlases(overlay);
     overlay.context = nullptr;
     overlay.device = nullptr;
     overlay.window = nullptr;

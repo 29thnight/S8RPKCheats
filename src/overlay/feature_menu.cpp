@@ -1,4 +1,5 @@
 #include "feature_menu.h"
+#include "menu_sprites.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
 #include "../domain/secondary_jewel_definitions.h"
@@ -411,7 +412,11 @@ struct FeatureMenuDraw {
     void prepare_popup(float width, float height) const;
     void draw_range_choices(int& selected) const;
     void draw_resources();
+    void draw_player_options();
     void draw_ai_growth();
+    void draw_traits();
+    void draw_overview();
+    void draw_connection_status();
     void draw_tengi_settings();
     void draw_secondary_jewels();
     void draw_domestic();
@@ -1075,18 +1080,22 @@ void FeatureMenuDraw::draw_domestic() {
         draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::TechCityVisibility, false);
     }
 
-    if (ImGui::Button("명품 관리")) {
+    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 300.0f * menu.dpi_scale), 40.0f * menu.dpi_scale);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "명품 관리", tool_size)) {
         menu.specialty_tools.open = true;
     }
 
-    if (ImGui::Button("도시 관리 / 후방 지원")) {
+    if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리 / 후방 지원", tool_size)) {
         menu.city_management.open = true;
     }
 
-    if (ImGui::Button("군단 배치 / 도시 무장 이동")) {
+    if (menu_sprites::sprite_button(menu.ui_atlases, "군단 배치 / 도시 무장 이동", tool_size)) {
         menu.corps_deployment.open = true;
     }
+}
 
+void FeatureMenuDraw::draw_player_options() {
+    draw_menu_heading("주인공 자원 · 보주");
     draw_resources();
     draw_feature({"보주 교체 무제한", domain::FeatureId::FastJewel});
 
@@ -1111,11 +1120,14 @@ void FeatureMenuDraw::draw_scenario() {
         FeatureItem{"시나리오 초기 설정 보정", domain::FeatureId::StartSetting, "시나리오 보정"},
         FeatureItem{"건녕 ↔ 교지 진로 방해 무시", domain::FeatureId::RoadBlock, "건녕↔교지"},
         FeatureItem{"교지 ↔ 회계 진로 방해 무시", domain::FeatureId::RoadBlock2, "교지↔회계"},
+        FeatureItem{"세력 기술 초기화", domain::FeatureId::TechZero},
+        FeatureItem{"미발견 무장을 재야로", domain::FeatureId::UndiscoveredToRonin},
     };
 
     draw_feature_grid("ScenarioOptions", FEATURES);
 
-    if (ImGui::Button("가족 · 시나리오 도구")) {
+    if (menu_sprites::sprite_button(menu.ui_atlases, "가족 · 시나리오 도구",
+            ImVec2(std::min(ImGui::GetContentRegionAvail().x, 300.0f * menu.dpi_scale), 40.0f * menu.dpi_scale))) {
         menu.officer_tools.open = true;
     }
 }
@@ -1135,9 +1147,6 @@ void FeatureMenuDraw::draw_information() {
         menu.notifications.show_history = true;
     }
 
-    if (ImGui::Button("메모장 / 메모리 도구")) {
-        menu.debug_tools.open = true;
-    }
 }
 
 void FeatureMenuDraw::draw_council() {
@@ -1156,7 +1165,6 @@ void FeatureMenuDraw::draw_council() {
         FeatureItem{"유목기병 습득 조건 해제", domain::FeatureId::YumokCondition},
         FeatureItem{"상병 습득 조건 해제", domain::FeatureId::SangbyeongCondition},
         FeatureItem{"단절 영토 무장 이동 제한", domain::FeatureId::IsolatedTerritoryMovement},
-        FeatureItem{"능력치 한계 돌파", domain::FeatureId::AutoStatUp99},
         FeatureItem{"이동 후 평정 계속", domain::FeatureId::CouncilContinueAfterMove},
         FeatureItem{"세력 도시 재야 무장 처단", domain::FeatureId::CouncilExecuteFreeOfficers},
         FeatureItem{"부하의 군주 이동 제안", domain::FeatureId::RulerTransferProposal},
@@ -1168,27 +1176,40 @@ void FeatureMenuDraw::draw_council() {
 void FeatureMenuDraw::draw_officer_edit() {
     draw_menu_heading("무장 편집");
 
-    if (ImGui::Button("주인공 무장 편집")) {
-        menu.protagonist_detail = true;
-    }
-
-    if (ImGui::Button("모든 무장 편집")) {
+    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 300.0f * menu.dpi_scale), 44.0f * menu.dpi_scale);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "모든 무장 편집", tool_size)) {
         menu.officer_list_open = true;
     }
+    ImGui::TextDisabled("공용 무장 데이터가 준비되면 메인화면에서도 편집할 수 있습니다.");
 
-    if (ImGui::Button("일괄 전법 · 특기 / 랜덤 기재")) {
+    ImGui::BeginDisabled(!menu.snapshot.protagonist_id);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "주인공 무장 편집", tool_size)) {
+        menu.protagonist_detail = true;
+    }
+    ImGui::EndDisabled();
+    if (!menu.snapshot.protagonist_id) {
+        ImGui::TextDisabled("주인공 편집은 시나리오 연결 후 사용할 수 있습니다.");
+    }
+    draw_player_options();
+    draw_information();
+}
+
+void FeatureMenuDraw::draw_traits() {
+    draw_menu_heading("기재 · 전법");
+
+    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 320.0f * menu.dpi_scale), 42.0f * menu.dpi_scale);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "일괄 전법 · 특기 / 랜덤 기재", tool_size)) {
         menu.officer_tools.open = true;
     }
 
     constexpr std::array FEATURES{
-        FeatureItem{"세력 기술 초기화", domain::FeatureId::TechZero},
-        FeatureItem{"미발견 무장을 재야로", domain::FeatureId::UndiscoveredToRonin},
         FeatureItem{"기재 3칸 표시", domain::FeatureId::TraitViewer},
+        FeatureItem{"능력치 한계 돌파", domain::FeatureId::AutoStatUp99},
     };
 
     draw_features(FEATURES);
 
-    if (ImGui::Button("기재 이름·설명 편집")) {
+    if (menu_sprites::sprite_button(menu.ui_atlases, "기재 이름·설명 편집", tool_size)) {
         menu.trait_text_editor.open = true;
     }
 
@@ -1755,9 +1776,7 @@ void FeatureMenuDraw::draw_footer(float content_width) {
         ImGui::TableSetColumnIndex(0);
         draw_menu_heading("위젯");
         draw_feature({"주인공", domain::FeatureId::ShowWidgetHero});
-        ImGui::SameLine();
         draw_feature({"모든 무장", domain::FeatureId::ShowWidgetAllOfficers});
-        ImGui::SameLine();
         draw_feature({"알림확인", domain::FeatureId::ShowWidgetNotif});
 
         ImGui::TableSetColumnIndex(1);
@@ -1781,8 +1800,6 @@ void FeatureMenuDraw::draw_footer(float content_width) {
             }
         }
         ImGui::PopID();
-        ImGui::SameLine();
-
         if (ImGui::Button("알림 비우기")) {
             clear_active_notifications(menu.notifications);
         }
@@ -1790,11 +1807,9 @@ void FeatureMenuDraw::draw_footer(float content_width) {
         ImGui::EndTable();
     }
 
-    if (ImGui::BeginTable("FooterSecondaryLayout", 4, FLAGS, ImVec2(content_width, 0))) {
-        ImGui::TableSetupColumn("Log", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("Speed", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("UI", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("Startup", ImGuiTableColumnFlags_WidthStretch, 1.3f);
+    if (ImGui::BeginTable("FooterSecondaryLayout", 2, FLAGS, ImVec2(content_width, 0))) {
+        ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         draw_menu_heading("로그");
@@ -1818,7 +1833,8 @@ void FeatureMenuDraw::draw_footer(float content_width) {
             ImGui::EndDisabled();
         }
         ImGui::PopItemWidth();
-        ImGui::TableSetColumnIndex(2);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
         draw_menu_heading("UI");
 
         ImGui::PushID(slider_epoch_id.data());
@@ -1839,10 +1855,296 @@ void FeatureMenuDraw::draw_footer(float content_width) {
             }
         }
         ImGui::PopID();
-        ImGui::TableSetColumnIndex(3);
+        ImGui::TableSetColumnIndex(1);
         draw_menu_heading("시작");
         draw_feature({"시작 시 치트창 표시", domain::FeatureId::AutoLoadMenu});
         ImGui::EndTable();
+    }
+
+    draw_menu_heading("도구");
+    if (menu_sprites::sprite_button(menu.ui_atlases, "메모장 / 메모리 도구",
+            ImVec2(std::min(content_width, 300.0f * menu.dpi_scale), 40.0f * menu.dpi_scale))) {
+        menu.debug_tools.open = true;
+    }
+}
+
+struct MenuPageInfo {
+    const char* label;
+    const char* description;
+    int icon;
+};
+
+constexpr std::array<MenuPageInfo, static_cast<std::size_t>(MenuPage::Count)> MENU_PAGES{{
+    {"개요", "연결 상태와 적용 결과를 확인합니다.", 0},
+    {"무장", "무장 목록, 주인공 자원과 관계 정보를 편집합니다.", 1},
+    {"기재 · 성장", "기재 문구, 일괄 전법과 성장 설정을 관리합니다.", 2},
+    {"도시 · 내정", "도시와 군단, 명품 및 내정 설정을 관리합니다.", 4},
+    {"평정 · 교류", "평정 규칙과 무장 간 교류를 설정합니다.", 0},
+    {"전투", "전투 규칙, 환경과 책략을 설정합니다.", 2},
+    {"시나리오", "시나리오 보정, 가족과 무장 등장 상태를 관리합니다.", 3},
+    {"환경설정", "위젯, 알림, 배속과 화면 배율을 조정합니다.", 5},
+}};
+
+void select_menu_page(FeatureMenu& menu, MenuPage page) {
+    if (menu.page != page) {
+        menu.page = page;
+        // Hidden sliders no longer get a deactivation frame. Release their
+        // edit locks while retaining any submitted request/acknowledgement.
+        menu.ui_scale_draft.editing = false;
+        menu.notification_speed_draft.editing = false;
+        menu.mission_appointment_limit_editing = false;
+    }
+}
+
+enum class ReportState { Off, Applied, Waiting, Attention, External };
+
+struct FeatureReport {
+    const char* label;
+    const char* detail;
+    MenuPage page;
+    ReportState state;
+};
+
+MenuPage native_report_page(domain::NativeFeatureGroup group) {
+    switch (group) {
+    case domain::NativeFeatureGroup::MissionCpuExclusion: return MenuPage::Domestic;
+    case domain::NativeFeatureGroup::AffinityDisplay: return MenuPage::Officers;
+    case domain::NativeFeatureGroup::IsolatedTerritory:
+    case domain::NativeFeatureGroup::CouncilContinue:
+    case domain::NativeFeatureGroup::CouncilExecuteFree:
+    case domain::NativeFeatureGroup::RulerTransferProposal: return MenuPage::CouncilSocial;
+    default: return MenuPage::Battle;
+    }
+}
+
+MenuPage legacy_report_page(domain::LegacyFeatureGroup group) {
+    switch (group) {
+    case domain::LegacyFeatureGroup::SecondaryJewels: return MenuPage::Officers;
+    case domain::LegacyFeatureGroup::SpeedClock: return MenuPage::Settings;
+    case domain::LegacyFeatureGroup::FactionLordBonus:
+    case domain::LegacyFeatureGroup::RoadBlock:
+    case domain::LegacyFeatureGroup::RoadBlock2: return MenuPage::Scenario;
+    case domain::LegacyFeatureGroup::ReinforcementArrival:
+    case domain::LegacyFeatureGroup::ShortBattleCooldown:
+    case domain::LegacyFeatureGroup::TroopCountCombat: return MenuPage::Battle;
+    case domain::LegacyFeatureGroup::TechCityVisibility:
+    case domain::LegacyFeatureGroup::Domestics:
+    case domain::LegacyFeatureGroup::BigCity:
+    case domain::LegacyFeatureGroup::GrazingCity:
+    case domain::LegacyFeatureGroup::FarmingCity:
+    case domain::LegacyFeatureGroup::CommerceCity:
+    case domain::LegacyFeatureGroup::Attitude: return MenuPage::Domestic;
+    default: return MenuPage::CouncilSocial;
+    }
+}
+
+ReportState trait_report_state(domain::TraitApplyStatus status) {
+    switch (status) {
+    case domain::TraitApplyStatus::Disabled: return ReportState::Off;
+    case domain::TraitApplyStatus::Applied: return ReportState::Applied;
+    case domain::TraitApplyStatus::ExternalRuntime: return ReportState::External;
+    case domain::TraitApplyStatus::Pending:
+    case domain::TraitApplyStatus::WaitingForTable:
+    case domain::TraitApplyStatus::CallbackBusy:
+    case domain::TraitApplyStatus::LiveObjects: return ReportState::Waiting;
+    default: return ReportState::Attention;
+    }
+}
+
+auto feature_reports(const domain::ConfigSnapshot& snapshot) {
+    std::array<FeatureReport, domain::NATIVE_FEATURE_GROUP_COUNT + domain::LEGACY_FEATURE_GROUP_COUNT + 3> reports{};
+    std::size_t cursor = 0;
+    for (std::size_t index = 0; index < snapshot.native_features.size(); ++index) {
+        const auto group = static_cast<domain::NativeFeatureGroup>(index);
+        const auto& status = snapshot.native_features[index];
+        ReportState state = ReportState::Off;
+        const char* detail = "사용 설정 꺼짐";
+        switch (status.phase) {
+        case domain::NativeFeaturePhase::Applied:
+            state = ReportState::Applied; detail = "공유 패치 그룹 적용 확인"; break;
+        case domain::NativeFeaturePhase::Pending:
+            state = ReportState::Waiting; detail = "변경 요청 적용 대기"; break;
+        case domain::NativeFeaturePhase::Failed:
+        case domain::NativeFeaturePhase::Uncertain:
+            state = ReportState::Attention; detail = domain::native_feature_error_text(status.error); break;
+        default: break;
+        }
+        reports[cursor++] = {domain::native_feature_label(group), detail, native_report_page(group), state};
+    }
+    for (std::size_t index = 0; index < snapshot.legacy_features.size(); ++index) {
+        const auto group = static_cast<domain::LegacyFeatureGroup>(index);
+        const auto& status = snapshot.legacy_features[index];
+        ReportState state = ReportState::Off;
+        const char* detail = "사용 설정 꺼짐";
+        switch (status.phase) {
+        case domain::LegacyFeaturePhase::Applied:
+            state = ReportState::Applied; detail = "기능군 적용 확인"; break;
+        case domain::LegacyFeaturePhase::WaitingForPlayer:
+            state = ReportState::Waiting; detail = "주인공 준비 후 3초 대기"; break;
+        case domain::LegacyFeaturePhase::Pending:
+            state = ReportState::Waiting; detail = "변경 요청 적용 대기"; break;
+        case domain::LegacyFeaturePhase::Retrying:
+            state = ReportState::Attention; detail = "적용 실패 · 자동 재시도 대기"; break;
+        default: break;
+        }
+        reports[cursor++] = {domain::legacy_feature_label(group), detail, legacy_report_page(group), state};
+    }
+    reports[cursor++] = {"기재 3칸 표시", domain::trait_apply_status_text(snapshot.traits.viewer),
+        MenuPage::Traits, trait_report_state(snapshot.traits.viewer)};
+    reports[cursor++] = {"확장 기재", domain::trait_apply_status_text(snapshot.traits.catalog),
+        MenuPage::Traits, trait_report_state(snapshot.traits.catalog)};
+    reports[cursor] = {"기본 기재 이름·설명", domain::trait_apply_status_text(snapshot.traits.legacy_text),
+        MenuPage::Traits, trait_report_state(snapshot.traits.legacy_text)};
+    return reports;
+}
+
+void FeatureMenuDraw::draw_connection_status() {
+    using Tone = menu_sprites::StatusTone;
+    constexpr ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings;
+    if (!ImGui::BeginTable("##connection_cards", 3, flags)) {
+        return;
+    }
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextDisabled("설정 불러오기");
+    menu_sprites::status_badge(menu.ui_atlases, menu.ready ? "준비됨" : "대기 중",
+        menu.ready ? Tone::Good : Tone::Waiting, menu.dpi_scale);
+    ImGui::TextWrapped(menu.ready ? "설정 파일 또는 기본값을 불러왔습니다." : "파일과 설정 서비스의 준비를 기다립니다.");
+
+    ImGui::TableSetColumnIndex(1);
+    ImGui::TextDisabled("시나리오 · 주인공");
+    const auto status = menu.snapshot.game_memory_status;
+    const bool connected = status == domain::GameMemoryStatus::Ready;
+    const bool failed = status == domain::GameMemoryStatus::ModuleReadFailed ||
+        status == domain::GameMemoryStatus::RootReadFailed || status == domain::GameMemoryStatus::PlayerReadFailed;
+    menu_sprites::status_badge(menu.ui_atlases, connected ? "연결됨" : failed ? "조회 재시도" : "연결 대기",
+        connected ? Tone::Good : failed ? Tone::Error : Tone::Waiting, menu.dpi_scale);
+    if (connected && menu.snapshot.protagonist_id) {
+        ImGui::Text("주인공 ID %u", *menu.snapshot.protagonist_id);
+    } else if (failed) {
+        ImGui::TextWrapped("%s", status == domain::GameMemoryStatus::ModuleReadFailed ? "실행 파일 메모리 읽기 실패" :
+            status == domain::GameMemoryStatus::RootReadFailed ? "게임 기본 정보 읽기 실패" : "주인공 정보 읽기 실패");
+    } else if (status == domain::GameMemoryStatus::Searching) {
+        const auto total = menu.snapshot.game_memory_image_size;
+        const double progress = total == 0 ? 0.0 :
+            100.0 * static_cast<double>(menu.snapshot.game_memory_scan_cursor) / static_cast<double>(total);
+        ImGui::Text("게임 주소 검색 · %.0f%%", progress);
+    } else if (status == domain::GameMemoryStatus::SearchWaiting) {
+        ImGui::TextWrapped("게임 준비 후 자동 재검색 · 조회 %llu회",
+            static_cast<unsigned long long>(menu.snapshot.game_memory_scan_passes));
+    } else {
+        ImGui::TextWrapped("공용 데이터 편집은 시나리오 연결과 별도로 사용할 수 있습니다.");
+    }
+
+    ImGui::TableSetColumnIndex(2);
+    ImGui::TextDisabled("공용 무장 목록");
+    const auto& roster = *menu.officer_roster;
+    const bool current = roster.epoch == menu.epoch;
+    const bool loaded = current && roster.available && !roster.loading;
+    const bool loading = current && roster.loading;
+    menu_sprites::status_badge(menu.ui_atlases, loading ? "조회 중" : loaded ? "조회 완료" : "미조회",
+        loading ? Tone::Waiting : loaded && roster.entry_count ? Tone::Good : Tone::Muted, menu.dpi_scale);
+    if (loading || loaded) {
+        ImGui::Text("%zu명 %s", roster.entry_count, loading ? "수신" : "조회됨");
+    } else {
+        ImGui::TextWrapped("'모든 무장 편집'을 열어 조회합니다.");
+    }
+    ImGui::EndTable();
+}
+
+void FeatureMenuDraw::draw_overview() {
+    using Tone = menu_sprites::StatusTone;
+    draw_connection_status();
+    ImGui::Spacing();
+    draw_menu_heading("바로 열기");
+    const int columns = ImGui::GetContentRegionAvail().x >= 720.0f * menu.dpi_scale ? 3 : 2;
+    if (ImGui::BeginTable("##quick_editors", columns, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::TableNextColumn();
+        if (menu_sprites::sprite_button(menu.ui_atlases, "모든 무장 편집##quick",
+                ImVec2(ImGui::GetContentRegionAvail().x, 42.0f * menu.dpi_scale), false, 1)) {
+            menu.officer_list_open = true;
+        }
+        ImGui::TableNextColumn();
+        if (menu_sprites::sprite_button(menu.ui_atlases, "기재 이름·설명 편집##quick",
+                ImVec2(ImGui::GetContentRegionAvail().x, 42.0f * menu.dpi_scale), false, 2)) {
+            menu.trait_text_editor.open = true;
+        }
+        ImGui::TableNextColumn();
+        if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리##quick",
+                ImVec2(ImGui::GetContentRegionAvail().x, 42.0f * menu.dpi_scale), false, 4)) {
+            menu.city_management.open = true;
+        }
+        ImGui::EndTable();
+    }
+    draw_menu_heading("적용 현황");
+    ImGui::TextWrapped("상태를 보고하는 기능군과 기재 항목을 표시합니다. 항목을 누르면 해당 설정으로 이동합니다.");
+    ImGui::TextDisabled("체크 표시는 사용 설정입니다. 실제 적용 결과는 아래 상태로 구분합니다.");
+    if (!menu.ready) {
+        ImGui::TextWrapped("설정을 불러온 뒤 적용 현황을 확인할 수 있습니다.");
+        return;
+    }
+
+    const auto reports = feature_reports(menu.snapshot);
+    std::array<std::size_t, 5> counts{};
+    for (const auto& report : reports) {
+        ++counts[static_cast<std::size_t>(report.state)];
+    }
+    if (ImGui::BeginTable("##application_totals", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings)) {
+        constexpr std::array STATES{ReportState::Applied, ReportState::Waiting, ReportState::Attention, ReportState::External};
+        constexpr std::array LABELS{"적용 확인", "대기", "확인 필요", "외부 관리"};
+        constexpr std::array TONES{Tone::Good, Tone::Waiting, Tone::Error, Tone::Muted};
+        for (std::size_t i = 0; i < STATES.size(); ++i) {
+            ImGui::TableNextColumn();
+            std::array<char, 64> label{};
+            std::snprintf(label.data(), label.size(), "%s %zu", LABELS[i], counts[static_cast<std::size_t>(STATES[i])]);
+            menu_sprites::status_badge(menu.ui_atlases, label.data(), TONES[i], menu.dpi_scale);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::RadioButton("대기·오류·외부", &menu.status_filter, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("꺼짐 제외", &menu.status_filter, 1);
+    ImGui::SameLine();
+    ImGui::RadioButton("전체", &menu.status_filter, 2);
+    constexpr ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+        ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings;
+    std::size_t shown = 0;
+    if (ImGui::BeginTable("##feature_reports", 3, flags)) {
+        ImGui::TableSetupColumn("기능군", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("상태", ImGuiTableColumnFlags_WidthFixed, 80.0f * menu.dpi_scale);
+        ImGui::TableSetupColumn("상세", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+        ImGui::TableHeadersRow();
+        for (std::size_t i = 0; i < reports.size(); ++i) {
+            const auto& report = reports[i];
+            if ((menu.status_filter == 0 && (report.state == ReportState::Off || report.state == ReportState::Applied)) ||
+                (menu.status_filter == 1 && report.state == ReportState::Off)) {
+                continue;
+            }
+            ++shown;
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            if (ImGui::Selectable(report.label)) {
+                select_menu_page(menu, report.page);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s · %s 화면 열기", report.label,
+                    MENU_PAGES[static_cast<std::size_t>(report.page)].label);
+            }
+            ImGui::TableSetColumnIndex(1);
+            const ImVec4 color = report.state == ReportState::Attention ? ImVec4(1.0f, 0.48f, 0.4f, 1.0f) :
+                report.state == ReportState::Waiting ? ImVec4(1.0f, 0.78f, 0.3f, 1.0f) :
+                report.state == ReportState::Applied ? ImVec4(0.57f, 0.84f, 0.61f, 1.0f) : ImVec4(0.72f, 0.72f, 0.76f, 1.0f);
+            constexpr std::array STATE_LABELS{"꺼짐", "적용됨", "대기", "확인 필요", "외부 관리"};
+            ImGui::TextColored(color, "%s", STATE_LABELS[static_cast<std::size_t>(report.state)]);
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextWrapped("%s", report.detail);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    if (shown == 0) {
+        ImGui::TextDisabled("이 필터에 해당하는 상태 보고가 없습니다.");
     }
 }
 
@@ -1851,12 +2153,10 @@ void FeatureMenuDraw::draw_footer(float content_width) {
 void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     FeatureMenuDraw draw{menu, mailbox};
 
+    // Independently opened editors continue rendering when the workbench closes.
     draw_special_assignment_results(menu);
     draw_trait_text_editor(menu, mailbox);
-
-    // The secondary jewel window stays usable while the main menu is collapsed.
     draw.draw_secondary_jewels();
-
     if (!menu.open) {
         return;
     }
@@ -1865,21 +2165,32 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     const ImGuiStyle& style = ImGui::GetStyle();
     const float scale = menu.dpi_scale;
     const float margin = 16.0f * scale;
-    const float column_width = std::max(360.0f * scale, ImGui::GetFontSize() * 24.0f);
-    const float minimum_content_width = column_width * 3.0f + 20.0f * scale;
     const ImVec2 maximum(std::max(1.0f, viewport.WorkSize.x - margin * 2.0f),
                         std::max(1.0f, viewport.WorkSize.y - margin * 2.0f));
-    const ImVec2 initial(std::min(minimum_content_width + style.WindowPadding.x * 2.0f + style.ScrollbarSize,
-                                 maximum.x), std::min(820.0f * scale, maximum.y));
-
-    ImGui::SetNextWindowSize(initial, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(640.0f * scale, maximum.x),
-                                             std::min(420.0f * scale, maximum.y)), maximum);
-
+    const ImVec2 minimum(std::min(760.0f * scale, maximum.x),
+                         std::min(480.0f * scale, maximum.y));
+    constexpr const char* window_name = "S8RPK · 편집 도구###S8RPK.Workbench";
+    ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f * scale, maximum.x),
+                                  std::min(790.0f * scale, maximum.y)), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(minimum, maximum);
     ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x + viewport.WorkSize.x * 0.5f,
-                                  viewport.WorkPos.y + viewport.WorkSize.y * 0.5f),
+                                 viewport.WorkPos.y + viewport.WorkSize.y * 0.5f),
                            ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-
+    // Resizing the host or increasing UI scale also constrains the old position.
+    // Do this before Begin so the title bar, hit boxes and background move together.
+    if (const ImGuiWindow* window = ImGui::FindWindowByName(window_name)) {
+        const ImVec2 size(std::clamp(window->SizeFull.x, minimum.x, maximum.x),
+                          window->Collapsed ? window->TitleBarHeight :
+                              std::clamp(window->SizeFull.y, minimum.y, maximum.y));
+        const ImVec2 lower(viewport.WorkPos.x + margin, viewport.WorkPos.y + margin);
+        const ImVec2 upper(std::max(lower.x, viewport.WorkPos.x + viewport.WorkSize.x - margin - size.x),
+                           std::max(lower.y, viewport.WorkPos.y + viewport.WorkSize.y - margin - size.y));
+        const ImVec2 position(std::clamp(window->Pos.x, lower.x, upper.x),
+                              std::clamp(window->Pos.y, lower.y, upper.y));
+        if (position.x != window->Pos.x || position.y != window->Pos.y) {
+            ImGui::SetNextWindowPos(position, ImGuiCond_Always);
+        }
+    }
     if (menu.toggle_collapse) {
         ImGui::SetNextWindowCollapsed(!menu.collapsed, ImGuiCond_Always);
         menu.toggle_collapse = false;
@@ -1889,158 +2200,115 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         menu.auto_load_collapse = false;
     }
 
-    constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-    const bool expanded = ImGui::Begin("S8RPK", &menu.open, WINDOW_FLAGS);
-
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    const bool expanded = ImGui::Begin(window_name, &menu.open, flags);
     menu.collapsed = ImGui::IsWindowCollapsed();
     menu.window_x = ImGui::GetWindowPos().x;
     menu.window_y = ImGui::GetWindowPos().y;
-
     if (!expanded) {
         ImGui::End();
         return;
     }
+    if (static_cast<std::size_t>(menu.page) >= MENU_PAGES.size()) {
+        menu.page = MenuPage::Overview;
+    }
 
-    draw_previous_request_error(menu);
-
-    if (!menu.ready) {
-        if (menu.save_notice && menu.save_notice->status == services::ConfigSaveStatus::InvalidData) {
-            ImGui::TextWrapped("S8RPK_cheat_config.json의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
-        } else if (menu.save_notice && menu.save_notice->status == services::ConfigSaveStatus::Failed) {
-            ImGui::Text("설정을 불러오지 못했습니다. 파일 접근 권한 또는 설정 서비스를 확인해 주세요. 오류 %u",
-                menu.save_notice->native_code);
-        } else {
-            ImGui::TextDisabled("설정을 불러오는 중입니다.");
-        }
+    std::array<char, 192> connection{};
+    if (menu.snapshot.protagonist_id && menu.snapshot.game_memory_status == domain::GameMemoryStatus::Ready) {
+        std::snprintf(connection.data(), connection.size(), "주인공 ID %u 연결됨", *menu.snapshot.protagonist_id);
+    } else if (menu.snapshot.game_memory_status == domain::GameMemoryStatus::ModuleReadFailed ||
+        menu.snapshot.game_memory_status == domain::GameMemoryStatus::RootReadFailed ||
+        menu.snapshot.game_memory_status == domain::GameMemoryStatus::PlayerReadFailed) {
+        std::snprintf(connection.data(), connection.size(), "%s", "게임 데이터 조회 재시도 · 개요에서 상태 확인");
     } else {
-        ImGui::TextDisabled("설정 불러오기: 완료");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("설정 파일 또는 기본값을 불러왔습니다.\n체크 표시는 사용 설정입니다. 실제 적용 결과는 각 항목의 상태를 확인하세요.");
-        }
-        if (menu.pending) {
-            ImGui::TextDisabled("요청을 처리하는 중입니다.");
+        std::snprintf(connection.data(), connection.size(), "%s", "시나리오 연결 대기 · 공용 데이터는 별도 조회");
+    }
+    ImGui::TextWrapped("%s  ·  %s%s", menu.ready ? "설정 준비됨" : "설정 불러오는 중",
+        connection.data(), menu.pending ? "  ·  요청 처리 중" : "");
+    draw_previous_request_error(menu);
+    if (!menu.ready && menu.save_notice) {
+        if (menu.save_notice->status == services::ConfigSaveStatus::InvalidData) {
+            ImGui::TextWrapped("설정 파일의 JSON 형식 또는 중복 항목을 확인해 주세요. 수정하면 자동으로 다시 읽습니다.");
+        } else if (menu.save_notice->status == services::ConfigSaveStatus::Failed) {
+            ImGui::TextWrapped("설정을 읽지 못했습니다. 파일 접근 또는 설정 서비스를 확인해 주세요. 오류 %u", menu.save_notice->native_code);
         }
     }
-
-    if (menu.ready) {
-        switch (menu.snapshot.game_memory_status) {
-        case domain::GameMemoryStatus::Searching: {
-            const auto total = menu.snapshot.game_memory_image_size;
-            const double progress = total == 0 ? 0.0 : 100.0 *
-                static_cast<double>(menu.snapshot.game_memory_scan_cursor) / static_cast<double>(total);
-            ImGui::TextDisabled("게임 메모리: 주소 검색 중 · %.0f%%", progress);
-            break;
-        }
-        case domain::GameMemoryStatus::SearchWaiting:
-            ImGui::TextWrapped("게임 메모리: 게임 준비 또는 주소 재검색 대기 · 자동으로 다시 시도합니다. (조회 %llu회)",
-                static_cast<unsigned long long>(menu.snapshot.game_memory_scan_passes));
-            break;
-        case domain::GameMemoryStatus::ModuleReadFailed:
-            ImGui::TextWrapped("게임 메모리: 실행 파일을 읽지 못했습니다. 자동으로 다시 시도합니다.");
-            break;
-        case domain::GameMemoryStatus::RootReadFailed:
-            ImGui::TextWrapped("게임 메모리: 기본 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
-            break;
-        case domain::GameMemoryStatus::PlayerReadFailed:
-            ImGui::TextWrapped("시나리오: 주인공 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
-            break;
-        case domain::GameMemoryStatus::WaitingForGame:
-            ImGui::TextDisabled("시나리오: 게임 데이터 준비 대기");
-            break;
-        case domain::GameMemoryStatus::WaitingForPlayer:
-            ImGui::TextDisabled("시나리오: 주인공 연결 대기");
-            break;
-        case domain::GameMemoryStatus::Ready:
-            if (menu.snapshot.protagonist_id) {
-                ImGui::TextDisabled("시나리오: 연결됨 · 주인공 ID %u", *menu.snapshot.protagonist_id);
-            } else {
-                ImGui::TextDisabled("시나리오: 연결됨 · 주인공 정보를 갱신하고 있습니다.");
-            }
-            break;
-        }
-
-        const auto& roster = *menu.officer_roster;
-        if (roster.epoch == menu.epoch && roster.loading) {
-            ImGui::TextDisabled("공용 무장 목록: 조회 중 · %zu명 수신", roster.entry_count);
-        } else if (roster.epoch == menu.epoch && roster.available) {
-            ImGui::TextDisabled("공용 무장 목록: %zu명 조회됨 · 시나리오 연결과 별도", roster.entry_count);
-        } else {
-            ImGui::TextWrapped("공용 무장 목록: 미조회 · 메인화면에서도 '모든 무장 편집'에서 별도로 조회합니다.");
-        }
-    }
-
     if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
-        ImGui::Text("설정 저장 실패 (%d, %u)", static_cast<int>(menu.save_notice->status),
-                    menu.save_notice->native_code);
-
+        ImGui::TextColored(ImVec4(1.0f, 0.48f, 0.4f, 1.0f), "설정 저장 확인 필요 (%d, %u)",
+            static_cast<int>(menu.save_notice->status), menu.save_notice->native_code);
         if ((menu.save_notice->status == services::ConfigSaveStatus::Failed ||
-             menu.save_notice->status == services::ConfigSaveStatus::Cancelled) && ImGui::Button("저장 다시 시도")) {
+             menu.save_notice->status == services::ConfigSaveStatus::Cancelled) && ImGui::SmallButton("저장 다시 시도")) {
             menu.retry_save_requested = true;
         }
     }
+    ImGui::Separator();
 
     const ImVec2 available = ImGui::GetContentRegionAvail();
-    const float content_width = std::max(available.x - style.ScrollbarSize, minimum_content_width);
-    const float footer_height = std::min(available.y * 0.45f,
-        ImGui::GetTextLineHeightWithSpacing() * 2.0f + ImGui::GetFrameHeightWithSpacing() * 3.0f +
-        style.ItemSpacing.y * 4.0f + style.ScrollbarSize);
-    const float body_height = std::max(1.0f, available.y - footer_height - style.ItemSpacing.y * 2.0f);
-    constexpr ImGuiTableFlags BODY_FLAGS = ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings |
-        ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
-
-    if (ImGui::BeginTable("MainLayoutTable", 5, BODY_FLAGS, ImVec2(0, body_height), content_width)) {
-        ImGui::TableSetupColumn("DomesticScenarioInfo", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("Gap1", ImGuiTableColumnFlags_WidthFixed, 10.0f * scale);
-        ImGui::TableSetupColumn("CouncilOfficer", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("Gap2", ImGuiTableColumnFlags_WidthFixed, 10.0f * scale);
-        ImGui::TableSetupColumn("SocialWar", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableNextRow();
-
-        // Draw every column even when horizontally clipped so an open popup
-        // keeps its matching Begin/End scope and command drafts.
-        ImGui::TableSetColumnIndex(0);
-        ImGui::PushItemWidth(column_width * 0.45f);
-        ImGui::PushTextWrapPos(0.0f);
-        draw.draw_domestic();
-        draw.draw_scenario();
-        draw.draw_information();
-
-        ImGui::PopTextWrapPos();
-        ImGui::PopItemWidth();
-        ImGui::TableSetColumnIndex(2);
-
-        ImGui::PushItemWidth(column_width * 0.45f);
-        ImGui::PushTextWrapPos(0.0f);
-        draw.draw_council();
-        draw.draw_officer_edit();
-
-        ImGui::PopTextWrapPos();
-        ImGui::PopItemWidth();
-        ImGui::TableSetColumnIndex(4);
-
-        ImGui::PushItemWidth(column_width * 0.45f);
-        ImGui::PushTextWrapPos(0.0f);
-        draw.draw_social();
-        draw.draw_war();
-        draw.draw_stratagem();
-
-        ImGui::PopTextWrapPos();
-        ImGui::PopItemWidth();
-        ImGui::EndTable();
+    const float nav_width = std::min(200.0f * scale, available.x * 0.30f);
+    const float gap = 12.0f * scale;
+    const float body_height = std::max(1.0f, available.y);
+    const bool popup_open = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+    if (ImGui::BeginChild("##workbench_navigation", ImVec2(nav_width, body_height), ImGuiChildFlags_None)) {
+        ImGui::TextDisabled("편집 메뉴");
+        ImGui::Spacing();
+        ImGui::BeginDisabled(popup_open);
+        for (std::size_t index = 0; index < MENU_PAGES.size(); ++index) {
+            const auto page = static_cast<MenuPage>(index);
+            const auto& info = MENU_PAGES[index];
+            if (menu_sprites::sprite_button(menu.ui_atlases, info.label,
+                    ImVec2(ImGui::GetContentRegionAvail().x, 46.0f * scale), menu.page == page, info.icon)) {
+                select_menu_page(menu, page);
+            }
+            if ((popup_open || menu.page != page) &&
+                ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+                ImGui::SetTooltip("%s%s", info.description, popup_open ? "\n열린 설정창을 닫으면 메뉴를 이동할 수 있습니다." : "");
+            }
+            ImGui::Spacing();
+        }
+        ImGui::EndDisabled();
+        ImGui::Separator();
+        ImGui::TextWrapped("한 번에 한 분류를 표시합니다. 적용 결과는 개요에서 확인하세요.");
+        if (ImGui::Button("알림 내역", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+            menu.notifications.show_history = true;
+        }
     }
-
-    ImGui::Separator();
-    ImGui::SetNextWindowContentSize(ImVec2(content_width, 0));
-
-    if (ImGui::BeginChild("##menu_footer", ImVec2(0, footer_height), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::PushTextWrapPos(0.0f);
-        draw.draw_footer(content_width);
-
-        ImGui::PopTextWrapPos();
-    }
-
     ImGui::EndChild();
+    ImGui::SameLine(0.0f, gap);
+
+    const ImVec2 body_size(std::max(1.0f, ImGui::GetContentRegionAvail().x), body_height);
+    const ImVec2 body_min = ImGui::GetCursorScreenPos();
+    menu_sprites::draw_panel(menu.ui_atlases, body_min, ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), scale);
+    // Page-specific IDs keep each page's scroll position and popup scope stable.
+    const MenuPage drawn_page = menu.page;
+    ImGui::PushID(static_cast<int>(drawn_page));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f * scale, 16.0f * scale));
+    ImGui::SetNextWindowContentSize(ImVec2(std::max(500.0f * scale, body_size.x - style.ScrollbarSize - 36.0f * scale), 0));
+    if (ImGui::BeginChild("##workbench_page", body_size, ImGuiChildFlags_AlwaysUseWindowPadding,
+                         ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_HorizontalScrollbar)) {
+        const auto& info = MENU_PAGES[static_cast<std::size_t>(drawn_page)];
+        ImGui::TextColored(ImVec4(0.96f, 0.79f, 0.43f, 1.0f), "%s", info.label);
+        ImGui::TextWrapped("%s", info.description);
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::PushItemWidth(std::min(280.0f * scale, ImGui::GetContentRegionAvail().x * 0.48f));
+        ImGui::PushTextWrapPos(0.0f);
+        switch (drawn_page) {
+        case MenuPage::Overview: draw.draw_overview(); break;
+        case MenuPage::Officers: draw.draw_officer_edit(); break;
+        case MenuPage::Traits: draw.draw_traits(); break;
+        case MenuPage::Domestic: draw.draw_domestic(); break;
+        case MenuPage::CouncilSocial: draw.draw_council(); draw.draw_social(); break;
+        case MenuPage::Battle: draw.draw_war(); draw.draw_stratagem(); break;
+        case MenuPage::Scenario: draw.draw_scenario(); break;
+        case MenuPage::Settings: draw.draw_footer(ImGui::GetContentRegionAvail().x); break;
+        case MenuPage::Count: break;
+        }
+        ImGui::PopTextWrapPos();
+        ImGui::PopItemWidth();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopID();
     ImGui::End();
 }
 

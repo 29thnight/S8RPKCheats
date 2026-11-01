@@ -1,0 +1,8 @@
+click "AI 전쟁 개선"
+expect-page battle
+click "개요"
+click "보조 보옥"
+expect-page officers
+click "개요"
+click "확장 기재"
+expect-page traits

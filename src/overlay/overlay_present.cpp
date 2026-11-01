@@ -1,10 +1,76 @@
 #include "overlay_present.h"
+#include "menu_sprites.h"
 #include "../platform/windows/speed_clock.h"
 #include "../../third_party/imgui_legacy/imgui.h"
+
+#include <utility>
 
 namespace s8::overlay {
 
 namespace {
+
+void clear_texture_bindings(FeatureMenu& menu) {
+    menu.range_textures.fill(nullptr);
+    menu.ui_atlases = {};
+}
+
+bool upload_image(ID3D11Device* device, const services::RangeImage& image,
+    winrt::com_ptr<ID3D11ShaderResourceView>& destination) {
+    const std::uint64_t stride = static_cast<std::uint64_t>(image.width) * 4;
+    if (!device || !image.width || !image.height ||
+        image.width > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        image.height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        stride * image.height != image.pixels.size()) {
+        return false;
+    }
+    D3D11_TEXTURE2D_DESC description{};
+    description.Width = image.width;
+    description.Height = image.height;
+    description.MipLevels = 1;
+    description.ArraySize = 1;
+    description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    description.SampleDesc.Count = 1;
+    description.Usage = D3D11_USAGE_DEFAULT;
+    description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_SUBRESOURCE_DATA data{};
+    data.pSysMem = image.pixels.data();
+    data.SysMemPitch = static_cast<UINT>(stride);
+    winrt::com_ptr<ID3D11Texture2D> texture;
+    winrt::com_ptr<ID3D11ShaderResourceView> view;
+    if (FAILED(device->CreateTexture2D(&description, &data, texture.put())) ||
+        FAILED(device->CreateShaderResourceView(texture.get(), nullptr, view.put()))) {
+        return false;
+    }
+    destination = std::move(view);
+    return true;
+}
+
+void upload_ui_atlases(OverlayPresent& state, std::uint64_t now_ms) {
+    if (state.renderer.ui_atlases_loaded || now_ms < state.renderer.ui_atlas_retry_ms) {
+        return;
+    }
+    const own::shared_owner<const services::UiAtlasImages> images = state.bridge.ui_atlas_images_view();
+    if (!images) {
+        return;
+    }
+    bool retry = false;
+    for (std::size_t i = 0; i < images->size(); ++i) {
+        const services::RangeImage& image = (*images)[i];
+        auto& texture = state.renderer.ui_atlas_textures[i];
+        if (image.pixels.empty()) {
+            continue;
+        }
+        if (!texture && !upload_image(state.renderer.device.get(), image, texture)) {
+            retry = true;
+            continue;
+        }
+        state.menu.ui_atlases[i] = {texture.get(), image.width, image.height};
+    }
+    // Failed allocations leave that atlas unbound, so the menu remains usable
+    // with ordinary ImGui controls. Retry without allocating on every frame.
+    state.renderer.ui_atlases_loaded = !retry;
+    state.renderer.ui_atlas_retry_ms = retry ? now_ms + 1000 : 0;
+}
 
 void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
     DXGI_SWAP_CHAIN_DESC description{};
@@ -15,14 +81,14 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
     if (state.render_stop_requested.load(std::memory_order_acquire)) {
         state.capture_mouse.store(false, std::memory_order_release);
         state.capture_keyboard.store(false, std::memory_order_release);
-        state.menu.range_textures.fill(nullptr);
+        clear_texture_bindings(state.menu);
         shutdown_dx11_overlay(state.renderer);
         state.target_swap_chain.store(nullptr, std::memory_order_release);
         state.render_stopped.store(true, std::memory_order_release);
         return;
     }
     if (state.renderer.swap_chain && state.renderer.swap_chain.get() != swap_chain) {
-        state.menu.range_textures.fill(nullptr);
+        clear_texture_bindings(state.menu);
         state.capture_mouse.store(false, std::memory_order_release);
         state.capture_keyboard.store(false, std::memory_order_release);
         shutdown_dx11_overlay(state.renderer);
@@ -47,6 +113,7 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         OverlayPresent& state = *static_cast<OverlayPresent*>(value);
 
         ImGui::GetIO().FontGlobalScale = state.menu.snapshot.ui_scale;
+        menu_sprites::ThemeScope skin(state.menu.dpi_scale);
 
         if (!state.renderer.range_textures_loaded) {
             if (const own::shared_owner<const services::RangeImages> images = state.bridge.range_images_view()) {
@@ -57,31 +124,14 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
                     if (image.pixels.empty()) {
                         continue;
                     }
-                    D3D11_TEXTURE2D_DESC description{};
-
-                    description.Width = image.width;
-                    description.Height = image.height;
-                    description.MipLevels = 1;
-                    description.ArraySize = 1;
-                    description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                    description.SampleDesc.Count = 1;
-                    description.Usage = D3D11_USAGE_DEFAULT;
-                    description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-                    D3D11_SUBRESOURCE_DATA data{};
-
-                    data.pSysMem = image.pixels.data();
-                    data.SysMemPitch = image.width * 4;
-                    winrt::com_ptr<ID3D11Texture2D> texture;
-
-                    if (SUCCEEDED(state.renderer.device->CreateTexture2D(&description, &data, texture.put()))) {
-                        state.renderer.device->CreateShaderResourceView(texture.get(), nullptr,
-                                                                        state.renderer.range_textures[i].put());
+                    if (upload_image(state.renderer.device.get(), image, state.renderer.range_textures[i])) {
                         state.menu.range_textures[i] = state.renderer.range_textures[i].get();
                     }
                 }
                 state.renderer.range_textures_loaded = true;
             }
         }
+        upload_ui_atlases(state, GetTickCount64());
         draw_feature_menu(state.menu, state.bridge.commands);
         if (state.menu.open) {
             if (state.menu.collapsed && state.menu.snapshot.features.get(domain::FeatureId::ShowWidgetNotif)) {
@@ -186,7 +236,7 @@ void on_overlay_present(void* context, IDXGISwapChain* swap_chain) noexcept {
         state.capture_keyboard.store(false, std::memory_order_release);
         state.render_failed.store(true, std::memory_order_release);
         state.render_retry_ms = GetTickCount64() + 1000;
-        state.menu.range_textures.fill(nullptr);
+        clear_texture_bindings(state.menu);
         shutdown_dx11_overlay(state.renderer);
         state.target_swap_chain.store(nullptr, std::memory_order_release);
     }
@@ -207,6 +257,8 @@ void on_overlay_before_resize(void* context, IDXGISwapChain* swap_chain) noexcep
     OverlayPresent& state = *static_cast<OverlayPresent*>(context);
 
     if (state.renderer.swap_chain.get() == swap_chain) {
+        state.menu.ui_atlases = {};
+        release_dx11_ui_atlases(state.renderer);
         release_dx11_render_target(state.renderer);
     }
 }
@@ -220,7 +272,7 @@ void on_overlay_present_failed(void* context, IDXGISwapChain* swap_chain, std::i
     }
     state.capture_mouse.store(false, std::memory_order_release);
     state.capture_keyboard.store(false, std::memory_order_release);
-    state.menu.range_textures.fill(nullptr);
+    clear_texture_bindings(state.menu);
     shutdown_dx11_overlay(state.renderer);
     state.target_swap_chain.store(nullptr, std::memory_order_release);
     state.render_failed.store(true, std::memory_order_release);

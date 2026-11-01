@@ -1,0 +1,5 @@
+click "도시 · 내정"
+expect-page domestic
+expect-disabled "행동력 무제한"
+expect-disabled "견문 시 민심 최대"
+shot "out/ui-preview/screenshots/loading.png"

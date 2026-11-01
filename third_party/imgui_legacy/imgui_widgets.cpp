@@ -3343,7 +3343,7 @@ bool ImGui::CustomSliderScalar(const char* label, ImGuiDataType data_type, void*
        // RenderTextClipped(total_bb.Min, total_bb.Max, value_buf, value_buf_end, NULL, ImVec2(1.f, 0.f));
     } PopStyleColor();
 
-    IMGUI_TEST_ENGINE_ITEM_INFO(id, label, window->DC.ItemFlags);
+    IMGUI_TEST_ENGINE_ITEM_INFO(id, label, g.LastItemData.StatusFlags);
     return value_changed;
 }
 

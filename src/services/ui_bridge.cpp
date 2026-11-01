@@ -33,6 +33,20 @@ own::shared_owner<const RangeImages> UiBridge::range_images_view() {
     return current_range_images;
 }
 
+void UiBridge::publish_ui_atlas_images(UiAtlasImages images) {
+    own::shared_owner<const UiAtlasImages> view = own::make_shared<UiAtlasImages>(std::move(images));
+
+    {
+        std::lock_guard lock(mutex);
+        current_ui_atlas_images.swap(view);
+    }
+}
+
+own::shared_owner<const UiAtlasImages> UiBridge::ui_atlas_images_view() {
+    std::lock_guard lock(mutex);
+    return current_ui_atlas_images;
+}
+
 void UiBridge::publish_officer_names(domain::OfficerNames names) {
     own::shared_owner<const domain::OfficerNames> view = own::make_shared<domain::OfficerNames>(std::move(names));
     own::shared_owner<const domain::OfficerNames> overrides = view;

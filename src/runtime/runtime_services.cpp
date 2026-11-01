@@ -14,6 +14,7 @@
 #include <limits>
 #include <optional>
 #include <random>
+#include <stop_token>
 #include <string>
 #include <unordered_map>
 #include <wincodec.h>
@@ -35,6 +36,78 @@ struct ComApartment {
     }
 };
 
+services::RangeImage decode_image_resource(IWICImagingFactory* factory, HMODULE module, WORD id) noexcept {
+    try {
+        services::RangeImage image;
+        const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(id), RT_RCDATA);
+
+        if (!factory || !resource) {
+            return {};
+        }
+        const DWORD size = SizeofResource(module, resource);
+        void* const data = LockResource(LoadResource(module, resource));
+        winrt::com_ptr<IWICStream> stream;
+        winrt::com_ptr<IWICBitmapDecoder> decoder;
+        winrt::com_ptr<IWICBitmapFrameDecode> frame;
+        winrt::com_ptr<IWICFormatConverter> converter;
+
+        if (!data || !size || FAILED(factory->CreateStream(stream.put())) ||
+            FAILED(stream->InitializeFromMemory(static_cast<BYTE*>(data), size)) ||
+            FAILED(factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put())) ||
+            FAILED(decoder->GetFrame(0, frame.put())) ||
+            FAILED(frame->GetSize(&image.width, &image.height)) ||
+            FAILED(factory->CreateFormatConverter(converter.put())) ||
+            FAILED(converter->Initialize(frame.get(), GUID_WICPixelFormat32bppRGBA,
+                WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom))) {
+            return {};
+        }
+        if (!image.width || !image.height || image.width > 16384 || image.height > 16384) {
+            return {};
+        }
+        constexpr std::uint64_t MAX_IMAGE_BYTES = 64ull * 1024 * 1024;
+        const std::uint64_t stride = static_cast<std::uint64_t>(image.width) * 4;
+        const std::uint64_t bytes = stride * image.height;
+
+        if (stride > (std::numeric_limits<UINT>::max)() || bytes > MAX_IMAGE_BYTES) {
+            return {};
+        }
+        image.pixels.resize(static_cast<std::size_t>(bytes));
+        if (FAILED(converter->CopyPixels(nullptr, static_cast<UINT>(stride), static_cast<UINT>(bytes),
+                reinterpret_cast<BYTE*>(image.pixels.data())))) {
+            return {};
+        }
+        return image;
+    } catch (...) {
+        // Optional artwork must not prevent configuration loading or saving.
+        return {};
+    }
+}
+
+void publish_image_resources(services::UiBridge& bridge, HMODULE module, bool com_ready,
+    std::stop_token stop) noexcept {
+    try {
+        winrt::com_ptr<IWICImagingFactory> factory;
+        if (com_ready) {
+            CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                IID_PPV_ARGS(factory.put()));
+        }
+        services::RangeImages ranges;
+        for (std::size_t i = 0; i < ranges.size() && !stop.stop_requested(); ++i) {
+            ranges[i] = decode_image_resource(factory.get(), module, static_cast<WORD>(101 + i));
+        }
+        bridge.publish_range_images(std::move(ranges));
+
+        services::UiAtlasImages atlases;
+        for (std::size_t i = 0; i < atlases.size() && !stop.stop_requested(); ++i) {
+            atlases[i] = decode_image_resource(factory.get(), module, static_cast<WORD>(301 + i));
+        }
+        // Retained CPU pixels support a later renderer/device recreation.
+        bridge.publish_ui_atlas_images(std::move(atlases));
+    } catch (...) {
+        OutputDebugStringW(L"S8RPKCheats: optional UI images unavailable; using standard controls.\n");
+    }
+}
+
 } // namespace
 
 std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND game_window,
@@ -49,51 +122,8 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
             const platform::windows::RealClockScope real_clock;
             const ComApartment apartment;
 
-            if (SUCCEEDED(apartment.status)) {
-                {
-                    services::RangeImages images;
-                    winrt::com_ptr<IWICImagingFactory> factory;
-                    if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
-                                                   IID_PPV_ARGS(factory.put())))) {
-                        const HMODULE module = reinterpret_cast<HMODULE>(plugin_module);
-
-                        for (std::size_t i = 0; i < images.size(); ++i) {
-                            const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(101 + i), RT_RCDATA);
-
-                            if (!resource) {
-                                continue;
-                            }
-                            const DWORD size = SizeofResource(module, resource);
-                            void* const data = LockResource(LoadResource(module, resource));
-                            winrt::com_ptr<IWICStream> stream;
-                            winrt::com_ptr<IWICBitmapDecoder> decoder;
-                            winrt::com_ptr<IWICBitmapFrameDecode> frame;
-                            winrt::com_ptr<IWICFormatConverter> converter;
-                            services::RangeImage& image = images[i];
-
-                            if (!data || !size || FAILED(factory->CreateStream(stream.put())) ||
-                                FAILED(stream->InitializeFromMemory(static_cast<BYTE*>(data), size)) ||
-                                FAILED(factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put())) ||
-                                FAILED(decoder->GetFrame(0, frame.put())) ||
-                                FAILED(frame->GetSize(&image.width, &image.height)) ||
-                                FAILED(factory->CreateFormatConverter(converter.put())) ||
-                                FAILED(converter->Initialize(frame.get(), GUID_WICPixelFormat32bppRGBA,
-                                       WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom))) {
-                                image = {};
-                                continue;
-                            }
-                            const UINT stride = image.width * 4;
-
-                            image.pixels.resize(static_cast<std::size_t>(stride) * image.height);
-                            if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(image.pixels.size()),
-                                                             reinterpret_cast<BYTE*>(image.pixels.data())))) {
-                                image = {};
-                            }
-                        }
-                    }
-                    state.overlay.bridge.publish_range_images(std::move(images));
-                }
-            }
+            publish_image_resources(state.overlay.bridge, reinterpret_cast<HMODULE>(plugin_module),
+                SUCCEEDED(apartment.status), stop);
             domain::NamedSpecialties named{};
             const std::filesystem::path directory = path.parent_path();
             domain::SkillCounts skill_counts;
