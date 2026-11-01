@@ -77,13 +77,50 @@ domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
         runtime.ui_scale,
         runtime.player_resources,
         runtime.legacy_features.statuses,
+        runtime.selected_officer_inspection.faction_color,
+        runtime.protagonist_inspection.faction_color,
+        runtime.selected_officer_inspection.relations,
+        runtime.protagonist_inspection.relations,
+        runtime.game_memory_status,
+        runtime.game_base_probe.cursor,
+        runtime.game_base_probe.image_size,
+        runtime.game_base_probe.passes,
     };
 }
 
 bool initialize_game_base(Runtime& runtime, std::span<const std::byte> image, std::uintptr_t module_base) {
-    if (const auto address = game::find_game_base_pointer(image, module_base))
-        runtime.game_base_pointer = *address;
+    if (const auto address = game::find_game_base_pointer(image, module_base)) {
+        if (game::validate_game_base_pointer(module_base, *address)) {
+            runtime.game_base_pointer = *address;
+        }
+    }
     return runtime.game_base_pointer != 0;
+}
+
+void discover_game_base(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget) {
+    if (runtime.stopping || runtime.game_base_pointer) {
+        return;
+    }
+    // Read live code in bounded slices. Reusing the startup image would repeat
+    // a failed search forever when the executable was not ready at injection.
+    if (const auto pointer = game::probe_game_base_pointer(runtime.game_base_probe,
+            module_base, now_ms, work_budget)) {
+        runtime.game_base_pointer = *pointer;
+        runtime.game_memory_status = domain::GameMemoryStatus::WaitingForGame;
+        return;
+    }
+    switch (runtime.game_base_probe.status) {
+    case game::GameBaseProbeStatus::Waiting:
+        runtime.game_memory_status = domain::GameMemoryStatus::SearchWaiting;
+        break;
+    case game::GameBaseProbeStatus::ReadFailed:
+        runtime.game_memory_status = domain::GameMemoryStatus::ModuleReadFailed;
+        break;
+    default:
+        runtime.game_memory_status = domain::GameMemoryStatus::Searching;
+        break;
+    }
 }
 
 bool initialize_game_base_from_module(Runtime& runtime, std::uintptr_t module_base) {
@@ -117,6 +154,10 @@ void change_game_session(Runtime& runtime) {
     runtime.pending_trait_change.reset();
     game::reset_auto_affinity(runtime.auto_affinity);
     runtime.selected_officer.reset();
+    game::reset_officer_inspection(runtime.selected_officer_inspection,
+        domain::GameEpoch{runtime.epoch.value + 1});
+    game::reset_officer_inspection(runtime.protagonist_inspection,
+        domain::GameEpoch{runtime.epoch.value + 1});
     runtime.ai_growth_preview.reset();
     runtime.ai_growth_last_report.reset();
     runtime.pending_annual_assignment = 0;
@@ -816,11 +857,11 @@ void tick_recurring_features(Runtime& runtime, std::uintptr_t module_base,
                                   player, player_ready);
 }
 
-void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
+void observe_game_context(Runtime& runtime, std::uintptr_t, std::uint64_t now_ms,
     const domain::WorkBudget& work_budget) {
     const platform::windows::RealClockScope real_clock;
 
-    if (runtime.stopping) {
+    if (runtime.stopping || work_budget.exhausted()) {
         return;
     }
 
@@ -829,13 +870,25 @@ void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uin
     std::uintptr_t player = 0;
 
     runtime.loop_context_observed = false;
-    if (!runtime.game_base_pointer || !platform::windows::read_memory(runtime.game_base_pointer,
-            std::as_writable_bytes(std::span(&game_base, 1))) ||
-        (game_base && (game_base <= 0x10000 || !platform::windows::read_memory(game_base + 0xe0,
-            std::as_writable_bytes(std::span(&player, 1)))))) {
+    if (!runtime.game_base_pointer) {
+        runtime.loop_game_base_ready = false;
+        runtime.loop_player_ready = false;
+        return;
+    }
+    if (!platform::windows::read_memory(runtime.game_base_pointer,
+            std::as_writable_bytes(std::span(&game_base, 1)))) {
+        runtime.game_memory_status = domain::GameMemoryStatus::RootReadFailed;
+        runtime.loop_game_base_ready = false;
+        runtime.loop_player_ready = false;
+        return;
+    }
+    if (game_base && (game_base <= 0x10000 || game_base > UINTPTR_MAX - 0xe8 ||
+        !platform::windows::read_memory(game_base + 0xe0,
+            std::as_writable_bytes(std::span(&player, 1))))) {
         // An unreadable slot does not prove that a game object was destroyed.
         // Keep its epoch and recovery journals. Only independent UI services
         // may proceed until the game context can be observed again.
+        runtime.game_memory_status = domain::GameMemoryStatus::PlayerReadFailed;
         runtime.loop_game_base_ready = false;
         runtime.loop_player_ready = false;
         return;
@@ -864,17 +917,15 @@ void observe_game_context(Runtime& runtime, std::uintptr_t game_module, std::uin
     }
     runtime.loop_context_observed = (!game_base || runtime.loop_game_base_ready) &&
         (!player || runtime.loop_player_ready);
+    runtime.game_memory_status = !game_base ? domain::GameMemoryStatus::WaitingForGame :
+        !runtime.loop_game_base_ready ? domain::GameMemoryStatus::RootReadFailed :
+        !player ? domain::GameMemoryStatus::WaitingForPlayer :
+        !runtime.loop_player_ready ? domain::GameMemoryStatus::PlayerReadFailed : domain::GameMemoryStatus::Ready;
     if (!runtime.loop_context_observed) {
         return;
     }
 
     observe_legacy_player(runtime, now_ms);
-    if (!work_budget.exhausted()) {
-        // These fixed-size scalar updates are the frequent game controls. Large
-        // scans and periodic work below share the same dispatch deadline.
-        tick_recurring_features(runtime, game_module, game_base, runtime.loop_game_base_ready,
-            player, runtime.loop_player_ready);
-    }
 }
 
 void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,

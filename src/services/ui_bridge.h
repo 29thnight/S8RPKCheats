@@ -94,6 +94,7 @@ public:
     std::atomic<bool> external_trait_runtime{false};
     std::atomic<bool> ui_rendered{false};
     std::atomic<bool> officer_detail_visible{false};
+    std::atomic<bool> protagonist_detail_visible{false};
     std::atomic<int> officer_roster_scan_cursor{-1};
     void publish_named_specialties(domain::NamedSpecialties named, std::uint32_t random_seed);
     std::optional<std::pair<domain::NamedSpecialties, std::uint32_t>> take_named_specialties();

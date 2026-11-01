@@ -9,12 +9,12 @@ Visual Studio 2026에서는 [S8RPKCheats2026.sln](S8RPKCheats2026.sln)을 연다
 - [기존 실행 경로와 조사 자료 안내](docs/design/P0_Inventory.md)
 - [기능 보존표](docs/design/P0_Feature_Contracts.md)
 - [현재 기능 대응](docs/design/Implementation_Parity.md)
-- [원본 대비 미이관 기능과 설정 로딩 수정 조사](docs/design/Upstream_Comparison_2026-11-01.md)
+- [원본 대비 조사·세부 기능 이관·설정 로딩 수정](docs/design/Upstream_Comparison_2026-11-01.md)
 
 `reference/S8RPKCheats/`는 기존 소스의 독립 Git 클론이며 기준 커밋 `068ca1d881edf870f7cf06f935cf50e286004af8`을 참고용으로 고정했다. `reference/NightFyre/`는 실행 골격 출처 비교에 사용하는 별도 클론이다.
 
 현재 구현은 `domain`, `game`, `runtime`, `services`, `overlay`, `platform/windows`, `proxy`로 분리되어 있다. 게임 읽기·쓰기, 메뉴 명령, 설정 저장, DX11 오버레이와 hook의 연결 코드가 있으며 공통 C++23 설정은 [속성 시트](build/S8.Cpp23.props)에 있다. 구현 경로의 존재와 실제 게임에서의 동작 검증은 구분한다.
 
-[5번 책략 값 처리](src/domain/stratagem5.cpp)는 [native adapter](src/game/stratagem5_native.cpp)와 [전투 갱신](src/runtime/battle_dispatch.cpp)에 연결되어 있다. 버튼의 게임 소유권·파괴 계약과 실제 실행 확인은 남아 있다. 원본의 세력 색상 편집, 선택 무장 관계 표, 배우자 관계 순서 교환 등 세부 미이관 항목은 위 비교 문서에 구분해 기록했다.
+[5번 책략 값 처리](src/domain/stratagem5.cpp)는 [native adapter](src/game/stratagem5_native.cpp)와 [전투 갱신](src/runtime/battle_dispatch.cpp)에 연결되어 있다. 버튼의 게임 소유권·파괴 계약과 실제 실행 확인은 남아 있다. 비교 조사에서 누락으로 확인한 세력 색상 편집, 주인공·선택 무장의 관계 표, 배우자 관계 순서 교환과 이름에서 상세로 이동하는 기능은 후속 구현으로 연결했다. 사용 위치와 데이터 검증·복구 범위는 위 비교 문서에 기록했다.
 
-P0 문서는 초기 조사 기록이다. 현재 기능 상태는 기능 대응·비교 문서를 함께 확인한다. 이번 소스 조사와 설정 로딩 수정에서는 빌드·테스트·게임 실행을 하지 않았으며, 빌드 및 테스트는 요청 시 진행한다.
+P0 문서는 초기 조사 기록이다. 현재 기능 상태는 기능 대응·비교 문서를 함께 확인한다. 이번 소스 조사·설정 로딩 수정·세부 기능 이관에서는 빌드·테스트·게임 실행을 하지 않았으며, 빌드 및 테스트는 요청 시 진행한다.

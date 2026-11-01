@@ -7,7 +7,7 @@
 - 구현 기준: 원본의 실제 `MainColumn* → MenuSections*` 호출과 게임 기능의 사용 경로. 원본의 진단용 분기와 사용되지 않는 실험 코드를 기능 완료의 근거로 세지 않는다.
 - 이 문서는 **소스 구현·연결 상태**를 기록한다. `AGENTS.md`에 따라 빌드, 테스트, 게임 실행, FPS 측정은 하지 않았다. 실행 시 기능의 일대일 동작과 60FPS 유지는 아직 입증하지 않았다.
 
-원본의 주요 기능군은 현재 메뉴·편집 패널·명령에 연결되어 있으며, 변경 전 값과 대상의 수명을 확인하는 절차를 추가했다. 이 표는 모든 세부 조작의 이관 완료를 뜻하지 않는다. 세력 색상 편집, 선택 무장 관계 표, 배우자 관계 순서 교환과 상세 바로가기의 누락은 [2026-11-01 비교 조사](Upstream_Comparison_2026-11-01.md)에 기록했다.
+원본의 주요 기능군은 현재 메뉴·편집 패널·명령에 연결되어 있으며, 변경 전 값과 대상의 수명을 확인하는 절차를 추가했다. 이 표는 모든 세부 조작의 실행 동등성을 뜻하지 않는다. [2026-11-01 비교 조사](Upstream_Comparison_2026-11-01.md)에서 확인한 세력 색상 편집, 선택 무장 관계 표, 배우자 관계 순서 교환과 상세 바로가기는 후속 소스 구현으로 연결했다.
 
 ## 기능 대응
 
@@ -21,7 +21,8 @@
 | 게임 배속 | `src/platform/windows/speed_clock.cpp`, `src/runtime/legacy_feature_control.cpp` | 1.0–5.0배, 0.5배 간격. 플러그인 작업에는 실제 시각을 사용하고 게임 시각의 연속성을 유지한다. 설치 요청은 다른 패치와 순환 처리한다. |
 | 시나리오·전기 | `src/game/start_setting.cpp`, `src/game/tengi.cpp`, `src/game/officer_tools.cpp` | 초기 시나리오 보정, 연월 편집, 데모 중지, 15개 전기의 허용·기간·간격 설정. 데모 중지는 실제 관측한 P1 객체의 정체성을 다시 확인한다. |
 | 주인공·전체 무장 편집 | `src/game/officer_roster.cpp`, `src/game/officer_tools.cpp`, `src/overlay/officer_tools_panel.cpp` | 기존 기본 능력·적성·소속·기재 편집에 전법 35종·특기 24종 일괄 변경, 대상 필터, 랜덤 기재 배정·중복 방지·빈 칸 채우기를 연결했다. |
-| 가족·자녀 | `src/game/family_tools.cpp`, `src/game/native_officer_names.cpp` | 조기 임관 예약/취소, 임신·배우자 편집, 실제 게임 이름/자 조회. 이름 파일의 비어 있지 않은 사용자 지정 값이 우선한다. |
+| 세력 색상·무장 관계 표 | `src/game/officer_roster.cpp`, `src/overlay/feature_menu.cpp`, `src/runtime/command_commit.cpp` | 주인공과 선택 무장의 세력 색상 번호, 의형제·배우자·상생·상극·원수·호적수와 확인 가능한 친밀도. 조회를 분할하고 없음을 조회 실패와 구분한다. 색상은 대상 token·기존 값 확인, readback·실패 복구를 거친다. |
+| 가족·자녀 | `src/game/family_tools.cpp`, `src/game/native_officer_names.cpp`, `src/overlay/officer_tools_panel.cpp` | 조기 임관 예약/취소, 임신 슬롯 편집, 배우자 관계 목록의 두 항목 순서 교환과 이름에서 상세 이동. 순서 교환은 관계 member 필드만 변경하고 미복구 journal을 tick·종료에 보존한다. 실제 게임 이름/자 조회에 비어 있지 않은 사용자 지정 이름이 우선한다. |
 | AI 성장·특수능력 | `src/game/ai_officer_growth.cpp`, `src/game/special_ability_assignment.cpp` | 연도·세션 단위 중복 방지, 단계별 읽기·반영, 수동 실행·자동 실행과 결과 표시. |
 | 도시 관리 | `src/game/city_management.cpp`, `src/overlay/city_management_panel.cpp` | 51개 도시의 자원·개발 한도·반란, 일괄 변경, 곡물 환전과 자동 유지. 세력·테이블·변경 전 값을 재확인한다. |
 | 후방 지원 | `src/runtime/city_control.cpp`, `src/services/city_support_service.cpp` | 수동 수송, 정액/비율 노선, 연말→연초 자동 실행. 원본 `S8RPK_rear_support_routes.json` 형식을 읽고 서비스에서 저장·재읽기한다. |
@@ -53,7 +54,8 @@
 
 | 경로 | 한 번의 처리 상한 또는 재사용 방식 |
 |---|---|
-| 창 메시지의 전체 갱신 | 공통 1,500µs deadline. 최초 설정·스냅샷 전달 후 게임 상태를 관측한다. Game/Battle/UI/Debug/Specialty/OfficerNames 6개 그룹을 순환하며 그룹당 최대 250µs slice를 남은 전체 예산으로 제한 |
+| 창 메시지의 전체 갱신 | 최초 설정 전달과 필수 root/epoch 읽기를 마친 뒤 공통 1,500µs deadline을 시작한다. Discovery/Recurring/Game/Battle/UI/Debug/Specialty/OfficerNames 8개 그룹을 순환하며 그룹당 최대 250µs slice를 남은 작업 예산으로 제한. 선행 메모리 읽기의 지연이 명령·정보 게시를 영구 차단하지 않는다. |
+| 게임 주소 재검색 | 실제 실행 중인 executable image를 4KiB씩, 호출당 최대 64KiB와 deadline 안에서 확인한다. 블록 경계 9바이트를 보존하고 후보 명령·global slot·root·P1·무장 ID를 다시 확인한다. 한 sweep 후 1초 뒤 재시도하며 시작 시의 오래된 image를 재사용하지 않는다. |
 | UI 명령 | 최대 4개. UI 그룹의 남은 deadline을 사용하며 명령 외 서비스도 같은 예산에 포함 |
 | 일반 설치 | legacy/native/trait controller 중 한 번에 한 작업 그룹. legacy 내부 27개 그룹을 순환하며 실패별 deadline 적용 |
 | AI 성장 | 최대 8명 단위 |
@@ -72,7 +74,7 @@
 
 각 작업의 기존 항목 상한과 자체 시간 예산보다 공통 deadline이 먼저 적용된다. Game·UI·Battle 내부 작업도 호출 전에 다음 순환 위치를 기록하므로, 긴 작업이 다음 갱신에서 앞 순서를 독점하지 않는다.
 
-시간 예산은 **작업 항목 사이에서 양보하는 조건**이다. 이미 시작한 게임 native 함수, 메모리 작업, 고정 크기 쓰기 트랜잭션은 완료한 뒤 양보한다. 1,500µs는 게임 창 메시지의 작업 admission 예산이며 Present 렌더링·게임 전체 frame의 강제 마감이나 측정된 latency/FPS를 뜻하지 않는다.
+시간 예산은 **작업 항목 사이에서 양보하는 조건**이다. 이미 시작한 게임 native 함수, 메모리 작업, 고정 크기 쓰기 트랜잭션은 완료한 뒤 양보한다. 1,500µs는 필수 root/epoch 관측 이후 순환 작업의 admission 예산이다. 관측 시간, Present 렌더링·게임 전체 frame의 강제 마감이나 측정된 latency/FPS를 뜻하지 않는다.
 
 RTV, native signature 검색 결과, 코드 버퍼, 작업 배열을 재사용한다. 설정·이름·명품 metadata의 파일 읽기와 문자열 병합은 서비스에서 처리한다. 잠금 내부에서는 작은 상태와 공유 소유자를 교환하고, 큰 데이터의 생성·해제는 잠금 밖에서 수행한다. 짧은 재시도는 메시지·타이머·condition variable의 deadline으로 예약하며 임의 sleep 루프를 추가하지 않는다.
 

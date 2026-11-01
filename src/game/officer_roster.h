@@ -2,6 +2,8 @@
 
 #include "../domain/officer_roster.h"
 #include "../domain/officer_roster_publication.h"
+#include "../domain/error.h"
+#include "../domain/ownership.h"
 #include "../domain/work_budget.h"
 
 #include <array>
@@ -39,6 +41,48 @@ struct TraitObjectSearch {
     static constexpr std::size_t BLOCK_SIZE = 4096;
     std::array<std::byte, BLOCK_SIZE + sizeof(std::uint16_t)> bytes{};
 };
+
+struct OfficerInspectionContext {
+    domain::GameEpoch epoch{};
+    std::uintptr_t module_base = 0;
+    std::uintptr_t game_base_pointer = 0;
+    std::uintptr_t game_base = 0;
+    std::uintptr_t player = 0;
+};
+
+struct OfficerInspectionState;
+
+struct OfficerInspectionCache {
+    domain::OfficerFactionColor faction_color;
+    own::shared_owner<const domain::OfficerRelations> relations;
+    own::unique_owner<OfficerInspectionState> state;
+
+    OfficerInspectionCache();
+    ~OfficerInspectionCache();
+    OfficerInspectionCache(const OfficerInspectionCache&) = delete;
+    OfficerInspectionCache& operator=(const OfficerInspectionCache&) = delete;
+};
+
+// Serialized game boundary only. Cached results contain values and IDs, never
+// native addresses. Each call admits at most 32 relation/affinity work items;
+// unchanged, completed queries do not rescan their tables. Color polling is
+// limited to 250 ms, independently of the game's speed multiplier.
+bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRosterScan& scan,
+    const OfficerInspectionContext& context, std::uint16_t officer_id, bool protagonist,
+    const domain::WorkBudget& budget = {});
+void request_officer_relations_refresh(OfficerInspectionCache& cache);
+// Retains the color rollback journal and monotonically increasing token counter.
+void reset_officer_inspection(OfficerInspectionCache& cache, domain::GameEpoch epoch);
+domain::Result<void> write_officer_faction_color(OfficerInspectionCache& cache,
+    const OfficerRosterScan& scan, const OfficerInspectionContext& context,
+    std::uint16_t officer_id, std::uint64_t expected_token,
+    std::uint8_t expected_color, std::uint8_t color);
+// Call even with the panel hidden, and during staged shutdown. False retains
+// the original byte and target identity for a later safe retry; an old epoch
+// never authorizes writing that byte into the current session. Recovery does
+// not depend on the UI roster's ID-to-slot map surviving a refresh.
+bool restore_officer_faction_color(OfficerInspectionCache& cache, const OfficerRosterScan& scan,
+    const OfficerInspectionContext& context);
 
 void scan_trait_object(TraitObjectSearch& search, std::size_t max_bytes,
     const domain::WorkBudget& budget = {});

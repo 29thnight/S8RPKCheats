@@ -114,12 +114,34 @@ bool prepare_battle_dispatch(BattleDispatch& state, Runtime& runtime, std::uintp
     if (state.preparation_attempted || !module_base || runtime.module_image.empty()) {
         return state.native.view.prepared;
     }
-    state.module = module_base;
-    state.metadata_offset = game::find_stratagem5_metadata_offset(runtime.module_image);
+    refresh_battle_preparation(state, runtime, module_base,
+        game::find_stratagem5_metadata_offset(runtime.module_image));
+    return state.native.view.prepared;
+}
+
+void refresh_battle_preparation(BattleDispatch& state, Runtime& runtime, std::uintptr_t module_base,
+    std::optional<std::uint32_t> metadata_offset) {
+    if (state.stopping || state.stopped || runtime.stopping || !module_base ||
+        runtime.image_module != module_base || runtime.module_image.empty() ||
+        (state.module && state.module != module_base)) {
+        return;
+    }
+    if (!state.metadata_offset) {
+        state.metadata_offset = metadata_offset;
+    }
     state.metadata_searched = true;
+    if (state.native.view.prepared || state.native.view.installed ||
+        state.native.view.armed || state.native.view.registered) {
+        return;
+    }
+    state.module = module_base;
     state.preparation_attempted = true;
+    // The adapter also rejects a previously published or thread-bound owner.
+    // Do not reset its view or storage to force another preparation attempt.
     state.prepare_blocked = !game::prepare_stratagem5_native_code(state.native, module_base, runtime.module_image);
-    return !state.prepare_blocked;
+    if (!state.prepare_blocked) {
+        state.next_prepare_ms = 0;
+    }
 }
 
 void update_battle_dispatch(BattleDispatch& state, Runtime& runtime,

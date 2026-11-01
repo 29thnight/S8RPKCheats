@@ -2,8 +2,10 @@
 
 #include "officer_basic.h"
 #include "trait.h"
+#include "ids.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -19,6 +21,41 @@ struct OfficerRosterEntry {
 
 using OfficerRoster = std::vector<OfficerRosterEntry>;
 using OfficerNames = std::unordered_map<int, std::string>;
+
+inline constexpr std::size_t OFFICER_RELATION_CAPACITY = 5102;
+enum class OfficerRelationKind { Sworn, Spouse, Synergetic, Antipathetic, Enemy, Rival, Count };
+enum class OfficerRelationsStatus { Loading, Ready, Partial, Unavailable, ReadFailed };
+
+struct OfficerRelationMember {
+    std::uint16_t id = 0;
+    std::optional<std::uint8_t> affinity;
+};
+
+struct OfficerRelationGroup {
+    std::array<OfficerRelationMember, OFFICER_RELATION_CAPACITY> members{};
+    std::size_t count = 0;
+    // A readable, completely scanned table with count == 0 means "none".
+    // An unavailable group must not be presented as an empty relationship.
+    bool available = false;
+};
+
+struct OfficerRelations {
+    GameEpoch epoch{};
+    std::uint16_t officer_id = 0;
+    OfficerRelationsStatus status = OfficerRelationsStatus::Loading;
+    std::array<OfficerRelationGroup, static_cast<std::size_t>(OfficerRelationKind::Count)> groups{};
+};
+
+struct OfficerFactionColor {
+    std::uint16_t officer_id = 0;
+    // Opaque observation generation; never a game address or faction index.
+    std::uint64_t token = 0;
+    std::uint8_t color = 0;
+    bool available = false;
+    bool no_faction = false;
+    bool recovery_pending = false;
+    bool operator==(const OfficerFactionColor&) const = default;
+};
 
 struct OfficerDetail {
     std::uint16_t id;

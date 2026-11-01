@@ -20,6 +20,10 @@ struct OfficerToolsPanel {
     int scenario_month = 1;
     int pregnancy_slot = 0;
     std::uint16_t pregnancy_spouse = 0;
+    std::array<std::uint16_t, 2> spouse_order_selection{};
+    std::array<std::uint16_t, 2> spouse_order_positions{};
+    std::uint64_t spouse_order_generation = 0;
+    std::optional<std::uint16_t> open_officer;
     double last_date_sync = 0;
     bool date_input_invalid = false;
 };

@@ -48,6 +48,13 @@ struct SetPregnancySpouse {
     std::uint16_t expected_spouse = 0;
     std::uint16_t new_spouse = 0;
 };
+struct SwapSpouseOrder {
+    std::uint16_t first_spouse = 0;
+    std::uint16_t second_spouse = 0;
+    std::uint16_t first_order = 0;
+    std::uint16_t second_order = 0;
+    std::uint64_t generation = 0;
+};
 struct SetFamilyPage {
     std::size_t child_page = 0;
     std::size_t spouse_page = 0;
@@ -66,7 +73,7 @@ struct StopDemoPlay {
 };
 
 using OfficerToolAction = std::variant<BatchTrainingRequest, RandomTraitsRequest,
-    CancelOfficerToolJob, RefreshFamilyTools, SetChildSchedule, SetPregnancySpouse,
+    CancelOfficerToolJob, RefreshFamilyTools, SetChildSchedule, SetPregnancySpouse, SwapSpouseOrder,
     SetFamilyPage, SetScenarioDate, StopDemoPlay>;
 
 struct OfficerToolsRequest {
@@ -103,6 +110,9 @@ struct SpouseToolRow {
     std::uint16_t id = 0;
     std::uint16_t birth = 0;
     std::uint16_t child_count = 0;
+    // One-based position in the observed relationship table/member order.
+    std::uint16_t order = 0;
+    bool order_swappable = false;
 };
 
 struct PregnancyToolSlot {
@@ -119,6 +129,8 @@ struct FamilyToolsView {
     bool loading = false;
     bool relationships_ready = false;
     bool pregnancy_ready = false;
+    bool spouse_order_recovery_pending = false;
+    std::uint64_t relationship_generation = 0;
     std::uint16_t hero = 0;
     std::size_t child_page = 0;
     std::size_t spouse_page = 0;

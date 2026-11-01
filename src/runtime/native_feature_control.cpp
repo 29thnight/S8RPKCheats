@@ -176,6 +176,29 @@ bool request_native_feature(Runtime& runtime, domain::FeatureId feature, bool en
     return true;
 }
 
+void retry_failed_native_features(Runtime& runtime) {
+    if (runtime.stopping) {
+        return;
+    }
+    NativeFeatureControl& control = runtime.native_features;
+
+    for (std::size_t index = 0; index < domain::NATIVE_FEATURE_GROUP_COUNT; ++index) {
+        const domain::NativeFeatureGroup group = static_cast<domain::NativeFeatureGroup>(index);
+        const game::NativePatchGroup& patches = patch_group(control, group);
+        domain::NativeFeatureStatus& status = control.statuses[index];
+
+        if (status.phase != domain::NativeFeaturePhase::Failed ||
+            status.error != domain::NativeFeatureError::SignatureMismatch ||
+            !desired_group(runtime.features, group) || patches.applied || patches.uncertain) {
+            continue;
+        }
+        control.pending[index] = true;
+        control.retry_after_ms[index] = 0;
+        status.phase = domain::NativeFeaturePhase::Pending;
+        status.error = domain::NativeFeatureError::None;
+    }
+}
+
 bool reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms) {
 
     NativeFeatureControl& control = runtime.native_features;

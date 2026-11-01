@@ -1,10 +1,16 @@
 #include "officer_roster.h"
+#include "../domain/auto_affinity.h"
 #include "../platform/windows/process_memory.h"
+#include "../platform/windows/speed_clock.h"
 
 #include <algorithm>
 #include <bit>
+#include <bitset>
+#include <chrono>
 #include <cstring>
+#include <limits>
 #include <span>
+#include <utility>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -633,6 +639,696 @@ bool write_roster_officer_training(const OfficerRosterScan& scan, std::uintptr_t
     }
     const auto officer = roster_officer(scan, module_base, id);
     return officer && platform::windows::write_data_memory(officer + offset, std::as_bytes(std::span(&value, 1)));
+}
+
+namespace {
+
+using RelationKind = domain::OfficerRelationKind;
+using RelationStatus = domain::OfficerRelationsStatus;
+constexpr std::size_t INSPECTION_WORK_ITEMS = 32;
+constexpr std::uintptr_t OFFICER_STRIDE = 0x3d0;
+constexpr std::uintptr_t OFFICER_POINTER_MASK = 0x0000ffffffffffffULL;
+constexpr std::array<std::uintptr_t, 2> DIRECT_OFFSETS{0x57ae38, 0x462ba8};
+constexpr std::array<std::uintptr_t, 2> DIRECT_BIASES{0x80, 0xc0};
+constexpr std::array<std::uintptr_t, 2> SYNERGY_OFFSETS{0x547330, 0x433210};
+constexpr std::array<RelationKind, 4> DIRECT_KINDS{
+    RelationKind::Sworn, RelationKind::Spouse, RelationKind::Enemy, RelationKind::Rival};
+
+enum class InspectionStage {
+    Idle, DirectCandidate, DirectValidate, DirectScan,
+    SynergyCandidate, SynergyValidate, SynergyScan, Affinity, Publish
+};
+
+struct InspectionIdentity {
+    domain::GameEpoch epoch{};
+    std::uintptr_t module = 0;
+    std::uintptr_t root_pointer = 0;
+    std::uintptr_t root = 0;
+    std::uintptr_t roster = 0;
+    std::uintptr_t officer = 0;
+    std::uint16_t id = 0;
+    bool protagonist = false;
+    bool operator==(const InspectionIdentity&) const = default;
+};
+
+struct FactionObservation {
+    InspectionIdentity owner;
+    std::uintptr_t force = 0;
+    std::uintptr_t vtable = 0;
+    std::uint8_t color = 0;
+};
+
+struct FactionColorRestore {
+    FactionObservation previous;
+    std::uint8_t replacement = 0;
+    bool pending = false;
+};
+
+template<class T> bool inspect_value(std::uintptr_t address, T& value) {
+    return platform::windows::read_memory(address, std::as_writable_bytes(std::span(&value, 1)));
+}
+
+template<class T, std::size_t N> T inspection_field(const std::array<std::byte, N>& bytes,
+    std::size_t offset) {
+    T value{};
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
+
+std::optional<InspectionIdentity> inspection_identity(const OfficerRosterScan& scan,
+    const OfficerInspectionContext& context, std::uint16_t id, bool protagonist) {
+    std::uintptr_t root = 0;
+    if (id == 0 || id > domain::OFFICER_RELATION_CAPACITY || context.module_base == 0 ||
+        context.module_base > std::numeric_limits<std::uintptr_t>::max() - 0x34c8630 ||
+        context.game_base <= 0x10000 ||
+        context.game_base > std::numeric_limits<std::uintptr_t>::max() - 0x800000 ||
+        !context.game_base_pointer || !inspect_value(context.game_base_pointer, root) ||
+        root != context.game_base) {
+        return std::nullopt;
+    }
+    const std::uintptr_t roster = roster_base(context.module_base);
+    std::uintptr_t officer = 0;
+    if (protagonist) {
+        if (!inspect_value(root + 0xe0, officer) || officer != context.player) {
+            return std::nullopt;
+        }
+    } else {
+        officer = roster_officer(scan, context.module_base, id);
+    }
+    std::uint16_t observed_id = 0;
+    if (roster <= 0x10000 ||
+        roster > std::numeric_limits<std::uintptr_t>::max() - domain::OFFICER_RELATION_CAPACITY * OFFICER_STRIDE ||
+        officer <= 0x10000 || officer > std::numeric_limits<std::uintptr_t>::max() - OFFICER_STRIDE ||
+        !inspect_value(officer + 8, observed_id) || observed_id != id) {
+        return std::nullopt;
+    }
+    return InspectionIdentity{context.epoch, context.module_base, context.game_base_pointer,
+        root, roster, officer, id, protagonist};
+}
+
+bool same_inspection_owner(const InspectionIdentity& expected, const OfficerRosterScan& scan,
+    const OfficerInspectionContext& context) {
+    if (expected.epoch != context.epoch) {
+        return false;
+    }
+    const std::optional<InspectionIdentity> current = inspection_identity(scan, context,
+        expected.id, expected.protagonist);
+    return current && *current == expected;
+}
+
+std::optional<FactionObservation> inspect_faction(const InspectionIdentity& owner) {
+    FactionObservation result;
+    result.owner = owner;
+    if (!inspect_value(owner.officer + 0x18, result.force)) {
+        return std::nullopt;
+    }
+    if (result.force == 0) {
+        return result;
+    }
+    if (result.force <= 0x10000 || result.force > std::numeric_limits<std::uintptr_t>::max() - 0x10 ||
+        !inspect_value(result.force, result.vtable) || result.vtable <= 0x10000 ||
+        !inspect_value(result.force + 9, result.color)) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+bool same_faction(const FactionObservation& left, const FactionObservation& right) {
+    return left.owner == right.owner && left.force == right.force && left.vtable == right.vtable;
+}
+
+constexpr std::size_t relation_index(RelationKind kind) {
+    return static_cast<std::size_t>(kind);
+}
+
+bool inspection_roster_pointer(std::uintptr_t pointer, std::uintptr_t roster) {
+    pointer &= OFFICER_POINTER_MASK;
+    return pointer >= roster && pointer - roster < domain::OFFICER_RELATION_CAPACITY * OFFICER_STRIDE &&
+        (pointer - roster) % OFFICER_STRIDE == 0;
+}
+
+bool inspection_member_id(std::uintptr_t pointer, std::uintptr_t roster, std::uint16_t& id) {
+    pointer &= OFFICER_POINTER_MASK;
+    id = 0;
+    if (!inspection_roster_pointer(pointer, roster)) {
+        return true;
+    }
+    if (!inspect_value(pointer + 8, id)) {
+        return false;
+    }
+    if (id == 0 || id > domain::OFFICER_RELATION_CAPACITY) {
+        id = 0;
+    }
+    return true;
+}
+
+bool same_inspection_recovery_owner(const InspectionIdentity& expected,
+    const OfficerInspectionContext& context) {
+    if (expected.epoch != context.epoch || expected.module != context.module_base ||
+        expected.root_pointer != context.game_base_pointer || expected.root != context.game_base) {
+        return false;
+    }
+    std::uintptr_t root = 0;
+    std::uint16_t id = 0;
+    if (!inspect_value(expected.root_pointer, root) || root != expected.root ||
+        roster_base(expected.module) != expected.roster ||
+        !inspect_value(expected.officer + 8, id) || id != expected.id) {
+        return false;
+    }
+    if (expected.protagonist) {
+        std::uintptr_t player = 0;
+        return inspect_value(root + 0xe0, player) && player == expected.officer && player == context.player;
+    }
+    // Roster refresh clears the UI's ID-to-slot map. Recovery must still be
+    // possible during shutdown, without waiting for that map to be rebuilt.
+    return inspection_roster_pointer(expected.officer, expected.roster);
+}
+
+} // namespace
+
+struct OfficerInspectionState {
+    std::optional<InspectionIdentity> owner;
+    std::optional<FactionObservation> faction;
+    FactionColorRestore restore;
+    std::uint64_t token_counter = 0;
+    std::chrono::steady_clock::time_point color_after{};
+    domain::OfficerRelations building;
+    std::array<std::bitset<domain::OFFICER_RELATION_CAPACITY + 1>,
+        static_cast<std::size_t>(RelationKind::Count)> seen;
+    InspectionStage stage = InspectionStage::Idle;
+    std::size_t candidate_index = 0;
+    std::size_t cursor = 0;
+    std::size_t candidate_valid = 0;
+    std::size_t candidate_invalid = 0;
+    std::size_t affinity_group = 0;
+    std::uintptr_t candidate = 0;
+    std::uintptr_t candidate_slot = 0;
+    std::uintptr_t candidate_pointer = 0;
+    std::uintptr_t direct_slot = 0;
+    std::uintptr_t direct_pointer = 0;
+    std::uintptr_t synergy_slot = 0;
+    std::uintptr_t synergy_pointer = 0;
+    std::uintptr_t data_center = 0;
+    bool direct_ready = false;
+    bool synergy_ready = false;
+    bool direct_read_failed = false;
+    bool synergy_read_failed = false;
+    bool affinity_clearing = false;
+    bool refresh_requested = true;
+};
+
+namespace {
+
+bool publish_inspection_status(OfficerInspectionCache& cache, domain::GameEpoch epoch,
+    std::uint16_t id, RelationStatus status) {
+    if (cache.relations && cache.relations->epoch == epoch && cache.relations->officer_id == id &&
+        cache.relations->status == status) {
+        return false;
+    }
+    own::shared_owner<domain::OfficerRelations> result = own::make_shared<domain::OfficerRelations>();
+    result->epoch = epoch;
+    result->officer_id = id;
+    result->status = status;
+    cache.relations = std::move(result);
+    return true;
+}
+
+void begin_inspection_relations(OfficerInspectionCache& cache, const InspectionIdentity& owner) {
+    OfficerInspectionState& state = *cache.state;
+    state.owner = owner;
+    state.building.epoch = owner.epoch;
+    state.building.officer_id = owner.id;
+    state.building.status = RelationStatus::Loading;
+    for (std::size_t index = 0; index < state.building.groups.size(); ++index) {
+        state.building.groups[index].count = 0;
+        state.building.groups[index].available = false;
+        state.seen[index].reset();
+    }
+    state.candidate_index = 0;
+    state.cursor = 0;
+    state.candidate = 0;
+    state.candidate_slot = 0;
+    state.candidate_pointer = 0;
+    state.direct_slot = 0;
+    state.direct_pointer = 0;
+    state.synergy_slot = 0;
+    state.synergy_pointer = 0;
+    state.direct_ready = false;
+    state.synergy_ready = false;
+    state.direct_read_failed = false;
+    state.synergy_read_failed = false;
+    state.affinity_clearing = false;
+    state.refresh_requested = false;
+    state.stage = InspectionStage::DirectCandidate;
+    publish_inspection_status(cache, owner.epoch, owner.id, RelationStatus::Loading);
+}
+
+void begin_synergy_inspection(OfficerInspectionState& state) {
+    state.candidate_index = 0;
+    state.cursor = 0;
+    state.candidate_slot = 0;
+    state.stage = InspectionStage::SynergyCandidate;
+}
+
+void begin_inspection_affinity(OfficerInspectionState& state) {
+    state.data_center = 0;
+    if (!inspect_value(state.owner->module + 0x2e98bc8, state.data_center) ||
+        state.data_center <= 0x10000 ||
+        state.data_center > std::numeric_limits<std::uintptr_t>::max() - 0x200000) {
+        state.data_center = 0;
+    }
+    state.cursor = 0;
+    state.affinity_group = 0;
+    state.stage = InspectionStage::Affinity;
+}
+
+bool inspection_pointer_unchanged(std::uintptr_t slot, std::uintptr_t expected) {
+    std::uintptr_t pointer = 0;
+    return slot == 0 || (inspect_value(slot, pointer) && pointer == expected);
+}
+
+bool discard_stale_inspection_affinity(OfficerInspectionState& state) {
+    if (state.data_center == 0 || state.affinity_clearing ||
+        inspection_pointer_unchanged(state.owner->module + 0x2e98bc8, state.data_center)) {
+        return false;
+    }
+    state.affinity_clearing = true;
+    state.affinity_group = 0;
+    state.cursor = 0;
+    state.stage = InspectionStage::Affinity;
+    return true;
+}
+
+void append_inspection_relation(OfficerInspectionState& state, RelationKind kind, std::uint16_t id) {
+    if (id == 0 || id > domain::OFFICER_RELATION_CAPACITY || id == state.owner->id) {
+        return;
+    }
+    const std::size_t index = relation_index(kind);
+    domain::OfficerRelationGroup& group = state.building.groups[index];
+    if (!state.seen[index].test(id)) {
+        // At most one entry per valid ID; the full supported roster fits.
+        state.seen[index].set(id);
+        group.members[group.count++] = {id, std::nullopt};
+    }
+}
+
+void direct_inspection_failed(OfficerInspectionState& state) {
+    state.direct_read_failed = true;
+    state.direct_ready = false;
+    state.direct_slot = 0;
+    for (const RelationKind kind : DIRECT_KINDS) {
+        state.building.groups[relation_index(kind)].count = 0;
+        state.building.groups[relation_index(kind)].available = false;
+        state.seen[relation_index(kind)].reset();
+    }
+    begin_synergy_inspection(state);
+}
+
+void synergy_inspection_failed(OfficerInspectionState& state) {
+    state.synergy_read_failed = true;
+    state.synergy_ready = false;
+    state.synergy_slot = 0;
+    for (const RelationKind kind : {RelationKind::Synergetic, RelationKind::Antipathetic}) {
+        state.building.groups[relation_index(kind)].count = 0;
+        state.building.groups[relation_index(kind)].available = false;
+        state.seen[relation_index(kind)].reset();
+    }
+    begin_inspection_affinity(state);
+}
+
+void inspect_relation_candidate(OfficerInspectionState& state, bool synergy) {
+    const std::size_t limit = synergy ? SYNERGY_OFFSETS.size() : DIRECT_OFFSETS.size() * DIRECT_BIASES.size();
+    if (state.candidate_index == limit) {
+        if (synergy) {
+            begin_inspection_affinity(state);
+        } else {
+            begin_synergy_inspection(state);
+        }
+        return;
+    }
+    const std::size_t index = state.candidate_index++;
+    state.candidate_slot = state.owner->root + (synergy ? SYNERGY_OFFSETS[index] : DIRECT_OFFSETS[index / 2]);
+    if (!inspect_value(state.candidate_slot, state.candidate_pointer)) {
+        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
+        return;
+    }
+    if (state.candidate_pointer <= 0x100c0 ||
+        state.candidate_pointer > std::numeric_limits<std::uintptr_t>::max() - 0x40000) {
+        return;
+    }
+    state.candidate = synergy ? state.candidate_pointer + 0xa0 : state.candidate_pointer - DIRECT_BIASES[index % 2];
+    state.cursor = 0;
+    state.candidate_valid = 0;
+    state.candidate_invalid = 0;
+    state.stage = synergy ? InspectionStage::SynergyValidate : InspectionStage::DirectValidate;
+}
+
+void validate_inspection_candidate(OfficerInspectionState& state, bool synergy) {
+    const std::size_t limit = synergy ? 600 : 128;
+    const InspectionStage rejected = synergy ? InspectionStage::SynergyCandidate : InspectionStage::DirectCandidate;
+    if (!inspection_pointer_unchanged(state.candidate_slot, state.candidate_pointer)) {
+        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
+        state.stage = rejected;
+        return;
+    }
+    if (state.cursor == limit) {
+        if (state.candidate_valid == 0) {
+            state.stage = rejected;
+        } else {
+            (synergy ? state.synergy_slot : state.direct_slot) = state.candidate_slot;
+            (synergy ? state.synergy_pointer : state.direct_pointer) = state.candidate_pointer;
+            state.cursor = 0;
+            state.stage = synergy ? InspectionStage::SynergyScan : InspectionStage::DirectScan;
+        }
+        return;
+    }
+    std::array<std::byte, 0x40> record{};
+    const std::size_t stride = synergy ? 0x20 : 0x40;
+    if (!platform::windows::read_memory(state.candidate + state.cursor++ * stride,
+            std::span(record).first(stride))) {
+        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
+        state.stage = rejected;
+        return;
+    }
+    const std::uint8_t kind = inspection_field<std::uint8_t>(record, synergy ? 0x18 : 8);
+    if (kind == 0) {
+        return;
+    }
+    const std::size_t first = synergy ? 8 : 0x10;
+    if (kind > (synergy ? 2 : 4) ||
+        !inspection_roster_pointer(inspection_field<std::uintptr_t>(record, first), state.owner->roster) ||
+        !inspection_roster_pointer(inspection_field<std::uintptr_t>(record, first + 8), state.owner->roster)) {
+        if (++state.candidate_invalid > 3) {
+            state.stage = rejected;
+        }
+    } else {
+        ++state.candidate_valid;
+    }
+}
+
+void inspect_direct_relation(OfficerInspectionState& state) {
+    if (!inspection_pointer_unchanged(state.direct_slot, state.direct_pointer)) {
+        direct_inspection_failed(state);
+        return;
+    }
+    if (state.cursor == 3000) {
+        state.direct_ready = true;
+        for (const RelationKind kind : DIRECT_KINDS) {
+            state.building.groups[relation_index(kind)].available = true;
+        }
+        begin_synergy_inspection(state);
+        return;
+    }
+    std::array<std::byte, 0x40> record{};
+    if (!inspect_value(state.candidate + state.cursor++ * record.size(), record)) {
+        direct_inspection_failed(state);
+        return;
+    }
+    const std::uint8_t kind = inspection_field<std::uint8_t>(record, 8);
+    if (kind < 1 || kind > DIRECT_KINDS.size()) {
+        return;
+    }
+    std::array<std::uint16_t, 5> members{};
+    bool contains_officer = false;
+    for (std::size_t index = 0; index < members.size(); ++index) {
+        if (!inspection_member_id(inspection_field<std::uintptr_t>(record, 0x10 + index * 8),
+                state.owner->roster, members[index])) {
+            direct_inspection_failed(state);
+            return;
+        }
+        contains_officer = contains_officer || members[index] == state.owner->id;
+    }
+    if (contains_officer) {
+        for (const std::uint16_t id : members) {
+            append_inspection_relation(state, DIRECT_KINDS[kind - 1], id);
+        }
+    }
+}
+
+void inspect_synergy_relation(OfficerInspectionState& state) {
+    if (!inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
+        synergy_inspection_failed(state);
+        return;
+    }
+    if (state.cursor == 5000) {
+        state.synergy_ready = true;
+        state.building.groups[relation_index(RelationKind::Synergetic)].available = true;
+        state.building.groups[relation_index(RelationKind::Antipathetic)].available = true;
+        begin_inspection_affinity(state);
+        return;
+    }
+    std::array<std::byte, 0x20> record{};
+    if (!inspect_value(state.candidate + state.cursor++ * record.size(), record)) {
+        synergy_inspection_failed(state);
+        return;
+    }
+    const std::uint8_t kind = inspection_field<std::uint8_t>(record, 0x18);
+    if ((kind != 1 && kind != 2) || inspection_field<std::uint8_t>(record, 0x19) != 0) {
+        return;
+    }
+    std::uint16_t first = 0, second = 0;
+    if (!inspection_member_id(inspection_field<std::uintptr_t>(record, 8), state.owner->roster, first) ||
+        !inspection_member_id(inspection_field<std::uintptr_t>(record, 0x10), state.owner->roster, second)) {
+        synergy_inspection_failed(state);
+        return;
+    }
+    const std::uint16_t other = first == state.owner->id ? second : second == state.owner->id ? first : 0;
+    if (other == 0 || other == state.owner->id) {
+        return;
+    }
+    // The original viewer excludes every direct relation from destiny groups.
+    for (const RelationKind direct : DIRECT_KINDS) {
+        if (state.seen[relation_index(direct)].test(other)) {
+            return;
+        }
+    }
+    append_inspection_relation(state, kind == 1 ? RelationKind::Antipathetic : RelationKind::Synergetic, other);
+}
+
+void inspect_relation_affinity(OfficerInspectionState& state) {
+    if (state.affinity_group == state.building.groups.size()) {
+        state.stage = InspectionStage::Publish;
+        return;
+    }
+    domain::OfficerRelationGroup& group = state.building.groups[state.affinity_group];
+    if (state.cursor == group.count) {
+        ++state.affinity_group;
+        state.cursor = 0;
+        return;
+    }
+    domain::OfficerRelationMember& member = group.members[state.cursor++];
+    member.affinity.reset();
+    if (state.affinity_clearing || state.data_center == 0) {
+        return;
+    }
+    const std::optional<std::uint32_t> offset = domain::affinity_pair_offset(state.owner->id, member.id);
+    std::uint8_t affinity = 0;
+    if (offset && inspect_value(state.data_center + 0x24206 + *offset, affinity) && affinity <= 100) {
+        member.affinity = affinity;
+    }
+}
+
+void refresh_inspected_color(OfficerInspectionCache& cache, const InspectionIdentity& owner) {
+    OfficerInspectionState& state = *cache.state;
+    const std::optional<FactionObservation> current = inspect_faction(owner);
+    cache.faction_color.officer_id = owner.id;
+    cache.faction_color.available = false;
+    cache.faction_color.no_faction = false;
+    cache.faction_color.recovery_pending = state.restore.pending;
+    if (!current) {
+        return;
+    }
+    if (!state.faction || !same_faction(*state.faction, *current)) {
+        cache.faction_color.token = state.token_counter == std::numeric_limits<std::uint64_t>::max()
+            ? 0 : ++state.token_counter;
+    }
+    state.faction = current;
+    cache.faction_color.color = current->color;
+    cache.faction_color.no_faction = current->force == 0;
+    cache.faction_color.available = current->force != 0 && cache.faction_color.token != 0 && !state.restore.pending;
+}
+
+} // namespace
+
+OfficerInspectionCache::OfficerInspectionCache() : state(own::make_unique<OfficerInspectionState>()) {}
+OfficerInspectionCache::~OfficerInspectionCache() = default;
+
+void request_officer_relations_refresh(OfficerInspectionCache& cache) {
+    cache.state->refresh_requested = true;
+    if (cache.state->owner) {
+        publish_inspection_status(cache, cache.state->owner->epoch, cache.state->owner->id, RelationStatus::Loading);
+    }
+}
+
+void reset_officer_inspection(OfficerInspectionCache& cache, domain::GameEpoch) {
+    OfficerInspectionState& state = *cache.state;
+    state.owner.reset();
+    state.faction.reset();
+    state.stage = InspectionStage::Idle;
+    state.color_after = {};
+    state.refresh_requested = true;
+    cache.relations = {};
+    cache.faction_color = {};
+    cache.faction_color.recovery_pending = state.restore.pending;
+    // Never reset token_counter or a possibly modified native byte's journal.
+}
+
+bool restore_officer_faction_color(OfficerInspectionCache& cache, const OfficerRosterScan&,
+    const OfficerInspectionContext& context) {
+    OfficerInspectionState& state = *cache.state;
+    FactionColorRestore& restore = state.restore;
+    if (!restore.pending) {
+        cache.faction_color.recovery_pending = false;
+        return true;
+    }
+    cache.faction_color.recovery_pending = true;
+    cache.faction_color.available = false;
+    if (!same_inspection_recovery_owner(restore.previous.owner, context)) {
+        return false;
+    }
+    const std::optional<FactionObservation> current = inspect_faction(restore.previous.owner);
+    if (!current || !same_faction(*current, restore.previous)) {
+        return false;
+    }
+    if (current->color != restore.previous.color) {
+        if (current->color != restore.replacement || !same_inspection_recovery_owner(restore.previous.owner, context)) {
+            return false;
+        }
+        const std::uint8_t original = restore.previous.color;
+        platform::windows::write_memory(restore.previous.force + 9,
+            std::as_bytes(std::span(&original, 1)));
+        const std::optional<FactionObservation> verified = inspect_faction(restore.previous.owner);
+        // A failed API call may still restore the byte. Readback, under the
+        // original live identity, decides whether the journal can be retired.
+        if (!verified || !same_faction(*verified, restore.previous) ||
+            verified->color != original || !same_inspection_recovery_owner(restore.previous.owner, context)) {
+            return false;
+        }
+    } else if (!same_inspection_recovery_owner(restore.previous.owner, context)) {
+        return false;
+    }
+    restore.pending = false;
+    cache.faction_color.recovery_pending = false;
+    state.color_after = {};
+    return true;
+}
+
+bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRosterScan& scan,
+    const OfficerInspectionContext& context, std::uint16_t officer_id, bool protagonist,
+    const domain::WorkBudget& budget) {
+    const platform::windows::RealClockScope real_clock;
+    if (budget.exhausted()) {
+        return false;
+    }
+    OfficerInspectionState& state = *cache.state;
+    const domain::OfficerFactionColor previous_color = cache.faction_color;
+    bool changed = false;
+    if (state.restore.pending) {
+        restore_officer_faction_color(cache, scan, context);
+    }
+    const std::optional<InspectionIdentity> owner = inspection_identity(scan, context, officer_id, protagonist);
+    if (!owner) {
+        cache.faction_color.officer_id = officer_id;
+        cache.faction_color.available = false;
+        cache.faction_color.no_faction = false;
+        state.stage = InspectionStage::Idle;
+        state.refresh_requested = true;
+        changed = publish_inspection_status(cache, context.epoch, officer_id, RelationStatus::ReadFailed);
+        return changed || previous_color != cache.faction_color;
+    }
+    const bool new_owner = !state.owner || *state.owner != *owner;
+    if (new_owner || state.refresh_requested || !cache.relations) {
+        begin_inspection_relations(cache, *owner);
+        changed = true;
+    }
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (new_owner || now >= state.color_after || state.restore.pending) {
+        refresh_inspected_color(cache, *owner);
+        state.color_after = now + std::chrono::milliseconds(250);
+    }
+    if (state.stage == InspectionStage::Idle) {
+        return changed || previous_color != cache.faction_color;
+    }
+    if (!inspection_pointer_unchanged(state.direct_slot, state.direct_pointer) ||
+        !inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
+        state.stage = InspectionStage::Idle;
+        changed = publish_inspection_status(cache, context.epoch, officer_id, RelationStatus::ReadFailed);
+        return changed || previous_color != cache.faction_color;
+    }
+    if (state.stage == InspectionStage::Affinity) {
+        discard_stale_inspection_affinity(state);
+    }
+    for (std::size_t work = 0; work < INSPECTION_WORK_ITEMS && !budget.exhausted(); ++work) {
+        switch (state.stage) {
+        case InspectionStage::DirectCandidate: inspect_relation_candidate(state, false); break;
+        case InspectionStage::DirectValidate: validate_inspection_candidate(state, false); break;
+        case InspectionStage::DirectScan: inspect_direct_relation(state); break;
+        case InspectionStage::SynergyCandidate: inspect_relation_candidate(state, true); break;
+        case InspectionStage::SynergyValidate: validate_inspection_candidate(state, true); break;
+        case InspectionStage::SynergyScan: inspect_synergy_relation(state); break;
+        case InspectionStage::Affinity: inspect_relation_affinity(state); break;
+        case InspectionStage::Publish:
+            if (!same_inspection_owner(*state.owner, scan, context) ||
+                !inspection_pointer_unchanged(state.direct_slot, state.direct_pointer) ||
+                !inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
+                changed = publish_inspection_status(cache, context.epoch, officer_id, RelationStatus::ReadFailed);
+            } else if (discard_stale_inspection_affinity(state)) {
+                // Clear optional affinity values in bounded slices before
+                // publishing a result gathered across different data centers.
+                break;
+            } else {
+                state.building.status = state.direct_ready && state.synergy_ready ? RelationStatus::Ready :
+                    state.direct_ready || state.synergy_ready ? RelationStatus::Partial :
+                    state.direct_read_failed || state.synergy_read_failed ? RelationStatus::ReadFailed : RelationStatus::Unavailable;
+                cache.relations = own::make_shared<domain::OfficerRelations>(state.building);
+                changed = true;
+            }
+            state.stage = InspectionStage::Idle;
+            return changed || previous_color != cache.faction_color;
+        case InspectionStage::Idle:
+            return changed || previous_color != cache.faction_color;
+        }
+    }
+    return changed || previous_color != cache.faction_color;
+}
+
+domain::Result<void> write_officer_faction_color(OfficerInspectionCache& cache,
+    const OfficerRosterScan& scan, const OfficerInspectionContext& context,
+    std::uint16_t officer_id, std::uint64_t expected_token, std::uint8_t expected_color, std::uint8_t color) {
+    OfficerInspectionState& state = *cache.state;
+    if (state.restore.pending) {
+        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure, 0x5302});
+    }
+    if (!state.owner || !state.faction || officer_id != state.owner->id || expected_token == 0 ||
+        expected_token != cache.faction_color.token || !cache.faction_color.available ||
+        !same_inspection_owner(*state.owner, scan, context)) {
+        return std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+    }
+    const std::optional<FactionObservation> current = inspect_faction(*state.owner);
+    if (!current || !same_faction(*state.faction, *current) || current->force == 0 || current->color != expected_color ||
+        !same_inspection_owner(*state.owner, scan, context)) {
+        state.color_after = {};
+        return std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+    }
+    if (expected_color == color) {
+        return {};
+    }
+    state.restore = {*current, color, true};
+    cache.faction_color.recovery_pending = true;
+    const bool written = platform::windows::write_memory(current->force + 9, std::as_bytes(std::span(&color, 1)));
+    const std::optional<FactionObservation> verified = inspect_faction(*state.owner);
+    if (written && verified && same_faction(*current, *verified) && verified->color == color &&
+        same_inspection_owner(*state.owner, scan, context)) {
+        state.restore.pending = false;
+        state.faction = verified;
+        cache.faction_color.color = color;
+        cache.faction_color.recovery_pending = false;
+        state.color_after = {};
+        return {};
+    }
+    const bool restored = restore_officer_faction_color(cache, scan, context);
+    state.color_after = {};
+    return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure, restored ? 0x5301u : 0x5302u});
 }
 
 } // namespace s8::game

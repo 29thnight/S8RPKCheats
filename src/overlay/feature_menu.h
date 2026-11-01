@@ -28,6 +28,14 @@ struct MenuFloatDraft {
     std::optional<float> submitted;
 };
 
+struct OfficerFactionColorDraft {
+    std::uint16_t officer_id = 0;
+    std::uint64_t token = 0;
+    std::uint8_t expected_color = 0;
+    int value = 0;
+    bool dirty = false;
+};
+
 struct OfficerRosterIndices {
     std::array<std::uint16_t, domain::OFFICER_ROSTER_LIMIT> ids{};
     std::size_t count = 0;
@@ -95,6 +103,9 @@ struct FeatureMenu {
     bool secondary_jewel_window = false;
     bool protagonist_detail = false;
     bool officer_list_open = false;
+    std::optional<std::uint16_t> officer_open_request;
+    bool officer_open_refresh_requested = false;
+    bool officer_open_focus = false;
     std::array<char, 64> officer_search{};
     int officer_search_result = -1;
     bool officer_search_pending = false;
@@ -117,6 +128,8 @@ struct FeatureMenu {
     std::optional<domain::Error> officer_edit_error;
     domain::GameEpoch officer_edit_epoch{0};
     std::uint16_t selected_basic_id = 0;
+    OfficerFactionColorDraft selected_color_draft;
+    OfficerFactionColorDraft protagonist_color_draft;
     std::uint16_t officer_name_edit_id = 0;
     std::array<char, 384> officer_name_draft{};
     bool officer_name_save_pending = false;

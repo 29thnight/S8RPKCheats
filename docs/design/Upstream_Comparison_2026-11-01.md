@@ -49,26 +49,27 @@
 
 원본 `ConfigBase.inc`와 `Config.cpp`의 저장·로드 키 문자열을 현재 `src`와 대조한 범위에서는 기능 키 누락을 발견하지 못했다. 키가 존재하는 것만으로 기능 동등성을 판단하지 않는다. 다음 세부 조작은 설정 키 중심 조사로 확인하기 어렵다.
 
-## 확인된 세부 기능 미이관
+## 확인된 세부 기능의 후속 이관
+
+초기 조사에서 아래 네 조작의 누락을 확인했다. 설정 로딩 수정 커밋 [`e3682a3`](https://github.com/29thnight/S8RPKCheats/commit/e3682a3528081d8ad8dd89a7d5ec642f39113aee) 이후, 사용자의 후속 구현 요청에 따라 현재 소스에 연결했다. 아래의 구현 완료는 Windows 빌드나 인게임 동작 확인을 뜻하지 않는다.
 
 ### 1. 소속 세력 색상 편집
 
 원본 무장 상세는 무장 객체 `+0x18`의 세력 포인터를 읽고, 세력 객체 `+0x09` 한 바이트를 편집하는 `세력 색상` 행을 제공한다. 주인공 상세도 같은 헤더 표시 함수를 사용한다.
 
 - 원본: [SelectOfficercapture_impl.inc의 세력 색상 행](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_impl.inc#L199-L231).
-- 현재: [OfficerDetail](../../src/domain/officer_roster.h)에는 세력 색상 필드가 없고, [편집 명령](../../src/domain/commands.h)과 [무장 상세 UI](../../src/overlay/feature_menu.cpp)에도 해당 조작이 없다.
+- 후속 구현: [값 모델](../../src/domain/officer_roster.h), `SetOfficerFactionColor` [명령](../../src/domain/commands.h), [조회·쓰기](../../src/game/officer_roster.cpp), [무장 상세 UI](../../src/overlay/feature_menu.cpp)를 연결했다.
 
-따라서 기본 능력·외형 편집이 존재하더라도 세력 색상까지 이관된 상태는 아니다. 추가할 때는 무장 ID뿐 아니라 세력 객체의 정체성과 변경 전 색상도 확인해야 한다.
+주인공 상세와 모든 무장 편집의 선택 상세에서 0~255 색상 번호를 입력하고 적용한다. 소속 세력 전체의 색상 값이다. UI에는 게임 주소 대신 무장 ID·검증 token·관측한 색상만 전달한다. 쓰기 직전에 세션·무장·세력 정체성과 기존 값을 다시 확인하고 readback한다. 실패한 복구 기록은 캐시에 보존하며 다른 상세창을 통한 색상 쓰기도 차단한다. 창을 닫아도 복구를 재시도하고 종료 단계에서도 복구 완료를 확인한다.
 
 ### 2. 선택 무장의 관계 정보 표
 
 원본 공통 무장 상세는 의형제·배우자·상생·상극을 표시하고, 관계가 발견되면 원수·호적수도 표시한다.
 
 - 원본: [상세에서 관계 표 호출](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_impl.inc#L921-L924), [관계 표 구현](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_impl.inc#L1725-L1850).
-- 현재: [OfficerDetail](../../src/domain/officer_roster.h)의 `family[3]`과 [무장 상세 UI](../../src/overlay/feature_menu.cpp)는 가문·부·모를 제공한다. 일반 선택 무장의 관계 목록은 스냅샷에 없다.
-- [가족 도구 UI](../../src/overlay/officer_tools_panel.cpp)는 주인공의 배우자·자녀 목록이다. [군단 추천 관계 수집](../../src/game/corps_relationships.cpp)도 상세창의 관계 표시와 연결된 기능은 아니다.
+- 후속 구현: 주인공·선택 무장 각각의 `OfficerRelations` 스냅샷을 [조회 캐시](../../src/game/officer_roster.cpp)에서 수집하고 [상세 UI](../../src/overlay/feature_menu.cpp)에 표시한다. 가문·부·모 표시와 주인공 가족 도구도 유지한다.
 
-가족 기능 전체의 부재가 아니라 일반 무장 상세의 관계 조회가 빠진 상태다. 관계 수집 결과를 ID·epoch에 묶인 조회 스냅샷으로 제공하는 후속 구현이 필요하다.
+의형제·배우자·상생·상극·원수·호적수의 이름·ID와 읽을 수 있는 친밀도를 제공한다. 조회 결과는 ID·epoch에 묶고, 게임 경계의 작업량·시간 예산 안에서 여러 번에 나눠 수집한다. Present는 완료된 값 스냅샷만 읽는다. `없음`, `조회 불가`, `일부 조회`, `읽기 실패`를 구분하고, 게임 내 관계가 바뀌면 `관계 갱신`으로 다시 읽는다. 원본의 알려진 후보 위치를 검증하며, 불확실한 메모리를 넓게 검색해 임의의 표를 채택하지 않는다.
 
 ### 3. 배우자 관계 목록의 두 항목 순서 교환
 
@@ -76,13 +77,23 @@
 
 - 원본: [활성 배우자 창의 두 항목 교환](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_t05_base.inc#L552-L599).
 - 활성 경로: [SelectOfficercapture.cpp](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture.cpp#L1-L3)가 위 wrapper를 포함한다. wrapper가 기존 배우자 창을 legacy 이름으로 분리하고 현재 진입점을 제공하므로 폐기된 스캐너의 조작을 세어 넣은 것이 아니다.
-- 현재: [OfficerToolAction](../../src/domain/officer_tools.h)에는 관계 테이블 두 항목의 교환 명령이 없다. [임신 슬롯 UI](../../src/overlay/officer_tools_panel.cpp)의 `SetPregnancySpouse`는 비임신 슬롯 하나에 아직 등록되지 않은 배우자를 넣는 다른 작업이다.
+- 후속 구현: [OfficerToolAction](../../src/domain/officer_tools.h)에 `SwapSpouseOrder`를 추가하고 [가족 처리](../../src/game/family_tools.cpp)와 [배우자 UI](../../src/overlay/officer_tools_panel.cpp)에 연결했다. `SetPregnancySpouse`와는 별도 명령·선택 상태다.
 
-이관하려면 관계 테이블·두 대상의 정체성을 검증하고 두 쓰기 중 하나가 실패했을 때 복구할 명령이 필요하다. 원본의 직접 포인터 교환 코드를 UI에 그대로 옮기는 방식은 현재 구조와 맞지 않는다.
+가족 도구의 배우자 목록은 관계 레코드·member 순서로 표시한다. 두 행의 `교환`을 체크한 뒤 `선택한 배우자 순서 교환`을 누른다. ID·epoch·관계 generation·관측 순서와 실제 두 포인터를 다시 확인한 뒤 태그 비트를 포함한 값을 교환한다. 동일 배우자가 여러 곳에 중복 참조된 경우 교환을 허용하지 않는다. 두 쓰기 중 실패가 발생하면 원래 값을 복구하고, 복구하지 못한 기록은 refresh·세션 변경·종료에서 지우지 않는다. 다른 세대의 객체에는 복구 값을 쓰지 않으며 미복구 기록이 있으면 새 교환과 종료 완료를 보류한다.
+
+원본 활성 스캐너는 `record + 0x10`을 `pointerAddr`로 보관하면서 실제 배우자를 `record + 0x18`에서 읽는다. 원본 버튼이 이 `pointerAddr`에 배우자를 쓰는 동작은 주인공 포인터를 덮을 수 있다. 이번 구현은 선택 배우자의 실제 member 위치를 기록해 그 두 필드만 변경한다.
 
 ### 부속 조작: 배우자 이름에서 상세창 열기
 
-[원본 배우자 이름](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_t05_base.inc#L503-L514)은 `Selectable`이며 클릭하면 해당 무장의 독립 상세창을 연다. 현재 [가족 도구 UI](../../src/overlay/officer_tools_panel.cpp)의 `draw_spouses()`는 이름을 `Text`로 표시한다. 자녀 보기와 임신 슬롯 대상 선택은 있지만 상세창 바로가기는 없다.
+[원본 배우자 이름](https://github.com/WOOSEOK99/S8RPKCheats/blob/068ca1d881edf870f7cf06f935cf50e286004af8/Internal%20DX11%20Base/Cheats/Officer/SelectOfficercapture_t05_base.inc#L503-L514)은 `Selectable`이며 클릭하면 해당 무장의 독립 상세창을 연다. 후속 [가족 도구 UI](../../src/overlay/officer_tools_panel.cpp)도 이름 클릭을 지원하고, 현재 구조에서는 기존 `모든 무장 편집 리스트`를 펼쳐 해당 무장의 상세로 이동한다.
+
+목록이 없으면 한 번 조회를 요청하고 완료 후 정확한 ID로 선택한다. 기존 신분 필터와 다중 편집 선택을 해제해 대상이 가려지거나 다른 무장까지 편집되는 것을 막는다. 큐 접수 실패 시 이동 요청을 유지하며 자동 무한 재조회는 하지 않는다. 새 관계 표의 무장 이름에서도 같은 이동 경로를 사용한다.
+
+### 이관 변경의 검토와 재컴파일 범위
+
+- `git diff`와 `git diff --check`, 별도 검토자의 요청·상태·포인터 필드·실패 복구 경로 검토를 수행했다. 빌드·테스트·게임 실행은 수행하지 않았다.
+- 새 명령·불변 스냅샷·캐시를 연결하므로 `domain/commands.h`, `domain/config_snapshot.h`, 무장·가족 모델 및 Runtime·UiBridge·패널 헤더가 변경됐다. 이를 포함하는 Game·Runtime·Services·Overlay 번역 단위와 종속 프록시가 재컴파일·링크 대상이다. 빌드 설정과 의존 프로젝트는 변경하지 않았다.
+- 실행 환경에서는 무소속/세력 변경, 주인공 전환, 빈 관계/조회 실패, 배우자 두 행 교환 후 새로고침·재로드, 오래된 화면의 요청 거부와 복구 실패 시 종료 보류를 확인해야 한다. 이는 실행한 테스트 목록이 아니다.
 
 ## 구현 차이와 미구현을 구분할 항목
 
@@ -118,7 +129,7 @@
 
 조사 시작점의 [README](../../README.md)는 게임 읽기·쓰기와 설정·UI·hook을 아직 연결하지 않았다는 초기 설명을 담고 있어 현재 구현보다 오래됐다. 이번 변경에서 현재 구조와 잔여 항목 안내로 수정했다. [기능 대응 문서](Implementation_Parity.md)도 대분류 연결이 모든 세부 조작의 이관 완료를 뜻하지 않도록 수정했다.
 
-메뉴가 잠기는 문제의 수정과 별도로, 세부 기능 보존 작업은 관계 조회·상세 바로가기, 세력 색상 편집, 배우자 관계 순서 교환 순서로 진행할 수 있다. 마지막 항목은 조회 UI보다 쓰기·실패 복구 계약의 검토 범위가 크다.
+메뉴가 잠기는 문제 수정에 이어 위 네 세부 조작을 이관했다. 후속으로 남은 범위는 Windows 빌드·게임 실행 확인과 위에 구분한 native 수명 계약이다. 이 문서에 없는 모든 세부 조작의 기능 동등성을 완료로 단정하지 않는다.
 
 이 조사는 확인된 누락과 대응 경로를 기록한 것이다. 목록에 없는 모든 세부 기능의 동등성이 증명되었다고 해석하지 않는다.
 
@@ -151,3 +162,34 @@ Win32 처리 근거: [GetMsgProc](https://learn.microsoft.com/en-us/windows/win3
 - 기존 [회귀 fixture](../../tests/stratagem5_tests.cpp)에 BOM 설정 로드, 저장 시 접두부·기존 내용 보존, 중복 키 거부 사례를 추가했다. 실행하지 않았다.
 - 빌드·테스트·게임 실행은 `AGENTS.md` 지침에 따라 수행하지 않았다. 사용자 환경의 실제 편집 복구와 게임 빌드 호환성은 실행 확인이 남아 있다.
 - 선언을 추가한 `command_commit.h`는 `command_commit.cpp`, `game_loop.cpp`, 테스트 번역 단위가 직접 포함한다. 나머지는 변경된 Runtime·Services·Overlay의 `.cpp`와 링크하는 프록시가 영향 범위다. 빌드 설정·외부 의존성은 변경하지 않았다.
+
+## 설정 로드 이후에도 정보가 비고 편집이 잠기는 문제
+
+사용자는 후속으로 설정은 읽었지만 게임 정보가 없고 편집이 비활성이라는 증상을 보고했다. 실행 중인 사용자 프로세스를 직접 관측하지는 못했으므로, 아래는 해당 증상을 만들 수 있는 확정된 **코드 경로**와 그 수정이다.
+
+### 1. 초기 주소 검색 실패의 영구 고정
+
+기존 [coordinator](../../src/runtime/game_loop.cpp)는 시작할 때 `initialize_game_base_from_module()`을 한 번 호출하고 실패를 무시했다. [관측 함수](../../src/runtime/runtime.cpp)는 `game_base_pointer == 0`이면 매번 반환했으며, 재탐색 경로가 없었다. 초기 image vector도 같은 module이면 재사용하므로 함수만 다시 호출해도 준비 전 snapshot의 검색 실패가 반복된다.
+
+[게임 주소 탐색](../../src/game/game_base.cpp)에 실제 실행 메모리의 점진 탐색을 추가했다. 4KiB 블록과 9바이트 경계 정보를 사용하고 호출당 최대 64KiB 및 deadline으로 작업을 나눈다. RIP 상대 슬롯의 모듈 범위·정렬·메모리 속성, root/P1 접근과 무장 ID를 검증한다. 후보 명령도 현재 메모리에서 다시 읽어 오래된 overlap과 새 bytes를 잘못 결합하지 않는다. 아직 게임·주인공이 준비되지 않았으면 후보를 확정하지 않고 다음 sweep에서 다시 읽는다.
+
+처음 루트를 복구하면 coordinator가 별도 vector로 실행 image를 새로 읽고 signature·metadata 값을 준비한다. 완료 packet은 창 소유 스레드에서만 채택한다. 초기 실패로 남은 기능 주소는 누락 필드만 합치며 활성 hook 주소·원본·cave·복구 기록을 덮지 않는다. 미적용 native 실패, 게시 전 책략 준비 실패와 이름 getter 실패도 해당 경계에서 다시 확인한다.
+
+### 2. 선행 조회가 모든 후속 작업을 굶기는 경로
+
+기존 갱신은 1,500µs deadline을 만든 뒤 필수 root 관측과 반복 쓰기를 먼저 수행했다. 이 구간이 매번 예산을 소모하면 순환 job의 위치도 전진하지 않는다. 설정 bootstrap은 앞선 수정으로 보이지만, 이후 무장 정보 샘플·명령 완료·snapshot 게시가 계속 실행되지 않을 수 있다. 이 상태에서 접수된 편집 요청은 UI의 `pending`을 풀지 못한다.
+
+필수 root/epoch 관측 후 순환 작업의 예산을 시작하고, 반복 쓰기는 별도 `Recurring` job으로 옮겼다. 탐색은 게임 상태를 아직 읽지 못해도 실행되는 `Discovery` job이다. 긴 작업은 기존처럼 다음 순환 위치를 먼저 기록하므로 이후 메시지에서 다른 작업이 진행한다. 이 변경은 전체 frame이 1,500µs 이내라는 보장이 아니다.
+
+### 화면에서 확인할 상태
+
+[메뉴](../../src/overlay/feature_menu.cpp)에 설정 준비와 별도의 게임 메모리 상태를 추가했다.
+
+| 표시 | 의미 |
+|---|---|
+| 게임 메모리 주소를 찾는 중 · 진행률 | 실제 실행 메모리 탐색이 진행 중이다. |
+| 게임 준비 또는 주소 재검색 대기 · 조회 횟수 | 해당 sweep에서 준비된 root/P1을 확인하지 못했으며 자동 재시도한다. 이 상태만으로 게임 버전 비호환을 단정하지 않는다. |
+| 실행 파일 메모리 / 게임 기본 정보 / 주인공 읽기 실패 | 실패한 단계가 구분된다. 읽기 실패는 세션이 끝났다는 증거로 사용하지 않는다. |
+| 게임 정보 연결됨 · 주인공 ID | root/P1 관측과 주인공 snapshot 전달이 진행됐다. 개별 native 기능의 호환성까지 보장하는 표시는 아니다. |
+
+관련 변경도 `git diff`와 정적 교차 검토 범위다. Windows 빌드·게임 실행으로 사용자의 실제 증상 해소를 확인하지는 않았다.

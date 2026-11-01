@@ -20,6 +20,11 @@
 namespace s8::runtime {
 namespace {
 
+game::OfficerInspectionContext officer_inspection_context(const Runtime& runtime, std::uintptr_t module) {
+    const auto base = game::read_game_base(runtime.game_base_pointer);
+    return {runtime.epoch, module, runtime.game_base_pointer, base, game::read_player(base)};
+}
+
 constexpr bool interface_only_command(const domain::CommandPayload& payload) noexcept {
     if (std::holds_alternative<domain::SetUiScale>(payload) ||
         std::holds_alternative<domain::SetNotificationSpeed>(payload) ||
@@ -546,6 +551,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         ui->officer_roster_scan_cursor.store(0, std::memory_order_release);
                     }
                     runtime.selected_officer.reset();
+                    game::reset_officer_inspection(runtime.selected_officer_inspection, runtime.epoch);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SelectRosterOfficer>) {
                     save_config = false;
@@ -555,6 +561,36 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     runtime.selected_officer = *detail;
                     return {};
+                } else if constexpr (std::is_same_v<T, domain::RefreshOfficerRelations>) {
+                    save_config = false;
+                    if ((command.protagonist && runtime.protagonist_id != command.officer_id) ||
+                        (!command.protagonist && (!runtime.selected_officer ||
+                            runtime.selected_officer->id != command.officer_id))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    auto& inspection = command.protagonist ? runtime.protagonist_inspection
+                        : runtime.selected_officer_inspection;
+                    game::request_officer_relations_refresh(inspection);
+                    game::update_officer_inspection(inspection, runtime.officer_roster,
+                        officer_inspection_context(runtime, game_module), command.officer_id,
+                        command.protagonist, work_budget);
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetOfficerFactionColor>) {
+                    save_config = false;
+                    if (runtime.selected_officer_inspection.faction_color.recovery_pending ||
+                        runtime.protagonist_inspection.faction_color.recovery_pending) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if ((command.protagonist && runtime.protagonist_id != command.officer_id) ||
+                        (!command.protagonist && (!runtime.selected_officer ||
+                            runtime.selected_officer->id != command.officer_id))) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+                    }
+                    auto& inspection = command.protagonist ? runtime.protagonist_inspection
+                        : runtime.selected_officer_inspection;
+                    return game::write_officer_faction_color(inspection, runtime.officer_roster,
+                        officer_inspection_context(runtime, game_module), command.officer_id,
+                        command.token, command.expected_color, command.color);
                 } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerGender>) {
                     save_config = false;
                     if (!game::write_roster_officer_gender(runtime.officer_roster, game_module,
@@ -580,7 +616,12 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     return request_trait_text_apply(runtime.traits, command);
                 } else if constexpr (std::is_same_v<T, domain::OfficerToolsRequest>) {
                     save_config = false;
-                    return submit_officer_tools_request(runtime, ui, game_module, command);
+                    const auto result = submit_officer_tools_request(runtime, ui, game_module, command);
+                    if (result && std::holds_alternative<domain::SwapSpouseOrder>(command.action)) {
+                        game::request_officer_relations_refresh(runtime.selected_officer_inspection);
+                        game::request_officer_relations_refresh(runtime.protagonist_inspection);
+                    }
+                    return result;
                 } else if constexpr (std::is_same_v<T, domain::CityRequest>) {
                     save_config = false;
                     return submit_city_request(runtime, game_module, command);
@@ -1054,8 +1095,29 @@ void reconcile_feature_groups(Runtime& runtime, services::UiBridge& ui, std::uin
 
 }
 
-void update_selected_officer(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module) {
+void update_selected_officer(Runtime& runtime, services::UiBridge& ui, std::uintptr_t game_module,
+    const domain::WorkBudget& work_budget) {
     const bool officer_detail_visible = ui.officer_detail_visible.exchange(false);
+    const bool protagonist_detail_visible = ui.protagonist_detail_visible.exchange(false);
+    const auto context = officer_inspection_context(runtime, game_module);
+    const auto inspect = [&](game::OfficerInspectionCache& inspection,
+        std::optional<std::uint16_t> id, bool protagonist, bool visible) {
+        // Recovery must continue after a detail window closes or its selection
+        // disappears. The backend retains and validates the original identity.
+        if (inspection.faction_color.recovery_pending) {
+            game::restore_officer_faction_color(inspection, runtime.officer_roster, context);
+        }
+        const bool loading = inspection.relations &&
+            inspection.relations->status == domain::OfficerRelationsStatus::Loading;
+        if (id && (visible || loading)) {
+            game::update_officer_inspection(inspection, runtime.officer_roster, context,
+                *id, protagonist, work_budget);
+        }
+    };
+    inspect(runtime.selected_officer_inspection, runtime.selected_officer
+        ? std::optional<std::uint16_t>{runtime.selected_officer->id} : std::nullopt,
+        false, officer_detail_visible);
+    inspect(runtime.protagonist_inspection, runtime.protagonist_id, true, protagonist_detail_visible);
 
     if (officer_detail_visible && runtime.selected_officer &&
         game::roster_traits_changed(runtime.officer_roster, game_module, *runtime.selected_officer)) {
@@ -1186,7 +1248,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             publish_runtime_notices(runtime, ui);
             break;
         case Job::SelectedOfficer:
-            update_selected_officer(runtime, ui, game_module);
+            update_selected_officer(runtime, ui, game_module, work_budget);
             break;
         case Job::Publish:
             publish_runtime_view(runtime, ui);

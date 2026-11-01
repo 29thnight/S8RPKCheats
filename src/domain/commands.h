@@ -108,6 +108,14 @@ struct SetProtagonistBasic { std::uint16_t officer_id; std::uint8_t index; std::
 struct SetProtagonistGender { std::uint16_t officer_id; std::uint8_t gender; };
 struct RefreshOfficerRoster {};
 struct SelectRosterOfficer { std::uint16_t officer_id; };
+struct RefreshOfficerRelations { std::uint16_t officer_id; bool protagonist = false; };
+struct SetOfficerFactionColor {
+    std::uint16_t officer_id;
+    std::uint64_t token;
+    std::uint8_t expected_color;
+    std::uint8_t color;
+    bool protagonist = false;
+};
 struct SetRosterOfficerBasic { std::uint16_t officer_id; std::uint8_t index; std::uint32_t value; };
 struct SetRosterOfficerGender { std::uint16_t officer_id; std::uint8_t gender; };
 struct SetRosterOfficerVoice { std::uint16_t officer_id; std::uint8_t voice; };
@@ -138,6 +146,7 @@ using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSett
                                     RestoreMissionAppointmentLimit, SetNotificationSpeed, SetDomesticRewardMode,
                                     SetSkillCount, SetProtagonistTacticLevel, SetProtagonistTraining,
                                     SetProtagonistBasic, SetProtagonistGender, RefreshOfficerRoster, SelectRosterOfficer,
+                                    RefreshOfficerRelations, SetOfficerFactionColor,
                                     SetRosterOfficerBasic, SetRosterOfficerGender, SetRosterOfficerVoice,
                                     SetRosterOfficerRonin, MoveRosterOfficer, ReviveRosterOfficer,
                                     SetRosterOfficerTrait, SetRosterOfficerTraining, ApplyTraitTextEdits,

@@ -50,6 +50,7 @@
 #include "../game/ship_weaponization.h"
 #include "../game/battle_skill_counts.h"
 #include "../game/officer_roster.h"
+#include "../game/game_base.h"
 #include "../game/auto_affinity.h"
 #include "../game/battle_observation.h"
 #include "../game/battle_state.h"
@@ -138,6 +139,8 @@ struct Runtime {
     std::array<game::CityConversion, 4> city_conversions{};
     std::array<bool, 4> city_config_applied{};
     std::uintptr_t game_base_pointer = 0;
+    game::GameBaseProbe game_base_probe;
+    domain::GameMemoryStatus game_memory_status = domain::GameMemoryStatus::Searching;
     game::Stratagem5Binding stratagem5;
     game::Stratagem5Count stratagem5_count;
     game::Stratagem5Camp stratagem5_camp;
@@ -182,6 +185,8 @@ struct Runtime {
     std::optional<PendingTraitChange> pending_trait_change;
     game::AutoAffinity auto_affinity;
     std::optional<domain::OfficerDetail> selected_officer;
+    game::OfficerInspectionCache selected_officer_inspection;
+    game::OfficerInspectionCache protagonist_inspection;
     std::optional<domain::OfficerTraits> protagonist_traits;
     game::AllAggressive all_aggressive;
     game::ZeroInfamy zero_infamy;
@@ -259,6 +264,8 @@ domain::Result<void> stop_game(Runtime& runtime, std::uintptr_t game_module);
 domain::ConfigSnapshot config_snapshot(const Runtime& runtime);
 bool initialize_game_base(Runtime& runtime, std::span<const std::byte> image, std::uintptr_t module_base);
 bool initialize_game_base_from_module(Runtime& runtime, std::uintptr_t module_base);
+void discover_game_base(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms,
+    const domain::WorkBudget& work_budget);
 void request_stratagem5(Runtime& runtime, bool enabled);
 bool enable_stratagem5_data(Runtime& runtime, std::uintptr_t module_base);
 bool disable_stratagem5_data(Runtime& runtime);

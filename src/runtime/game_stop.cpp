@@ -69,6 +69,8 @@ enum class StopStep : std::size_t {
     StratagemCamp,
     StratagemCount,
     StratagemData,
+    OfficerFactionColor,
+    FamilySpouseOrder,
     Count
 };
 
@@ -94,6 +96,8 @@ bool needed(const Runtime& runtime, StopStep step) {
     case StopStep::Traits: return true;
     case StopStep::CityManagement: return true;
     case StopStep::CorpsDeployment: return true;
+    case StopStep::OfficerFactionColor: return true;
+    case StopStep::FamilySpouseOrder: return true;
     case StopStep::Native: return true;
     case StopStep::Tengi: return runtime.tengi.module_base != 0;
     case StopStep::AiGrowth: return runtime.ai_growth_settings.enabled;
@@ -157,6 +161,18 @@ bool needed(const Runtime& runtime, StopStep step) {
 domain::Result<void> perform_stop(Runtime& runtime, std::uintptr_t module_base, StopStep step) {
 
     switch (step) {
+    case StopStep::OfficerFactionColor: {
+        const auto base = game::read_game_base(runtime.game_base_pointer);
+        const game::OfficerInspectionContext context{runtime.epoch, module_base,
+            runtime.game_base_pointer, base, game::read_player(base)};
+        const bool selected = game::restore_officer_faction_color(runtime.selected_officer_inspection,
+            runtime.officer_roster, context);
+        const bool protagonist = game::restore_officer_faction_color(runtime.protagonist_inspection,
+            runtime.officer_roster, context);
+        return stop_result(selected && protagonist, step);
+    }
+    case StopStep::FamilySpouseOrder:
+        return stop_result(game::restore_family_spouse_order(runtime.officer_tools->family), step);
     case StopStep::CityManagement:
         return stop_result(game::stop_city_management(runtime.city_management, module_base, runtime.epoch), step);
     case StopStep::CorpsDeployment:

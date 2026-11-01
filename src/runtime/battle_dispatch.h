@@ -38,6 +38,11 @@ struct BattleDispatch {
 // Coordinator-only startup work. Pattern searches and unpublished code buffers
 // are prepared here before the owner thread begins native commit dispatch.
 bool prepare_battle_dispatch(BattleDispatch& state, Runtime& runtime, std::uintptr_t module_base);
+// Serialized owner after adopting a fresh image, at most once per image
+// generation. Retries only initial unpublished preparation; metadata was
+// already searched by the worker. Published code and recovery state stay put.
+void refresh_battle_preparation(BattleDispatch& state, Runtime& runtime, std::uintptr_t module_base,
+    std::optional<std::uint32_t> metadata_offset);
 // Call after observe_game_context established this dispatch's root/epoch, before command
 // completion publishes the frame. Native UI work uses the same admitted thread.
 void update_battle_dispatch(BattleDispatch& state, Runtime& runtime,

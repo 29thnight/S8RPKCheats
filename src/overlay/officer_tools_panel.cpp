@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <string>
 #include <utility>
 
 namespace s8::overlay {
@@ -230,7 +231,13 @@ void draw_spouses(OfficerToolsPanel& panel, const domain::OfficerToolsView& view
     const domain::FamilyToolsView& family = view.family;
 
     ImGui::Text("현재 배우자 %zu명", family.spouse_total);
-    if (ImGui::BeginTable("##spouses", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+    ImGui::TextDisabled("배우자 이름을 누르면 무장 상세 편집을 엽니다.");
+    if (family.spouse_order_recovery_pending) {
+        ImGui::TextWrapped("배우자 순서의 원래 값을 복구하는 중입니다. 복구가 끝날 때까지 순서 교환을 할 수 없습니다.");
+    }
+    if (ImGui::BeginTable("##spouses", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+        ImGui::TableSetupColumn("교환", ImGuiTableColumnFlags_WidthFixed, 42 * scale);
+        ImGui::TableSetupColumn("순서", ImGuiTableColumnFlags_WidthFixed, 42 * scale);
         ImGui::TableSetupColumn("배우자");
         ImGui::TableSetupColumn("나이", ImGuiTableColumnFlags_WidthFixed, 50 * scale);
         ImGui::TableSetupColumn("자녀", ImGuiTableColumnFlags_WidthFixed, 50 * scale);
@@ -243,7 +250,30 @@ void draw_spouses(OfficerToolsPanel& panel, const domain::OfficerToolsView& view
             ImGui::PushID(static_cast<int>(spouse.id));
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::Text("%s (%u)", officer_name(names, spouse.id), spouse.id);
+            const auto selected = std::find(panel.spouse_order_selection.begin(),
+                panel.spouse_order_selection.end(), spouse.id);
+            bool checked = selected != panel.spouse_order_selection.end();
+            ImGui::BeginDisabled(family.loading || !family.relationships_ready ||
+                family.spouse_order_recovery_pending || !spouse.order_swappable ||
+                (!checked && panel.spouse_order_selection[0] && panel.spouse_order_selection[1]));
+            if (ImGui::Checkbox("##swap", &checked)) {
+                const auto slot = checked ? std::find(panel.spouse_order_selection.begin(),
+                    panel.spouse_order_selection.end(), std::uint16_t{0}) : selected;
+                if (slot != panel.spouse_order_selection.end()) {
+                    const auto index = static_cast<std::size_t>(slot - panel.spouse_order_selection.begin());
+                    *slot = checked ? spouse.id : 0;
+                    panel.spouse_order_positions[index] = checked ? spouse.order : 0;
+                }
+            }
+            ImGui::EndDisabled();
+            ImGui::TableNextColumn();
+            ImGui::Text("%u", spouse.order);
+            ImGui::TableNextColumn();
+            const std::string label = std::string(officer_name(names, spouse.id)) + " (" +
+                std::to_string(spouse.id) + ")##details";
+            if (ImGui::Selectable(label.c_str())) {
+                panel.open_officer = spouse.id;
+            }
             ImGui::TableNextColumn();
             if (view.date_ready && spouse.birth != 0 && view.year >= spouse.birth) {
                 ImGui::Text("%u", view.year - spouse.birth);
@@ -267,6 +297,26 @@ void draw_spouses(OfficerToolsPanel& panel, const domain::OfficerToolsView& view
         }
         ImGui::EndTable();
     }
+    for (const auto id : panel.spouse_order_selection) {
+        if (id) {
+            ImGui::Text("교환 선택: %s (%u)", officer_name(names, id), id);
+        }
+    }
+    ImGui::BeginDisabled(family.loading || !family.relationships_ready ||
+        family.spouse_order_recovery_pending || !panel.spouse_order_selection[0] ||
+        !panel.spouse_order_selection[1]);
+    if (ImGui::Button("선택한 배우자 순서 교환")) {
+        issue(output, view.epoch, domain::SwapSpouseOrder{panel.spouse_order_selection[0],
+            panel.spouse_order_selection[1], panel.spouse_order_positions[0],
+            panel.spouse_order_positions[1], panel.spouse_order_generation});
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("교환 선택 해제")) {
+        panel.spouse_order_selection.fill(0);
+        panel.spouse_order_positions.fill(0);
+    }
+    ImGui::TextWrapped("두 배우자의 관계 목록 순서를 교환합니다. 임신 슬롯 교체 대상은 '슬롯 교체 대상' 열에서 별도로 지정합니다.");
     const std::size_t pages = std::max(std::size_t{1},
         (family.spouse_total + domain::FAMILY_SPOUSE_PAGE - 1) / domain::FAMILY_SPOUSE_PAGE);
 
@@ -403,6 +453,7 @@ void draw_scenario(OfficerToolsPanel& panel, const domain::OfficerToolsView& vie
 std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerToolsPanel& panel,
     const domain::OfficerToolsView& view, const domain::OfficerNames* names, float scale, bool can_submit) {
     std::optional<domain::OfficerToolsRequest> output;
+    panel.open_officer.reset();
 
     if (!panel.open) {
         return output;
@@ -414,6 +465,14 @@ std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerTools
         panel.pregnancy_slot = 0;
         panel.last_date_sync = 0;
         panel.date_input_invalid = false;
+        panel.spouse_order_generation = 0;
+        panel.spouse_order_selection.fill(0);
+        panel.spouse_order_positions.fill(0);
+    }
+    if (panel.spouse_order_generation != view.family.relationship_generation) {
+        panel.spouse_order_generation = view.family.relationship_generation;
+        panel.spouse_order_selection.fill(0);
+        panel.spouse_order_positions.fill(0);
     }
     ImGui::SetNextWindowSize(ImVec2(760 * scale, 650 * scale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("무장·가족·시나리오 도구###OfficerTools", &panel.open)) {

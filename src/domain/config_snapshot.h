@@ -29,6 +29,11 @@
 
 namespace s8::domain {
 
+enum class GameMemoryStatus {
+    Searching, SearchWaiting, ModuleReadFailed, RootReadFailed,
+    WaitingForGame, PlayerReadFailed, WaitingForPlayer, Ready
+};
+
 struct ConfigSnapshot {
     FeatureFlags features;
     bool short_battle_cooldown_enabled = false;
@@ -85,6 +90,14 @@ struct ConfigSnapshot {
     float ui_scale = 1.0f;
     std::optional<PlayerResources> player_resources;
     LegacyFeatureStatuses legacy_features{};
+    OfficerFactionColor selected_faction_color;
+    OfficerFactionColor protagonist_faction_color;
+    own::shared_owner<const OfficerRelations> selected_officer_relations;
+    own::shared_owner<const OfficerRelations> protagonist_relations;
+    GameMemoryStatus game_memory_status = GameMemoryStatus::Searching;
+    std::size_t game_memory_scan_cursor = 0;
+    std::size_t game_memory_image_size = 0;
+    std::uint64_t game_memory_scan_passes = 0;
 };
 
 } // namespace s8::domain

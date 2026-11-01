@@ -54,6 +54,9 @@ struct NativeFeatureControl {
 };
 
 bool request_native_feature(Runtime& runtime, domain::FeatureId feature, bool enabled);
+// Retry a desired, inactive signature mismatch after fresh code becomes
+// available. Retains every patch entry/cave and all uncertain recovery state.
+void retry_failed_native_features(Runtime& runtime);
 // At most one patch transaction per admitted commit boundary. Busy groups retain
 // the desired setting and yield to other groups until their next retry deadline.
 bool reconcile_native_features(Runtime& runtime, std::uintptr_t module_base, std::uint64_t now_ms);

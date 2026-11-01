@@ -9,7 +9,9 @@
 #include "battle_dispatch.h"
 #include "officer_names_control.h"
 #include "../domain/ownership.h"
+#include "../game/stratagem5_metadata.h"
 #include "../overlay/window_subclass.h"
+#include "../platform/windows/module_image.h"
 #include "../platform/windows/speed_clock.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -23,6 +25,7 @@
 #include <chrono>
 #include <cwchar>
 #include <expected>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -33,6 +36,14 @@ constexpr std::size_t COMMANDS_PER_DISPATCH = 4;
 constexpr std::chrono::microseconds DISPATCH_BUDGET{1500};
 constexpr std::chrono::microseconds JOB_SLICE{250};
 constexpr std::uint64_t STOP_RETRY_INTERVAL_MS = 100;
+
+struct PreparedGameImage {
+    std::uintptr_t module = 0;
+    std::uint64_t generation = 0;
+    std::vector<std::byte> image;
+    NativeSignaturePreparation signatures;
+    std::optional<std::uint32_t> metadata_offset;
+};
 
 struct RuntimeSession {
     Runtime runtime;
@@ -66,6 +77,16 @@ struct RuntimeSession {
     std::size_t next_job = 0;
     std::uint64_t next_stop_attempt_ms = 0;
     bool stop_failure_reported = false;
+    // The coordinator owns image capture and pattern searches; only the window
+    // owner adopts their value result. Neither thread mutates the other's image.
+    std::atomic<std::uint64_t> image_refresh_requested{0};
+    std::atomic<std::uint64_t> image_refresh_failed{0};
+    std::mutex prepared_image_mutex;
+    own::unique_owner<PreparedGameImage> prepared_image;
+    std::uint64_t image_refresh_consumed = 0;
+    std::uint64_t next_image_refresh_ms = 0;
+    unsigned image_refresh_failures = 0;
+    bool image_refresh_retry = false;
 };
 
 // This pointer borrows the coordinator's process-lifetime owner. Published
@@ -195,40 +216,107 @@ struct DispatchScope {
     }
 };
 
+void adopt_prepared_game_image(RuntimeSession& session, std::uint64_t now_ms) {
+    const auto generation = session.image_refresh_requested.load(std::memory_order_acquire);
+    if (!generation || generation == session.image_refresh_consumed || session.runtime.stopping ||
+        session.stop_requested.load(std::memory_order_acquire)) {
+        return;
+    }
+    if (session.image_refresh_failed.load(std::memory_order_acquire) == generation) {
+        session.image_refresh_consumed = generation;
+        if (session.image_refresh_failures == 0) {
+            session.services.overlay.bridge.publish_notice("게임 정보는 연결했지만 일부 기능 준비를 다시 확인하고 있습니다.");
+        }
+        session.image_refresh_failures = std::min(session.image_refresh_failures + 1, 5u);
+        session.next_image_refresh_ms = now_ms +
+            std::min(std::uint64_t{30000}, std::uint64_t{1000} << (session.image_refresh_failures - 1));
+        session.image_refresh_retry = true;
+        return;
+    }
+    own::unique_owner<PreparedGameImage> prepared;
+    {
+        const std::unique_lock lock(session.prepared_image_mutex, std::try_to_lock);
+        if (!lock.owns_lock() || !session.prepared_image) {
+            return;
+        }
+        prepared = std::move(session.prepared_image);
+    }
+    if (prepared->module != session.game_module || prepared->generation != generation || prepared->image.empty()) {
+        return;
+    }
+    session.runtime.module_image.swap(prepared->image);
+    session.runtime.image_module = prepared->module;
+    merge_native_signature_values(session.runtime, prepared->signatures);
+    retry_failed_native_features(session.runtime);
+    refresh_battle_preparation(session.battle_dispatch, session.runtime, prepared->module, prepared->metadata_offset);
+    // Successful getters and all name batches remain intact. Only the two
+    // startup failure caches need revalidation against the fresh image.
+    if (!session.officer_names.layout_supported || !session.officer_names.getters_ready) {
+        session.officer_names.layout_module = 0;
+        session.officer_names.prepared_module = 0;
+    }
+    session.image_refresh_consumed = generation;
+    session.image_refresh_retry = false;
+    session.image_refresh_failures = 0;
+}
+
 void dispatch_game_jobs(RuntimeSession& session) {
-    enum class Job : std::size_t { Game, Battle, Ui, Debug, Specialty, OfficerNames, Count };
+    enum class Job : std::size_t { Discovery, Recurring, Game, Battle, Ui, Debug, Specialty, OfficerNames, Count };
     constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
-    const domain::WorkBudget dispatch_budget{std::chrono::steady_clock::now() + DISPATCH_BUDGET};
     const std::uint64_t now_ms = GetTickCount64();
 
     // Deliver the initial settings even if root observation consumes the
     // dispatch budget. This only initializes owned values and publishes UI data.
     load_ui_configuration(session.runtime, session.services.overlay.bridge, session.game_module);
 
-    // Root/epoch observation precedes all consumers. Work below shares one
-    // deadline; native calls and started write transactions complete in place.
-    observe_game_context(session.runtime, session.game_module, now_ms, dispatch_budget);
+    // Root/epoch observation is mandatory. Starting the job deadline before
+    // these reads could starve every consumer forever on a slow memory probe.
+    // Recurring writes have their own rotating job below.
+    observe_game_context(session.runtime, session.game_module, now_ms);
+    const domain::WorkBudget dispatch_budget{std::chrono::steady_clock::now() + DISPATCH_BUDGET};
 
     for (std::size_t attempted = 0; attempted < JOB_COUNT && !dispatch_budget.exhausted(); ++attempted) {
         if (session.stop_requested.load(std::memory_order_acquire)) {
             break;
         }
         const Job job = static_cast<Job>(session.next_job);
-        const domain::WorkBudget slice{
-            std::min(dispatch_budget.deadline, std::chrono::steady_clock::now() + JOB_SLICE)};
-
-        // Advance before entering a job so an overrun yields to the next group
-        // on the following message instead of starving later services.
-        session.next_job = (session.next_job + 1) % JOB_COUNT;
 
         // Failed game reads must not stop configuration delivery or strand a
         // queued UI request. Request services gate their game-dependent work.
-        if (!session.runtime.loop_context_observed && job != Job::Ui &&
+        if (!session.runtime.loop_context_observed && job != Job::Discovery && job != Job::Ui &&
             job != Job::Debug && job != Job::Specialty) {
+            session.next_job = (session.next_job + 1) % JOB_COUNT;
             continue;
         }
+        const auto admitted = std::chrono::steady_clock::now();
+        if (dispatch_budget.deadline - admitted < JOB_SLICE) {
+            // Keep this job first for the next message. Retiring an almost
+            // empty slice can repeatedly skip a command or probe's first item.
+            break;
+        }
+        const domain::WorkBudget slice{admitted + JOB_SLICE};
+        // Advance only after admission, before a native call can overrun.
+        session.next_job = (session.next_job + 1) % JOB_COUNT;
 
         switch (job) {
+        case Job::Discovery: {
+            const bool unresolved = session.runtime.game_base_pointer == 0;
+            discover_game_base(session.runtime, session.game_module, now_ms, slice);
+            const auto generation = session.image_refresh_requested.load(std::memory_order_acquire);
+            if (((unresolved && session.runtime.game_base_pointer && generation == 0) ||
+                (session.image_refresh_retry && now_ms >= session.next_image_refresh_ms)) &&
+                generation != UINT64_MAX) {
+                session.image_refresh_retry = false;
+                session.image_refresh_requested.store(generation + 1, std::memory_order_release);
+                wake_coordinator(session);
+            }
+            adopt_prepared_game_image(session, now_ms);
+            break;
+        }
+        case Job::Recurring:
+            tick_recurring_features(session.runtime, session.game_module, session.runtime.loop_game_base,
+                session.runtime.loop_game_base_ready, session.runtime.loop_player, session.runtime.loop_player_ready);
+            break;
         case Job::Game:
             tick_game(session.runtime, session.game_module, now_ms, slice);
             break;
@@ -553,8 +641,35 @@ bool attach_dispatcher(RuntimeSession& session) {
     // alive on a dormant coordinator; this path has no periodic wake or sleep.
     bool services_finished = false;
     bool message_hook_failure_reported = false;
+    std::uint64_t prepared_generation = 0;
 
     for (;;) {
+        const auto requested_generation = session.image_refresh_requested.load(std::memory_order_acquire);
+        if (requested_generation != prepared_generation &&
+            !session.stop_requested.load(std::memory_order_acquire) &&
+            !session.window_destroyed.load(std::memory_order_acquire)) {
+            prepared_generation = requested_generation;
+            try {
+                // No Runtime or patch state is touched on this thread after
+                // publication. Heavy reads/searches use a private snapshot.
+                auto image = platform::windows::read_module_image(session.game_module);
+                if (!image) {
+                    session.image_refresh_failed.store(requested_generation, std::memory_order_release);
+                } else {
+                    auto prepared = own::make_unique<PreparedGameImage>();
+                    prepared->module = session.game_module;
+                    prepared->generation = requested_generation;
+                    prepared->image = std::move(*image);
+                    prepared->signatures = prepare_native_signature_values(prepared->module, prepared->image);
+                    prepared->metadata_offset = game::find_stratagem5_metadata_offset(prepared->image);
+                    const std::lock_guard lock(session.prepared_image_mutex);
+                    session.prepared_image = std::move(prepared);
+                }
+            } catch (...) {
+                session.image_refresh_failed.store(requested_generation, std::memory_order_release);
+            }
+            post_update(session);
+        }
         if (!services_finished && !session.dispatch_active.load(std::memory_order_acquire) &&
             (session.game_stopped.load(std::memory_order_acquire) ||
                                    session.window_destroyed.load(std::memory_order_acquire))) {

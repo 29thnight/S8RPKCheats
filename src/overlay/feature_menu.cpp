@@ -264,6 +264,11 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.selection_epoch = menu.epoch;
             menu.selected_officer_ids.fill(false);
             menu.officer_next_selection.reset();
+            menu.officer_open_request.reset();
+            menu.officer_open_refresh_requested = false;
+            menu.officer_open_focus = false;
+            menu.selected_color_draft = {};
+            menu.protagonist_color_draft = {};
         }
     }
     bridge.consume_officer_roster(*menu.officer_roster, menu.epoch);
@@ -1868,6 +1873,44 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         ImGui::TextDisabled("변경 사항을 적용하는 중입니다.");
     }
 
+    if (menu.ready) {
+        switch (menu.snapshot.game_memory_status) {
+        case domain::GameMemoryStatus::Searching: {
+            const auto total = menu.snapshot.game_memory_image_size;
+            const double progress = total == 0 ? 0.0 : 100.0 *
+                static_cast<double>(menu.snapshot.game_memory_scan_cursor) / static_cast<double>(total);
+            ImGui::TextDisabled("설정 로드 완료 · 게임 메모리 주소를 찾는 중입니다. %.0f%%", progress);
+            break;
+        }
+        case domain::GameMemoryStatus::SearchWaiting:
+            ImGui::TextWrapped("설정 로드 완료 · 게임 준비 또는 메모리 주소 재검색을 기다립니다. 자동으로 다시 시도합니다. (조회 %llu회)",
+                static_cast<unsigned long long>(menu.snapshot.game_memory_scan_passes));
+            break;
+        case domain::GameMemoryStatus::ModuleReadFailed:
+            ImGui::TextWrapped("설정 로드 완료 · 게임 실행 파일의 메모리를 읽지 못했습니다. 자동으로 다시 시도합니다.");
+            break;
+        case domain::GameMemoryStatus::RootReadFailed:
+            ImGui::TextWrapped("설정 로드 완료 · 게임의 기본 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
+            break;
+        case domain::GameMemoryStatus::PlayerReadFailed:
+            ImGui::TextWrapped("설정 로드 완료 · 게임 메모리에서 주인공 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
+            break;
+        case domain::GameMemoryStatus::WaitingForGame:
+            ImGui::TextDisabled("설정 로드 완료 · 게임 데이터가 준비되기를 기다립니다.");
+            break;
+        case domain::GameMemoryStatus::WaitingForPlayer:
+            ImGui::TextDisabled("설정 로드 완료 · 주인공 정보를 기다립니다.");
+            break;
+        case domain::GameMemoryStatus::Ready:
+            if (menu.snapshot.protagonist_id) {
+                ImGui::TextDisabled("게임 정보 연결됨 · 주인공 ID %u", *menu.snapshot.protagonist_id);
+            } else {
+                ImGui::TextDisabled("게임 정보 연결됨 · 무장 정보를 갱신하고 있습니다.");
+            }
+            break;
+        }
+    }
+
     if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
         ImGui::Text("설정 저장 실패 (%d, %u)", static_cast<int>(menu.save_notice->status),
                     menu.save_notice->native_code);
@@ -2093,27 +2136,210 @@ void draw_officer_traits(FeatureMenu& menu, services::CommandMailbox& mailbox, s
     }
 }
 
+namespace {
+
+void open_officer_details(FeatureMenu& menu, std::uint16_t id) {
+    menu.officer_list_open = true;
+    menu.officer_open_request = id;
+    menu.officer_open_refresh_requested = false;
+    menu.officer_open_focus = true;
+    menu.officer_filter = -1;
+    menu.officer_search_pending = false;
+    menu.officer_pending_search.clear();
+    menu.officer_search.fill(0);
+    menu.officer_search_result = -1;
+    menu.selected_officer_ids.fill(false);
+    menu.officer_next_selection.reset();
+    menu.officer_reselect_pending = false;
+    menu.officer_name_edit_id = 0;
+    menu.officer_name_focus = false;
+    menu.error.reset();
+}
+
+void draw_officer_inspection(FeatureMenu& menu, services::UiBridge& bridge,
+    std::uint16_t id, bool protagonist) {
+    const auto& color = protagonist ? menu.snapshot.protagonist_faction_color
+        : menu.snapshot.selected_faction_color;
+    auto& draft = protagonist ? menu.protagonist_color_draft : menu.selected_color_draft;
+    const bool busy = !menu.ready || menu.pending.has_value() || !menu.pending_officer_edits.empty();
+
+    ImGui::PushID(protagonist ? "hero_inspection" : "selected_inspection");
+    if (menu.snapshot.selected_faction_color.recovery_pending ||
+        menu.snapshot.protagonist_faction_color.recovery_pending) {
+        ImGui::TextWrapped("세력 색상의 원래 값을 복구하는 중입니다. 복구가 끝날 때까지 색상 편집을 할 수 없습니다.");
+    } else if (color.officer_id != id) {
+        ImGui::TextDisabled("세력 색상 정보를 기다리는 중입니다.");
+    } else if (!color.available) {
+        ImGui::TextDisabled(color.no_faction ? "소속 세력이 없습니다." : "세력 색상을 읽을 수 없습니다.");
+    } else {
+        if (draft.officer_id != id || !draft.dirty) {
+            draft = {id, color.token, color.color, color.color, false};
+        }
+        ImGui::BeginDisabled(busy);
+        ImGui::SetNextItemWidth(100 * menu.dpi_scale);
+        if (ImGui::InputInt("세력 색상 번호", &draft.value, 0, 0)) {
+            draft.dirty = true;
+        }
+        const bool stale = draft.token != color.token || draft.expected_color != color.color;
+        const bool valid = draft.value >= 0 && draft.value <= 255;
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!draft.dirty || stale || !valid);
+        if (ImGui::Button("색상 적용")) {
+            const domain::RequestId request{++menu.next_request};
+            const auto result = bridge.commands.push({request, menu.epoch,
+                domain::SetOfficerFactionColor{id, draft.token, draft.expected_color,
+                    static_cast<std::uint8_t>(draft.value), protagonist}});
+            if (result) {
+                menu.pending = request;
+                menu.pending_notice = "세력 색상을 변경했습니다.";
+                draft.dirty = false;
+            } else {
+                menu.error = result.error();
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("현재 값 사용")) {
+            draft = {id, color.token, color.color, color.color, false};
+        }
+        ImGui::EndDisabled();
+        if (stale) {
+            ImGui::TextWrapped("소속 세력 또는 색상이 바뀌었습니다. 현재 값을 다시 확인한 뒤 편집하세요.");
+        } else if (!valid) {
+            ImGui::TextUnformatted("색상 번호는 0~255 범위로 입력하세요.");
+        }
+        ImGui::TextDisabled("소속 세력 전체에 적용됩니다. 현재 번호: %u", color.color);
+    }
+
+    if (ImGui::CollapsingHeader("관계 정보")) {
+        const auto& relations = protagonist ? menu.snapshot.protagonist_relations
+            : menu.snapshot.selected_officer_relations;
+        ImGui::BeginDisabled(busy || (relations && relations->officer_id == id &&
+            relations->epoch == menu.epoch && relations->status == domain::OfficerRelationsStatus::Loading));
+        if (ImGui::Button("관계 갱신")) {
+            const domain::RequestId request{++menu.next_request};
+            const auto result = bridge.commands.push({request, menu.epoch,
+                domain::RefreshOfficerRelations{id, protagonist}});
+            if (result) {
+                menu.pending = request;
+                menu.error.reset();
+            } else {
+                menu.error = result.error();
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled("게임에서 관계가 바뀌면 갱신하세요.");
+        if (!relations || relations->officer_id != id || relations->epoch != menu.epoch ||
+            relations->status == domain::OfficerRelationsStatus::Loading) {
+            ImGui::TextUnformatted("관계 정보를 불러오는 중입니다.");
+        } else {
+            switch (relations->status) {
+            case domain::OfficerRelationsStatus::Partial:
+                ImGui::TextWrapped("일부 관계 데이터만 확인했습니다. 조회하지 못한 종류는 별도로 표시합니다.");
+                break;
+            case domain::OfficerRelationsStatus::Unavailable:
+                ImGui::TextWrapped("현재 게임의 관계 데이터 위치를 확인할 수 없습니다. 관계 갱신으로 다시 조회하세요.");
+                break;
+            case domain::OfficerRelationsStatus::ReadFailed:
+                ImGui::TextWrapped("관계 데이터를 읽지 못했습니다. 관계 갱신으로 다시 조회하세요.");
+                break;
+            default: break;
+            }
+            constexpr std::array names{"의형제", "배우자", "상생", "상극", "원수", "호적수"};
+            for (std::size_t group_index = 0; group_index < names.size(); ++group_index) {
+                const auto& group = relations->groups[group_index];
+                if (!group.available) {
+                    ImGui::TextDisabled("%s: 조회 불가", names[group_index]);
+                    continue;
+                }
+                if (group.count == 0) {
+                    ImGui::Text("%s: 없음", names[group_index]);
+                    continue;
+                }
+                ImGui::PushID(static_cast<int>(group_index));
+                const std::string title = std::string(names[group_index]) + " (" +
+                    std::to_string(group.count) + ")";
+                if (ImGui::TreeNodeEx(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const float height = std::min(static_cast<float>(group.count + 1), 7.0f) *
+                        ImGui::GetTextLineHeightWithSpacing() + 12 * menu.dpi_scale;
+                    if (ImGui::BeginTable("##relations", 3, ImGuiTableFlags_RowBg |
+                        ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY, ImVec2(0, height))) {
+                        ImGui::TableSetupColumn("무장");
+                        ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 65 * menu.dpi_scale);
+                        ImGui::TableSetupColumn("친밀도", ImGuiTableColumnFlags_WidthFixed, 70 * menu.dpi_scale);
+                        ImGui::TableSetupScrollFreeze(0, 1);
+                        ImGui::TableHeadersRow();
+                        ImGuiListClipper clipper;
+                        clipper.Begin(static_cast<int>(group.count));
+                        while (clipper.Step()) {
+                            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                                const auto& member = group.members[static_cast<std::size_t>(row)];
+                                const auto found = menu.officer_names ? menu.officer_names->find(member.id)
+                                    : domain::OfficerNames::const_iterator{};
+                                const auto label = menu.officer_names && found != menu.officer_names->end()
+                                    ? found->second : "무장 #" + std::to_string(member.id);
+                                ImGui::PushID(static_cast<int>(member.id));
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+                                ImGui::BeginDisabled(busy);
+                                if (ImGui::Selectable(label.c_str())) {
+                                    open_officer_details(menu, member.id);
+                                }
+                                ImGui::EndDisabled();
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%u", member.id);
+                                ImGui::TableNextColumn();
+                                if (member.affinity) {
+                                    ImGui::Text("%u", *member.affinity);
+                                } else {
+                                    ImGui::TextUnformatted("-");
+                                }
+                                ImGui::PopID();
+                            }
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+    }
+    ImGui::PopID();
+}
+
+} // namespace
+
 void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
     auto& mailbox = bridge.commands;
     if (!menu.officer_list_open) {
         return;
     }
     ImGui::SetNextWindowSize(ImVec2(1000, 700), ImGuiCond_FirstUseEver);
+    if (menu.officer_open_focus) {
+        ImGui::SetNextWindowCollapsed(false);
+        ImGui::SetNextWindowFocus();
+        menu.officer_open_focus = false;
+    }
     if (ImGui::Begin("모든 무장 편집 리스트###OfficerListWin", &menu.officer_list_open)) {
         const int scan_cursor = bridge.officer_roster_scan_cursor.load(std::memory_order_acquire);
         const bool roster_available = menu.officer_roster->available && menu.officer_roster->epoch == menu.epoch;
 
         // Opening the window permits one automatic request. A failed read
         // remains idle until the user explicitly retries with the refresh button.
-        if (ImGui::IsWindowAppearing() && menu.ready && !menu.pending &&
+        if ((ImGui::IsWindowAppearing() || (menu.officer_open_request && !menu.officer_open_refresh_requested)) &&
+            menu.ready && !menu.pending &&
             menu.pending_officer_edits.empty() && !roster_available && scan_cursor < 0) {
             const domain::RequestId request{++menu.next_request};
             const domain::Result<void> result = mailbox.push({request, menu.epoch, domain::RefreshOfficerRoster{}});
 
             if (result) {
                 menu.pending = request;
+                menu.officer_open_refresh_requested = menu.officer_open_request.has_value();
             } else {
                 menu.error = result.error();
+                menu.officer_open_refresh_requested = true;
             }
         }
 
@@ -2122,6 +2348,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         } else if (menu.officer_roster->loading && menu.officer_roster->epoch == menu.epoch) {
             ImGui::Text("목록 반영 중... (%zu명)", menu.officer_roster->entry_count);
         }
+        if (menu.officer_open_request) {
+            ImGui::Text("무장 #%u 상세를 준비하고 있습니다.", *menu.officer_open_request);
+        }
         if (!menu.pending_officer_edits.empty()) {
             ImGui::Text("일괄 적용 중: %zu / %zu", menu.completed_officer_edits,
                         menu.pending_officer_edits.size());
@@ -2129,9 +2358,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         if (menu.error) {
             ImGui::Text("요청 실패 (%d)", static_cast<int>(menu.error->code));
         }
-        const auto select_officer = [&](std::uint16_t id) {
+        const auto select_officer = [&](std::uint16_t id) -> bool {
             if (menu.pending || !menu.pending_officer_edits.empty() || !menu.ready) {
-                return;
+                return false;
             }
             const domain::RequestId request{++menu.next_request};
             auto result = mailbox.push({request, menu.epoch, domain::SelectRosterOfficer{id}});
@@ -2140,6 +2369,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             } else {
                 menu.error = result.error();
             }
+            return result.has_value();
         };
         const auto queue_officer_edits = [&](std::uint16_t primary, const auto& payload_for) {
             menu.pending_officer_edits.clear();
@@ -2311,7 +2541,27 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             }
             ImGui::SameLine();
             ImGui::Text("(%zu명)", static_cast<std::size_t>(selected_count));
-            const bool run_search = menu.officer_search_pending && !menu.pending &&
+            if (menu.officer_open_request && !menu.pending && menu.pending_officer_edits.empty() &&
+                menu.ready && !menu.officer_roster->loading && scan_cursor < 0) {
+                const auto target = *menu.officer_open_request;
+                menu.officer_filter = -1;
+                rebuild_filter();
+                const auto found = std::find_if(menu.officer_filtered_indices.begin(),
+                    menu.officer_filtered_indices.end(), [&](std::size_t index) {
+                        return menu.officer_roster->entries[index].id == target;
+                    });
+                if (found == menu.officer_filtered_indices.end()) {
+                    bridge.publish_notice("해당 무장을 현재 목록에서 찾지 못했습니다. 목록 갱신 후 다시 선택하세요.");
+                    menu.officer_open_request.reset();
+                } else if (select_officer(target)) {
+                    menu.officer_search_result = static_cast<int>(found - menu.officer_filtered_indices.begin());
+                    menu.officer_open_request.reset();
+                    ImGui::SetScrollY(0);
+                }
+                menu.officer_reselect_pending = false;
+                menu.officer_next_selection.reset();
+            }
+            const bool run_search = !menu.officer_open_request && menu.officer_search_pending && !menu.pending &&
                                     menu.pending_officer_edits.empty() && menu.ready &&
                                     !menu.officer_roster->loading;
             if (run_search) {
@@ -2353,11 +2603,13 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     menu.officer_reselect_pending = false;
                 }
             }
-            const bool selected_visible = menu.snapshot.selected_officer &&
+            const bool selected_visible = !menu.officer_open_request && menu.snapshot.selected_officer &&
                 std::any_of(menu.officer_filtered_indices.begin(), menu.officer_filtered_indices.end(), [&](std::size_t index) {
                     return menu.officer_roster->entries[index].id == menu.snapshot.selected_officer->id;
                 });
-            if (menu.officer_reselect_pending && !menu.pending && menu.pending_officer_edits.empty() && menu.ready) {
+            if (menu.officer_reselect_pending && !menu.officer_open_request && !menu.officer_search_pending &&
+                !menu.pending && menu.pending_officer_edits.empty() && menu.ready &&
+                !menu.officer_roster->loading && scan_cursor < 0) {
                 if ((!selected_visible || menu.officer_next_selection) && !menu.officer_filtered_indices.empty()) {
                     auto next = menu.officer_roster->entries[menu.officer_filtered_indices.front()].id;
                     if (menu.officer_next_selection) {
@@ -2412,6 +2664,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 };
                 ImGui::Text("가문: %s | 부: %s | 모: %s", family_name(officer.family[0]),
                             family_name(officer.family[1]), family_name(officer.family[2]));
+                draw_officer_inspection(menu, bridge, officer.id, false);
                 constexpr std::array city_names{
                     "양평", "북평", "계", "남피", "업", "평원", "북해", "제남", "진양", "상당",
                     "하비", "소패", "복양", "진류", "허창", "초", "여남", "낙양", "홍농", "장안",
@@ -2783,7 +3036,9 @@ void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge) {
     ImGui::SetNextWindowSize(ImVec2(800, 700), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("주인공 무장 상세 편집###OffDetailWin", &menu.protagonist_detail)) {
         if (menu.snapshot.protagonist_id) {
+            bridge.protagonist_detail_visible.store(true);
             draw_officer_name(menu, bridge, *menu.snapshot.protagonist_id, true);
+            draw_officer_inspection(menu, bridge, *menu.snapshot.protagonist_id, true);
             if (menu.snapshot.protagonist_traits) {
                 draw_officer_traits(menu, mailbox, *menu.snapshot.protagonist_id, *menu.snapshot.protagonist_traits, true);
             }
@@ -3069,7 +3324,12 @@ void draw_officer_tools(FeatureMenu& menu, services::UiBridge& bridge) {
     }
     const std::optional<domain::OfficerToolsRequest> command = draw_officer_tools_panel(menu.officer_tools,
         *menu.officer_tools_view, menu.officer_names ? &*menu.officer_names : nullptr, menu.dpi_scale,
-        !menu.pending.has_value() && menu.ready);
+        !menu.pending.has_value() && menu.pending_officer_edits.empty() && menu.ready);
+
+    if (menu.officer_tools.open_officer) {
+        open_officer_details(menu, *menu.officer_tools.open_officer);
+        menu.officer_tools.open_officer.reset();
+    }
 
     if (!command) {
         return;

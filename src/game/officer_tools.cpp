@@ -693,6 +693,7 @@ void stop_officer_tools(OfficerTools& state) {
     if (state.running) {
         finish_job(state, domain::OfficerToolStatus::Cancelled);
     }
+    restore_family_spouse_order(state.family);
     reset_family_tools(state.family, state.view.epoch);
     state.view.family = state.family.view;
     state.demo = {};
@@ -782,6 +783,8 @@ bool submit_officer_tool(OfficerTools& state, const OfficerToolContext& context,
             return set_child_schedule(state.family, context, action);
         } else if constexpr (std::is_same_v<T, domain::SetPregnancySpouse>) {
             return set_pregnancy_spouse(state.family, context, action);
+        } else if constexpr (std::is_same_v<T, domain::SwapSpouseOrder>) {
+            return swap_spouse_order(state.family, context, action);
         } else if constexpr (std::is_same_v<T, domain::SetFamilyPage>) {
             set_family_page(state.family, action);
             return domain::OfficerToolStatus::Completed;
