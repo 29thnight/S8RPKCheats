@@ -55,6 +55,68 @@ bool executable_region(const MEMORY_BASIC_INFORMATION& region) {
     return (region.Protect & EXECUTABLE) != 0;
 }
 
+bool readable_image_data(std::uintptr_t module, std::size_t image_size, std::uintptr_t address) {
+    if (address < module || address - module > image_size - sizeof(std::uintptr_t) ||
+        address % alignof(std::uintptr_t) != 0) {
+        return false;
+    }
+    MEMORY_BASIC_INFORMATION region{};
+    if (VirtualQuery(reinterpret_cast<const void*>(address), &region, sizeof(region)) != sizeof(region) ||
+        !readable_image_region(region, module) || executable_region(region)) {
+        return false;
+    }
+    const std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(region.BaseAddress);
+    return begin <= address && region.RegionSize >= sizeof(std::uintptr_t) &&
+        address - begin <= region.RegionSize - sizeof(std::uintptr_t);
+}
+
+struct MasterTraitIdentity {
+    std::uintptr_t table = 0;
+    std::uintptr_t vtable = 0;
+    std::uintptr_t first_function = 0;
+
+    bool operator==(const MasterTraitIdentity&) const = default;
+};
+
+bool read_master_trait_identity(std::uintptr_t module, std::size_t image_size,
+    std::uintptr_t root, MasterTraitIdentity& identity) {
+    // The existing trait runtime reads contiguous 0x40-byte records through
+    // table[0]; officer editing reads table[id]. Both must identify the same
+    // native records before a title-screen root can replace the P1 evidence.
+    constexpr std::uintptr_t POINTER_OFFSET = 0x57a4d0;
+    constexpr std::uintptr_t RECORD_SIZE = 0x40;
+    constexpr std::array<std::uint16_t, 3> IDS{1, 2, 70};
+    if (root > std::numeric_limits<std::uintptr_t>::max() - POINTER_OFFSET - (IDS.back() + 1) * sizeof(std::uintptr_t) ||
+        !platform::windows::read_memory(root + POINTER_OFFSET,
+            std::as_writable_bytes(std::span(&identity.table, 1))) || identity.table <= 0x10000 ||
+        !platform::windows::is_committed_memory(identity.table, (IDS.back() + 1) * RECORD_SIZE)) {
+        return false;
+    }
+    for (const std::uint16_t expected : IDS) {
+        std::uintptr_t object = 0, vtable = 0;
+        std::uint16_t id = 0;
+        if (!platform::windows::read_memory(root + POINTER_OFFSET + expected * sizeof(std::uintptr_t),
+                std::as_writable_bytes(std::span(&object, 1))) ||
+            object != identity.table + expected * RECORD_SIZE ||
+            !platform::windows::read_memory(object, std::as_writable_bytes(std::span(&vtable, 1))) ||
+            !platform::windows::read_memory(object + 8, std::as_writable_bytes(std::span(&id, 1))) ||
+            id != expected || (identity.vtable && vtable != identity.vtable)) {
+            return false;
+        }
+        identity.vtable = vtable;
+    }
+    if (!readable_image_data(module, image_size, identity.vtable) ||
+        !platform::windows::read_memory(identity.vtable,
+            std::as_writable_bytes(std::span(&identity.first_function, 1))) ||
+        identity.first_function < module || identity.first_function - module >= image_size) {
+        return false;
+    }
+    MEMORY_BASIC_INFORMATION function_region{};
+    return VirtualQuery(reinterpret_cast<const void*>(identity.first_function), &function_region,
+               sizeof(function_region)) == sizeof(function_region) &&
+        readable_image_region(function_region, module) && executable_region(function_region);
+}
+
 std::uint64_t retry_time(std::uint64_t now_ms) {
     return now_ms > std::numeric_limits<std::uint64_t>::max() - PROBE_RETRY_MS
         ? std::numeric_limits<std::uint64_t>::max() : now_ms + PROBE_RETRY_MS;
@@ -78,19 +140,7 @@ std::optional<std::uintptr_t> find_game_base_pointer(
 
 bool validate_game_base_pointer(std::uintptr_t module_base, std::uintptr_t slot) {
     std::size_t image_size = 0;
-    if (!module_image_size(module_base, image_size) || slot < module_base ||
-        slot - module_base > image_size - sizeof(std::uintptr_t) ||
-        slot % alignof(std::uintptr_t) != 0) {
-        return false;
-    }
-    MEMORY_BASIC_INFORMATION region{};
-    if (VirtualQuery(reinterpret_cast<const void*>(slot), &region, sizeof(region)) != sizeof(region) ||
-        !readable_image_region(region, module_base) || executable_region(region)) {
-        return false;
-    }
-    const std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(region.BaseAddress);
-    if (begin > slot || region.RegionSize < sizeof(std::uintptr_t) ||
-        slot - begin > region.RegionSize - sizeof(std::uintptr_t)) {
+    if (!module_image_size(module_base, image_size) || !readable_image_data(module_base, image_size, slot)) {
         return false;
     }
 
@@ -98,7 +148,22 @@ bool validate_game_base_pointer(std::uintptr_t module_base, std::uintptr_t slot)
     if (root <= 0x10000 || !platform::windows::is_committed_memory(root, 0x6000)) {
         return false;
     }
-    const std::uintptr_t player = read_player(root);
+    std::uintptr_t player = 0;
+    if (!platform::windows::read_memory(root + 0xe0, std::as_writable_bytes(std::span(&player, 1)))) {
+        return false;
+    }
+    if (!player) {
+        // No protagonist is a valid title-screen state. A failed P1 read or a
+        // non-null invalid P1 must not be mistaken for that state, nor may a
+        // signature pointing to an arbitrary empty global authorize a root.
+        MasterTraitIdentity first{}, confirmed{};
+        std::uintptr_t confirmed_player = 0;
+        return read_master_trait_identity(module_base, image_size, root, first) &&
+            read_master_trait_identity(module_base, image_size, root, confirmed) && first == confirmed &&
+            read_game_base(slot) == root &&
+            platform::windows::read_memory(root + 0xe0, std::as_writable_bytes(std::span(&confirmed_player, 1))) &&
+            confirmed_player == 0;
+    }
     std::uint16_t id = 0;
     if (player <= 0x10000 || !platform::windows::is_committed_memory(player, 0x200) ||
         !platform::windows::read_memory(player + 8, std::as_writable_bytes(std::span(&id, 1))) ||

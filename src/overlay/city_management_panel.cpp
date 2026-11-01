@@ -526,7 +526,7 @@ void draw_city_management(CityManagementPanel& panel, services::UiBridge& bridge
     }
     ImGui::EndDisabled();
     if (!snapshot.available || snapshot.epoch != epoch) {
-        ImGui::TextWrapped("게임 플레이 화면에서 도시 정보를 읽을 수 있습니다.");
+        ImGui::TextWrapped("도시 데이터 테이블이 준비되기를 기다립니다.");
         ImGui::End();
         return;
     }

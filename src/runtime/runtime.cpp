@@ -904,17 +904,6 @@ void observe_game_context(Runtime& runtime, std::uintptr_t, std::uint64_t now_ms
         runtime.loop_game_base_ready = game_base > 0x10000 && platform::windows::is_committed_memory(game_base, 0x6000);
     }
 
-    if (runtime.session_game_base && (game_base != runtime.session_game_base ||
-        (runtime.session_player && player != runtime.session_player))) {
-        // Both values above were read successfully. A confirmed null or new
-        // identity may retire object-bound state; a failed read may not.
-        change_game_session(runtime);
-        runtime.session_player = runtime.loop_player_ready ? player : 0;
-        runtime.session_game_base = game_base;
-    } else if (!runtime.session_player && runtime.loop_player_ready) {
-        runtime.session_player = player;
-        runtime.session_game_base = game_base;
-    }
     runtime.loop_context_observed = (!game_base || runtime.loop_game_base_ready) &&
         (!player || runtime.loop_player_ready);
     runtime.game_memory_status = !game_base ? domain::GameMemoryStatus::WaitingForGame :
@@ -925,13 +914,30 @@ void observe_game_context(Runtime& runtime, std::uintptr_t, std::uint64_t now_ms
         return;
     }
 
+    const bool session_changed = runtime.session_game_base &&
+        (game_base != runtime.session_game_base || player != runtime.session_player);
+    const bool first_bind_with_roster = !runtime.session_game_base && game_base &&
+        runtime.officer_roster.has_scan;
+    if (session_changed || first_bind_with_roster) {
+        // A title-screen roster can precede root discovery. Retire its old
+        // commands on the first bind, and also on null-P1 -> scenario entry.
+        // Only successful observations reach here; failed reads retain journals.
+        const bool reload_roster = runtime.officer_roster.has_scan;
+        change_game_session(runtime);
+        if (reload_roster) {
+            game::request_officer_roster(runtime.officer_roster);
+        }
+    }
+    runtime.session_game_base = game_base;
+    runtime.session_player = player;
+
     observe_legacy_player(runtime, now_ms);
 }
 
 void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_ms,
     const domain::WorkBudget& work_budget) {
     enum class Job : std::size_t {
-        StartSetting, PlayerResources, Tengi, Roster, NativeCandidates, AiGrowth,
+        StartSetting, PlayerResources, Tengi, NativeCandidates, AiGrowth,
         Affinity, TechZero, OfficerStats, Aggressive, Tavern, Ronin, Jewels,
         LordBonus, FirstRoad, SecondRoad, MapShuffle, SiegeRestore, Count
     };
@@ -966,9 +972,6 @@ void tick_game(Runtime& runtime, std::uintptr_t game_module, std::uint64_t now_m
                 game::update_tengi(runtime.tengi, game_module, runtime.loop_player_ready ? player : 0,
                     now_ms, runtime.tengi_settings);
             }
-            break;
-        case Job::Roster:
-            game::update_officer_roster(runtime.officer_roster, game_module, work_budget);
             break;
         case Job::NativeCandidates:
             update_native_feature_candidates(runtime, game_module, work_budget);

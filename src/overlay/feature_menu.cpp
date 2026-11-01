@@ -40,6 +40,48 @@ void complete_float_draft(MenuFloatDraft& draft, const services::CommandCompleti
     }
 }
 
+const char* request_error_text(const domain::Error& error) {
+    constexpr std::uint32_t NOT_READY_NATIVE_CODE = 21; // Windows ERROR_NOT_READY.
+
+    switch (error.code) {
+    case domain::ErrorCode::InvalidData:
+        return "입력값 또는 대상 데이터를 확인할 수 없습니다.";
+    case domain::ErrorCode::StaleEpoch:
+        return "게임 상태가 바뀌어 요청이 취소되었습니다.";
+    case domain::ErrorCode::UnsupportedVersion:
+        return "현재 실행 환경에서 지원되지 않는 요청입니다.";
+    case domain::ErrorCode::QueueFull:
+        return "요청 대기열이 가득 차 접수하지 못했습니다.";
+    case domain::ErrorCode::Cancelled:
+        return "요청이 취소되었습니다.";
+    case domain::ErrorCode::PlatformFailure:
+        // ERROR_NOT_READY is returned when configuration or game data is not ready.
+        return error.native_code == NOT_READY_NATIVE_CODE
+            ? "요청 당시 데이터가 준비되지 않았습니다."
+            : "요청 처리 중 시스템 오류가 발생했습니다.";
+    default:
+        return "요청을 처리하지 못했습니다.";
+    }
+}
+
+void draw_previous_request_error(FeatureMenu& menu) {
+    if (!menu.error) {
+        return;
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.3f, 1.0f));
+    ImGui::TextWrapped("이전 요청 실패 · %s", request_error_text(*menu.error));
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("현재 연결 상태와 별개인 이전 요청의 결과입니다.\n오류 코드: %d · 상세 코드: %u",
+            static_cast<int>(menu.error->code), menu.error->native_code);
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("오류 닫기##previous_request_error")) {
+        menu.error.reset();
+    }
+}
+
 void draw_legacy_status(const domain::ConfigSnapshot& snapshot, domain::LegacyFeatureGroup group,
     bool same_line = true) {
 
@@ -553,7 +595,10 @@ void FeatureMenuDraw::draw_feature(const FeatureItem& item) {
         if (status.phase == domain::NativeFeaturePhase::Pending) {
             ImGui::TextDisabled("적용 대기 (현재 그룹 %s)", status.applied ? "활성" : "해제");
         } else if (status.phase == domain::NativeFeaturePhase::Applied) {
-            ImGui::TextDisabled("그룹 적용됨");
+            ImGui::TextDisabled("%s", enabled ? "그룹 패치 적용됨" : "사용 설정 꺼짐");
+            if (!enabled && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("그룹 패치는 적용된 상태입니다.\n이 옵션의 사용 설정은 꺼져 있으며, 그룹 상태와 별개입니다.");
+            }
         } else if (status.phase == domain::NativeFeaturePhase::Disabled) {
             ImGui::TextDisabled("해제됨");
         } else {
@@ -1856,9 +1901,7 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         return;
     }
 
-    if (menu.error) {
-        ImGui::Text("요청 실패 (%d, %u)", static_cast<int>(menu.error->code), menu.error->native_code);
-    }
+    draw_previous_request_error(menu);
 
     if (!menu.ready) {
         if (menu.save_notice && menu.save_notice->status == services::ConfigSaveStatus::InvalidData) {
@@ -1869,8 +1912,14 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         } else {
             ImGui::TextDisabled("설정을 불러오는 중입니다.");
         }
-    } else if (menu.pending) {
-        ImGui::TextDisabled("변경 사항을 적용하는 중입니다.");
+    } else {
+        ImGui::TextDisabled("설정 불러오기: 완료");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("설정 파일 또는 기본값을 불러왔습니다.\n체크 표시는 사용 설정입니다. 실제 적용 결과는 각 항목의 상태를 확인하세요.");
+        }
+        if (menu.pending) {
+            ImGui::TextDisabled("요청을 처리하는 중입니다.");
+        }
     }
 
     if (menu.ready) {
@@ -1879,35 +1928,44 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
             const auto total = menu.snapshot.game_memory_image_size;
             const double progress = total == 0 ? 0.0 : 100.0 *
                 static_cast<double>(menu.snapshot.game_memory_scan_cursor) / static_cast<double>(total);
-            ImGui::TextDisabled("설정 로드 완료 · 게임 메모리 주소를 찾는 중입니다. %.0f%%", progress);
+            ImGui::TextDisabled("게임 메모리: 주소 검색 중 · %.0f%%", progress);
             break;
         }
         case domain::GameMemoryStatus::SearchWaiting:
-            ImGui::TextWrapped("설정 로드 완료 · 게임 준비 또는 메모리 주소 재검색을 기다립니다. 자동으로 다시 시도합니다. (조회 %llu회)",
+            ImGui::TextWrapped("게임 메모리: 게임 준비 또는 주소 재검색 대기 · 자동으로 다시 시도합니다. (조회 %llu회)",
                 static_cast<unsigned long long>(menu.snapshot.game_memory_scan_passes));
             break;
         case domain::GameMemoryStatus::ModuleReadFailed:
-            ImGui::TextWrapped("설정 로드 완료 · 게임 실행 파일의 메모리를 읽지 못했습니다. 자동으로 다시 시도합니다.");
+            ImGui::TextWrapped("게임 메모리: 실행 파일을 읽지 못했습니다. 자동으로 다시 시도합니다.");
             break;
         case domain::GameMemoryStatus::RootReadFailed:
-            ImGui::TextWrapped("설정 로드 완료 · 게임의 기본 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
+            ImGui::TextWrapped("게임 메모리: 기본 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
             break;
         case domain::GameMemoryStatus::PlayerReadFailed:
-            ImGui::TextWrapped("설정 로드 완료 · 게임 메모리에서 주인공 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
+            ImGui::TextWrapped("시나리오: 주인공 정보를 읽지 못했습니다. 다시 조회하고 있습니다.");
             break;
         case domain::GameMemoryStatus::WaitingForGame:
-            ImGui::TextDisabled("설정 로드 완료 · 게임 데이터가 준비되기를 기다립니다.");
+            ImGui::TextDisabled("시나리오: 게임 데이터 준비 대기");
             break;
         case domain::GameMemoryStatus::WaitingForPlayer:
-            ImGui::TextDisabled("설정 로드 완료 · 주인공 정보를 기다립니다.");
+            ImGui::TextDisabled("시나리오: 주인공 연결 대기");
             break;
         case domain::GameMemoryStatus::Ready:
             if (menu.snapshot.protagonist_id) {
-                ImGui::TextDisabled("게임 정보 연결됨 · 주인공 ID %u", *menu.snapshot.protagonist_id);
+                ImGui::TextDisabled("시나리오: 연결됨 · 주인공 ID %u", *menu.snapshot.protagonist_id);
             } else {
-                ImGui::TextDisabled("게임 정보 연결됨 · 무장 정보를 갱신하고 있습니다.");
+                ImGui::TextDisabled("시나리오: 연결됨 · 주인공 정보를 갱신하고 있습니다.");
             }
             break;
+        }
+
+        const auto& roster = *menu.officer_roster;
+        if (roster.epoch == menu.epoch && roster.loading) {
+            ImGui::TextDisabled("공용 무장 목록: 조회 중 · %zu명 수신", roster.entry_count);
+        } else if (roster.epoch == menu.epoch && roster.available) {
+            ImGui::TextDisabled("공용 무장 목록: %zu명 조회됨 · 시나리오 연결과 별도", roster.entry_count);
+        } else {
+            ImGui::TextWrapped("공용 무장 목록: 미조회 · 메인화면에서도 '모든 무장 편집'에서 별도로 조회합니다.");
         }
     }
 
@@ -2355,9 +2413,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             ImGui::Text("일괄 적용 중: %zu / %zu", menu.completed_officer_edits,
                         menu.pending_officer_edits.size());
         }
-        if (menu.error) {
-            ImGui::Text("요청 실패 (%d)", static_cast<int>(menu.error->code));
-        }
+        draw_previous_request_error(menu);
         const auto select_officer = [&](std::uint16_t id) -> bool {
             if (menu.pending || !menu.pending_officer_edits.empty() || !menu.ready) {
                 return false;
@@ -3046,9 +3102,7 @@ void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge) {
         if (!menu.pending_officer_edits.empty()) {
             ImGui::Text("일괄 적용 중: %zu / %zu", menu.completed_officer_edits, menu.pending_officer_edits.size());
         }
-        if (menu.error) {
-            ImGui::Text("요청 실패 (%d)", static_cast<int>(menu.error->code));
-        }
+        draw_previous_request_error(menu);
         const auto queue_hero_edits = [&](domain::CommandPayload primary, const auto& payload_for) {
             menu.pending_officer_edits.clear();
             menu.completed_officer_edits = 0;

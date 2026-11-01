@@ -64,6 +64,26 @@ std::uintptr_t player_force(std::uintptr_t player) {
     return player > 0x10000 && read_value(player + 0x20, city) ? read_city_force(city) : 0;
 }
 
+bool scenario_ready(std::uintptr_t root, std::uintptr_t player) {
+    std::uintptr_t current_player = 0;
+
+    return root > 0x10000 && platform::windows::is_committed_memory(root, 0x6000) &&
+        player > 0x10000 && platform::windows::is_committed_memory(player, 0x200) &&
+        read_value(root + 0xe0, current_player) && current_player == player &&
+        officer_id(player) != domain::NO_CITY_OFFICER;
+}
+
+bool basic_city_action(domain::CityAction action) {
+    switch (action) {
+    case domain::CityAction::Refresh: case domain::CityAction::Write:
+    case domain::CityAction::Maximize: case domain::CityAction::ResetRevolt:
+    case domain::CityAction::Cancel:
+        return true;
+    default:
+        return false;
+    }
+}
+
 std::uintptr_t resolve_faction_table(std::uintptr_t module_base) {
     if (!module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - 0x34c8630) {
         return 0;
@@ -206,6 +226,13 @@ bool restore_bound_data(CityManagement& state) {
 }
 
 domain::CityWorkStatus write_transaction(CityManagement& state, std::span<const CityDataWrite> writes, bool faction = false) {
+    const std::uintptr_t table = faction ? resolve_faction_table(state.module_base) : resolve_city_data(state.module_base);
+    if (table == 0) {
+        return domain::CityWorkStatus::ReadFailed;
+    }
+    if (table != (faction ? state.faction_table : state.city_table)) {
+        return domain::CityWorkStatus::SessionChanged;
+    }
     for (const CityDataWrite& write : writes) {
         std::uint32_t current = 0;
 
@@ -255,7 +282,9 @@ void start_work(CityManagement& state, CityWork work) {
 
 bool bind_city_session(CityManagement& state, std::uintptr_t module_base, std::uintptr_t root,
     std::uintptr_t player, domain::GameEpoch epoch) {
-    const std::uintptr_t table = root > 0x10000 && player > 0x10000 ? resolve_city_data(module_base) : 0;
+    // The title-screen city table has its own static chain and does not require
+    // a protagonist. Scenario operations keep their separate live-player gate.
+    const std::uintptr_t table = resolve_city_data(module_base);
     const bool same_session = state.module_base == module_base && state.game_root == root && state.player == player &&
         state.epoch == epoch;
 
@@ -288,6 +317,9 @@ bool bind_city_session(CityManagement& state, std::uintptr_t module_base, std::u
     state.snapshot.epoch = epoch;
     state.snapshot.cities = {};
     state.snapshot.factions = {};
+    state.snapshot.year = 0;
+    state.snapshot.month = 0;
+    state.snapshot.player_force_lord = domain::NO_CITY_OFFICER;
     state.snapshot.technologies_loaded = false;
     state.faction_table = 0;
     state.snapshot.available = table != 0;
@@ -534,6 +566,8 @@ void begin_pending(CityManagement& state) {
         start_work(state, CityWork::Exchange);
     } else if ((state.pending & PENDING_REVOLT) != 0) {
         state.pending &= ~PENDING_REVOLT;
+        // Maintenance must not inherit an earlier manual ResetRevolt request.
+        state.request = {};
         start_work(state, CityWork::Revolt);
     } else if ((state.pending & PENDING_REFRESH) != 0) {
         state.pending &= ~PENDING_REFRESH;
@@ -649,6 +683,9 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
     if (!bind_city_session(state, module_base, game_root, player, epoch)) {
         return domain::CityWorkStatus::ReadFailed;
     }
+    if (!basic_city_action(request.action) && !scenario_ready(game_root, player)) {
+        return domain::CityWorkStatus::ReadFailed;
+    }
     if (request.action != domain::CityAction::Refresh && (!previously_bound || previous_table != state.city_table)) {
         return domain::CityWorkStatus::SessionChanged;
     }
@@ -744,11 +781,24 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
         state.snapshot.status = domain::CityWorkStatus::RollbackFailed;
         return;
     }
-    observe_calendar(state, real_milliseconds);
-    if (state.work != CityWork::Revolt && state.snapshot.settings.revolt_always_zero &&
-        real_milliseconds >= state.next_revolt_ms) {
-        state.pending |= PENDING_REVOLT;
-        state.next_revolt_ms = real_milliseconds + 200;
+    const bool live_scenario = scenario_ready(game_root, player);
+    if (live_scenario) {
+        observe_calendar(state, real_milliseconds);
+        if (state.work != CityWork::Revolt && state.snapshot.settings.revolt_always_zero &&
+            real_milliseconds >= state.next_revolt_ms) {
+            state.pending |= PENDING_REVOLT;
+            state.next_revolt_ms = real_milliseconds + 200;
+        }
+    } else {
+        state.pending &= PENDING_REFRESH;
+        // Only explicit edits of the static city table may run before a
+        // scenario. Automatic maintenance, faction edits and support wait.
+        const bool manual_revolt = state.work == CityWork::Revolt &&
+            state.request.action == domain::CityAction::ResetRevolt;
+        if (state.work != CityWork::Idle && state.work != CityWork::Refresh &&
+            state.work != CityWork::Maximize && !manual_revolt) {
+            end_work(state, domain::CityWorkStatus::SessionChanged);
+        }
     }
     if (state.work == CityWork::Idle) {
         begin_pending(state);

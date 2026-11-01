@@ -34,7 +34,8 @@ struct GameBaseProbe {
 std::optional<std::uintptr_t> find_game_base_pointer(
     std::span<const std::byte> image, std::uintptr_t module_base);
 // A signature alone is not sufficient to authorize a game root. The slot must
-// be live image data and resolve to a readable root and identifiable player.
+// be live image data and resolve to a readable root plus an identifiable player
+// or, when P1 is null, a verified native master-trait table.
 bool validate_game_base_pointer(std::uintptr_t module_base, std::uintptr_t slot);
 // Each admitted block completes its scan and advances even if its read used
 // the remaining budget. Missing/loading candidates are freshly read on later

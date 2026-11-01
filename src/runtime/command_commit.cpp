@@ -25,11 +25,38 @@ game::OfficerInspectionContext officer_inspection_context(const Runtime& runtime
     return {runtime.epoch, module, runtime.game_base_pointer, base, game::read_player(base)};
 }
 
-constexpr bool interface_only_command(const domain::CommandPayload& payload) noexcept {
+constexpr bool context_independent_command(const domain::CommandPayload& payload, bool root_discovered) noexcept {
+    if (std::holds_alternative<domain::SetRosterOfficerBasic>(payload) ||
+        std::holds_alternative<domain::SetRosterOfficerGender>(payload) ||
+        std::holds_alternative<domain::SetRosterOfficerVoice>(payload) ||
+        std::holds_alternative<domain::SetRosterOfficerTraining>(payload)) {
+        // Title-screen edits use the independently validated master array.
+        // Once a root slot is known, wait for observation/epoch retirement
+        // before writing: an unreadable or newly found root can be a load.
+        return !root_discovered;
+    }
     if (std::holds_alternative<domain::SetUiScale>(payload) ||
         std::holds_alternative<domain::SetNotificationSpeed>(payload) ||
-        std::holds_alternative<domain::CancelSpecialAbilityAssignment>(payload)) {
+        std::holds_alternative<domain::CancelSpecialAbilityAssignment>(payload) ||
+        std::holds_alternative<domain::RefreshOfficerRoster>(payload) ||
+        std::holds_alternative<domain::SelectRosterOfficer>(payload) ||
+        std::holds_alternative<domain::SetSkillCount>(payload) ||
+        std::holds_alternative<domain::ApplyTraitTextEdits>(payload)) {
+        // Read-only master-table queries and file-backed settings do not use P1.
         return true;
+    }
+
+    if (const auto* city = std::get_if<domain::CityRequest>(&payload)) {
+        switch (city->action) {
+        case domain::CityAction::Refresh:
+        case domain::CityAction::Write:
+        case domain::CityAction::Maximize:
+        case domain::CityAction::ResetRevolt:
+        case domain::CityAction::Cancel:
+            return true;
+        default:
+            return false;
+        }
     }
 
     const domain::SetFeature* const feature = std::get_if<domain::SetFeature>(&payload);
@@ -46,6 +73,7 @@ constexpr bool interface_only_command(const domain::CommandPayload& payload) noe
     case domain::FeatureId::FileLog:
     case domain::FeatureId::MonitorRonin:
     case domain::FeatureId::OfficerChangeNotify:
+    case domain::FeatureId::TraitViewer:
         return true;
     default:
         return false;
@@ -80,7 +108,8 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
         if (accepted->command.epoch != runtime.epoch) {
             result = std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
         } else if (!runtime.config_loaded ||
-            (!runtime.loop_context_observed && !interface_only_command(accepted->command.payload))) {
+            (!runtime.loop_context_observed && !context_independent_command(
+                accepted->command.payload, runtime.game_base_pointer != 0))) {
             // Complete unavailable requests instead of leaving the menu waiting.
             // No setting may overwrite a configuration that has not loaded yet.
             result = std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure, ERROR_NOT_READY});
@@ -546,7 +575,11 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::RefreshOfficerRoster>) {
                     save_config = false;
+                    const std::uintptr_t previous_base = runtime.officer_roster.base;
                     game::request_officer_roster(runtime.officer_roster);
+                    // Preserve only the identity (not old rows/slots) until the
+                    // scan can detect a replacement master table before binding it.
+                    runtime.officer_roster.base = previous_base;
                     if (ui) {
                         ui->officer_roster_scan_cursor.store(0, std::memory_order_release);
                     }
@@ -1079,12 +1112,17 @@ void reconcile_feature_groups(Runtime& runtime, services::UiBridge& ui, std::uin
             (runtime.legacy_features.next_controller + offset) % PATCH_CONTROLLER_COUNT);
         bool attempted = false;
 
-        if (controller == 0) {
+        if (controller == 0 && runtime.loop_context_observed) {
             attempted = reconcile_legacy_features(runtime, game_module, native_now_ms);
-        } else if (controller == 1) {
+        } else if (controller == 1 && runtime.loop_context_observed) {
             attempted = reconcile_native_features(runtime, game_module, native_now_ms);
-        } else if (runtime.config_loaded) {
-            attempted = reconcile_trait_control(runtime.traits, game_module, runtime.loop_game_base,
+        } else if (controller == 2 && runtime.config_loaded &&
+            (runtime.loop_context_observed || !runtime.game_base_pointer)) {
+            // Module hooks and text catalogs can initialize before a game root
+            // is found. A known root that cannot be read is not a confirmed
+            // null: pause here to retain the existing trait-table journal.
+            attempted = reconcile_trait_control(runtime.traits, game_module,
+                runtime.loop_context_observed ? runtime.loop_game_base : 0,
                 runtime.epoch.value, native_now_ms, ui.external_trait_runtime.load(std::memory_order_acquire));
         }
         if (attempted) {
@@ -1198,10 +1236,12 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
 
         runtime.next_ui_job = (runtime.next_ui_job + 1) % JOB_COUNT;
 
-        const bool interface_job = job == Job::Configuration || job == Job::Commands ||
-            job == Job::Roster || job == Job::Notices || job == Job::Publish;
+        const bool independent_job = job == Job::Configuration || job == Job::Commands ||
+            job == Job::Roster || job == Job::Protagonist || job == Job::City ||
+            job == Job::FeatureGroups || job == Job::SelectedOfficer ||
+            job == Job::Notices || job == Job::Publish;
 
-        if (!runtime.loop_context_observed && !interface_job) {
+        if (!runtime.loop_context_observed && !independent_job) {
             continue;
         }
 
@@ -1220,9 +1260,20 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         case Job::PendingTrait:
             service_pending_trait(runtime, ui, game_module, work_budget);
             break;
-        case Job::Roster:
+        case Job::Roster: {
+            // This scan uses the module's master roster, not the current hero.
+            // Keep it beside publication so title-screen requests can finish.
+            const std::uintptr_t previous_base = runtime.officer_roster.base;
+            game::update_officer_roster(runtime.officer_roster, game_module, work_budget);
+            if (previous_base && runtime.officer_roster.base && previous_base != runtime.officer_roster.base) {
+                // A master table may change before a root/P1 can be observed.
+                // Retire queued edits before publishing rows under its new identity.
+                change_game_session(runtime);
+                game::request_officer_roster(runtime.officer_roster);
+            }
             publish_roster_progress(runtime, ui);
             break;
+        }
         case Job::Protagonist:
             sample_protagonist(runtime, game_module);
             break;
