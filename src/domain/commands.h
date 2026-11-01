@@ -94,7 +94,7 @@ struct SetSiegeHealRate { int rate; };
 
 struct SetAllJewelsOpen { bool enabled; };
 
-struct SetSecondaryJewels { SecondaryJewelMask mask; };
+struct SetSecondaryJewels { SecondaryJewelMask mask; std::uint16_t raw_id = 0; bool open = false; };
 struct SetDomesticsMultipliers { DomesticsMultipliers multipliers; };
 struct SetMissionAppointmentLimit { std::int32_t value; };
 struct RestoreMissionAppointmentLimit {};

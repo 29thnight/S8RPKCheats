@@ -2,6 +2,7 @@
 
 #include "../domain/officer_roster.h"
 #include "../domain/officer_tools.h"
+#include "ui_atlas.h"
 
 #include <array>
 #include <cstdint>
@@ -9,8 +10,10 @@
 
 namespace s8::overlay {
 
+enum class OfficerToolsSection { Training, RandomTraits, Family, Scenario };
+
 struct OfficerToolsPanel {
-    bool open = false;
+    bool manual_editing = false;
     domain::GameEpoch epoch{};
     domain::BatchTrainingRequest training;
     domain::RandomTraitsRequest random;
@@ -31,6 +34,7 @@ struct OfficerToolsPanel {
 // The caller queues the returned value in the normal command mailbox. This
 // panel reads only an immutable value snapshot and never accesses game memory.
 std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerToolsPanel& panel,
-    const domain::OfficerToolsView& view, const domain::OfficerNames* names, float scale, bool can_submit = true);
+    const domain::OfficerToolsView& view, const domain::OfficerNames* names, float scale,
+    OfficerToolsSection section, const UiAtlasTextures& atlases, bool can_submit = true);
 
 } // namespace s8::overlay

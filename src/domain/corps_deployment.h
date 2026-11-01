@@ -100,6 +100,7 @@ struct CorpsSnapshot {
     bool busy = false;
     bool plan_valid = false;
     bool relationships_complete = false;
+    std::string_view work_stage;
 };
 
 } // namespace s8::domain

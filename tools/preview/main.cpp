@@ -1,7 +1,11 @@
 #include "sample_session.h"
+#include "domain/secondary_jewel_definitions.h"
 #include "ui_probe.h"
 #include "overlay/feature_menu.h"
 #include "overlay/menu_sprites.h"
+#ifdef _WIN32
+#include "overlay/game_font_atlas.h"
+#endif
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
@@ -35,10 +39,10 @@ overlay::MenuPage page_from_name(const std::string& name) {
 
 struct Options {
     std::string scenario = "ready", font, screenshot, dump, script, open;
-    fs::path resources, background;
+    fs::path resources, background, game_directory;
     overlay::MenuPage page = overlay::MenuPage::Overview;
     int frames = 0, width = 1120, height = 760, delay_frames = 0, background_crop_top = 0;
-    bool no_atlas = false, minimized = false, auto_load = false, game_view = false, explicit_page = false;
+    bool unlock_pk = false, no_atlas = false, minimized = false, auto_load = false, game_view = false, explicit_page = false;
     float scale = 1.0f;
 };
 
@@ -46,6 +50,7 @@ Options parse_options(int argc, char** argv) {
     Options result;
     for (int i = 1; i < argc; ++i) {
         const std::string key = argv[i];
+        if (key == "--unlock-pk") { result.unlock_pk = true; continue; }
         if (key == "--no-atlas") { result.no_atlas = true; continue; }
         if (key == "--minimized") { result.minimized = true; continue; }
         if (key == "--auto-load") { result.auto_load = true; continue; }
@@ -54,8 +59,8 @@ Options parse_options(int argc, char** argv) {
             std::cout << "S8RPK shared ImGui UI preview (sample data only)\n"
                 "  --scenario ready|title|loading|errors|external\n"
                 "  --page overview|officers|traits|domestic|council|battle|scenario|settings\n"
-                "  --open roster|traits|city|protagonist\n"
-                "  --scale 1.0 --size 1120x760 --font FONT --resources DIRECTORY\n"
+                "  --open roster|traits|city|protagonist|jewels --unlock-pk\n"
+                "  --scale 1.0 --size 1120x760 --font FONT --resources DIRECTORY\n  --game-directory DIRECTORY (Windows: native UI textures and font)\n"
                 "  --frames 8 --screenshot FILE.png --dump-items FILE.txt --script FILE\n"
                 "  --no-atlas --delay-frames 20 (fallback / pending-input checks)\n"
                 "  --minimized --auto-load (launcher / real startup path)\n"
@@ -70,6 +75,7 @@ Options parse_options(int argc, char** argv) {
         else if (key == "--page") { result.page = page_from_name(value); result.explicit_page = true; }
         else if (key == "--open") result.open = value;
         else if (key == "--font") result.font = value;
+        else if (key == "--game-directory") result.game_directory = value;
         else if (key == "--resources") result.resources = value;
         else if (key == "--background") result.background = value;
         else if (key == "--background-crop-top") result.background_crop_top = std::stoi(value);
@@ -121,7 +127,7 @@ void load_font(const Options& options) {
         font_config.OversampleV = 1;
         font_config.PixelSnapH = true;
         font_config.GlyphExtraSpacing.x = -1.0f;
-        if (io.Fonts->AddFontFromFileTTF(candidate.string().c_str(), 18.0f,
+        if (io.Fonts->AddFontFromFileTTF(candidate.string().c_str(), 16.0f,
             &font_config, io.Fonts->GetGlyphRangesKorean())) return;
     }
     throw std::runtime_error("Korean font missing; use --font /path/to/font.ttf");
@@ -169,18 +175,15 @@ void screenshot(SDL_Renderer* renderer, const fs::path& path) {
 
 void render_shared_ui(overlay::FeatureMenu& menu, services::UiBridge& bridge) {
     overlay::update_feature_menu(menu, bridge);
-    menu.dpi_scale = menu.snapshot.ui_scale;
-    ImGui::GetIO().FontGlobalScale = menu.snapshot.ui_scale;
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    menu.dpi_scale = 1.2f * std::min(display.x / 1920.0f, display.y / 1080.0f) * menu.snapshot.ui_scale;
+    ImGui::GetIO().FontGlobalScale = menu.dpi_scale;
     overlay::menu_sprites::ThemeScope skin(menu.dpi_scale);
-    overlay::draw_feature_menu(menu, bridge.commands);
+    overlay::draw_feature_menu(menu, bridge);
     if (menu.open) {
         overlay::draw_officer_roster(menu, bridge);
         overlay::draw_protagonist_abilities(menu, bridge);
-        overlay::draw_officer_tools(menu, bridge);
         const auto* names = menu.officer_names ? &*menu.officer_names : nullptr;
-        overlay::draw_city_management(menu.city_management, bridge, menu.epoch, menu.next_request, names);
-        overlay::draw_corps_deployment(menu.corps_deployment, bridge.corps_deployment,
-            bridge.commands, menu.epoch, menu.next_request, names);
         overlay::draw_debug_tools(menu.debug_tools, bridge.debug_tools, menu.epoch);
         overlay::draw_specialty_tools(menu.specialty_tools, bridge, menu.epoch, names);
     }
@@ -376,8 +379,8 @@ struct Script {
             if (!item || item->enabled != (verb == "expect-enabled")) throw std::runtime_error("Unexpected enabled state: " + value);
             ++checks;
         } else if (verb == "expect-open") {
-            const bool open = value == "roster" ? menu.officer_list_open : value == "traits" ? menu.trait_text_editor.open
-                : value == "city" ? menu.city_management.open : value == "protagonist" ? menu.protagonist_detail : false;
+            const bool open = value == "roster" ? menu.officer_list_open : value == "traits" ? (!menu.home_screen && menu.page == overlay::MenuPage::Traits)
+                : value == "city" ? (!menu.home_screen && menu.page == overlay::MenuPage::Domestic) : value == "protagonist" ? menu.protagonist_detail : false;
             if (!open) throw std::runtime_error("Subwindow not open: " + value);
             ++checks;
         } else if (verb == "expect-commands") {
@@ -386,6 +389,18 @@ struct Script {
         } else if (verb == "expect-roster") {
             if (!menu.officer_roster->available || menu.officer_roster->entry_count != static_cast<std::size_t>(std::stoi(value)))
                 throw std::runtime_error("Roster sample publication incomplete");
+            ++checks;
+        } else if (verb == "expect-jewel") {
+            std::istringstream jewel_state{value};
+            unsigned id = 0, expected = 0;
+            jewel_state >> id >> expected;
+            const auto definition = std::find_if(domain::SECONDARY_JEWEL_DEFINITIONS.begin(), domain::SECONDARY_JEWEL_DEFINITIONS.end(),
+                [id](const domain::SecondaryJewelDefinition& item) { return item.id == id; });
+            if (definition == domain::SECONDARY_JEWEL_DEFINITIONS.end()) throw std::runtime_error("Unknown sample jewel");
+            const bool open = ((*session.config.jewel_bitmap)[definition->raw_id >> 3] & (1u << (definition->raw_id & 7))) != 0;
+            const bool forced = domain::secondary_jewel_selected(*session.config.secondary_jewels, definition->id);
+            const unsigned actual = !open ? 0 : forced ? 2 : 1;
+            if (actual != expected) throw std::runtime_error("Unexpected sample jewel state");
             ++checks;
         } else if (verb == "expect-scale") {
             if (std::abs(session.config.ui_scale - std::stof(value)) > 0.05f) throw std::runtime_error("UI scale was not committed");
@@ -513,6 +528,14 @@ int main(int argc, char** argv) {
         io.IniFilename = nullptr;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         load_font(options);
+#ifdef _WIN32
+        if (!options.game_directory.empty()) {
+            services::prepare_game_font(options.game_directory);
+            const own::shared_owner<const services::GameFont> native_font = services::game_font_view();
+            if (native_font->glyphs.empty()) throw std::runtime_error(native_font->error);
+            overlay::load_game_font(16.0f);
+        }
+#endif
         ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
         ImGui_ImplSDLRenderer2_Init(renderer);
         {
@@ -544,9 +567,14 @@ int main(int argc, char** argv) {
             menu->page = options.page;
             menu->home_screen = !options.explicit_page;
             menu->officer_list_open = options.open == "roster";
-            menu->trait_text_editor.open = options.open == "traits";
-            menu->city_management.open = options.open == "city";
+            if (options.open == "traits" || options.open == "city") {
+                menu->page = options.open == "traits" ? overlay::MenuPage::Traits : overlay::MenuPage::Domestic;
+                menu->home_screen = false;
+                menu->collapsed = false;
+            }
             menu->protagonist_detail = options.open == "protagonist";
+            menu->secondary_jewel_window = options.open == "jewels";
+            menu->pk_editors_unlocked = options.unlock_pk;
             const auto resources = resource_directory(options);
             constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "paper_panels.png",
                 "compact_controls.png", "return_controls.png"};
@@ -555,6 +583,21 @@ int main(int argc, char** argv) {
                 auto* texture = textures.load(renderer, resources / "ui" / atlas_files[i], &width, &height);
                 menu->ui_atlases[i] = {texture, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
             }
+#ifdef _WIN32
+            if (!options.game_directory.empty()) {
+                if (!services::publish_game_ui_images(session->bridge)) throw std::runtime_error("Native UI assets did not load");
+                const own::shared_owner<const services::UiAtlasImages> images = session->bridge.ui_atlas_images_view();
+                for (std::size_t i = 0; i < images->size(); ++i) {
+                    const services::RangeImage& image = (*images)[i];
+                    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image.width, image.height);
+                    if (!texture || SDL_UpdateTexture(texture, nullptr, image.pixels.data(), image.width * 4) != 0) throw std::runtime_error(SDL_GetError());
+                    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+                    textures.values.push_back(texture);
+                    menu->ui_atlases[i] = {texture, image.width, image.height};
+                }
+            }
+#endif
             if (options.no_atlas) menu->ui_atlases = {};
             for (std::size_t i = 0; i < menu->range_textures.size(); ++i)
                 menu->range_textures[i] = textures.load(renderer, resources / "ranges" / (std::to_string(i + 1) + ".png"));

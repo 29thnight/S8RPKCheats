@@ -192,8 +192,18 @@ TraitTextEdits make_embedded_trait_text_rows(const TraitRuntimeCatalog& catalog)
     for (std::size_t index = 0; index < catalog.metadata.size(); ++index) {
         const TraitRuntimeMetadata& metadata = catalog.metadata[index];
 
-        if (metadata.present && !metadata.name.empty()) {
-            rows.push_back({static_cast<std::uint16_t>(index + 1), true, metadata.name, metadata.description, {}, {}});
+        const TraitRuntimeEntry& entry = catalog.traits[index];
+
+        if (entry.present || metadata.present) {
+            const std::string name = !metadata.name.empty() ? metadata.name :
+                index < DEFAULT_TRAIT_TEXTS.size() ? std::string(DEFAULT_TRAIT_TEXTS[index].name) :
+                "기재 " + std::to_string(index + 1);
+            TraitTextEdit row{static_cast<std::uint16_t>(index + 1), true, name, metadata.description, {}, {}};
+
+            if (entry.present) {
+                row.effects = entry.trait.effects;
+            }
+            rows.push_back(std::move(row));
         }
     }
     return rows;
@@ -229,12 +239,18 @@ Result<TraitRuntimeCatalog> apply_embedded_trait_text_edits(const TraitRuntimeCa
 
     for (const TraitTextEdit& row : rows) {
         if (!row.embedded || validate_trait_text_edit(row) != TraitTextValidation::Valid ||
-            !updated.metadata[row.trait_id - 1].present) {
+            (!updated.metadata[row.trait_id - 1].present && !updated.traits[row.trait_id - 1].present)) {
             return std::unexpected(Error{ErrorCode::InvalidData});
         }
 
         TraitRuntimeMetadata& metadata = updated.metadata[row.trait_id - 1];
 
+        if (row.effects) {
+            updated.traits[row.trait_id - 1] = {true, Trait{row.trait_id, *row.effects}};
+        }
+        if (!row.name.empty() || !row.description.empty()) {
+            metadata.present = true;
+        }
         if (!row.name.empty()) {
             metadata.name = row.name;
         }

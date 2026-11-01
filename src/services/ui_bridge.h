@@ -76,6 +76,7 @@ struct OfficerNameEdit {
 struct TraitTextSaveRequest {
     bool embedded = false;
     own::shared_owner<const domain::TraitTextEdits> rows;
+    bool apply_external = false;
 };
 
 class UiBridge {

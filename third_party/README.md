@@ -6,6 +6,7 @@
 | Dear ImGui 및 포함된 stb | 기존 S8RPKCheats `Framework` 17개 파일 | 기준 `068ca1d881edf870f7cf06f935cf50e286004af8`에서 복사. 공식 후보 `0ebf49b4c1fa9256a2ea002245a1186075fe7567`과 동일 원본이라고 확정하지 않음 | [MIT 고지](imgui_legacy/LICENSE.txt), 각 stb 헤더의 원문 고지 |
 | JSON for Modern C++ | https://github.com/nlohmann/json | v3.12.0, `55f93686c01528224f448c19128836e7df245f72` | [MIT 고지](nlohmann_json/LICENSE.MIT) |
 | NVIDIA stdexec | https://github.com/NVIDIA/stdexec | `314637d32d23a3b22ff4b45aa0b17d53a60be0c2` | [라이선스](stdexec/LICENSE.txt) |
+| SAN8R Resource Viewer | 사용자 제공 Python 소스 0.2.1 | `core.py`·`fontcodec.py`의 RDB/RDX·FDATA LZ4·G1N 해석을 C++로 이관 | [MIT 고지](san8r_resource_viewer/LICENSE.txt) |
 
 `minhook/`은 독립 Git 체크아웃이다. 이 프로젝트의 C 전용 [MSBuild 프로젝트](../src/platform/windows/S8.MinHook.vcxproj)가 x64 소스 네 개를 사용한다. 원본 S8RPKCheats에 포함된 파일과의 차이는 [P0 출처 조사](../docs/design/P0_Proxy_Origin.md)에 기록되어 있다. 아직 컴파일하거나 게임에서 검증하지 않았다.
 

@@ -10,6 +10,8 @@
 
 #include <array>
 #include <atomic>
+#include <cstring>
+#include <filesystem>
 #include <span>
 
 namespace s8::game {
@@ -75,15 +77,88 @@ bool set_secondary_jewels(const domain::SecondaryJewelMask& mask, std::uintptr_t
     for (const auto word : mask.words) {
         any = any || word != 0;
     }
-    if (any && !installed) {
+    if (!installed) {
         if (!module_base) {
             return false;
         }
         const auto target = module_base + 0x17abbf0;
         constexpr std::array EXPECTED{std::byte{0x48}, std::byte{0x89}, std::byte{0x5c}, std::byte{0x24}, std::byte{0x08}};
         std::array<std::byte, 5> current{};
-        if (!platform::windows::read_memory(target, current) || current != EXPECTED) {
+        if (!platform::windows::read_memory(target, current)) {
             return false;
+        }
+        if (current != EXPECTED) {
+            // VERSION.dll v1.4.7 already owns this judge. Use its locked mask
+            // accessors instead of installing another hook over its trampoline.
+            if (current[0] != std::byte{0xe9}) {
+                return false;
+            }
+
+            std::int32_t displacement = 0;
+            std::memcpy(&displacement, current.data() + 1, sizeof(displacement));
+            const std::uintptr_t relay = static_cast<std::uintptr_t>(
+                static_cast<std::intptr_t>(target + 5) + displacement);
+            std::array<std::byte, 14> jump{};
+
+            if (!platform::windows::read_memory(relay, jump) || jump[0] != std::byte{0xff} ||
+                jump[1] != std::byte{0x25} || jump[2] != std::byte{} || jump[3] != std::byte{} ||
+                jump[4] != std::byte{} || jump[5] != std::byte{}) {
+                return false;
+            }
+
+            std::uintptr_t judge = 0;
+            HMODULE owner = nullptr;
+            std::memcpy(&judge, jump.data() + 6, sizeof(judge));
+            if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                    reinterpret_cast<LPCWSTR>(judge), &owner) ||
+                judge != reinterpret_cast<std::uintptr_t>(owner) + 0xb42c0) {
+                return false;
+            }
+
+            std::array<wchar_t, 32768> game_path{};
+            std::array<wchar_t, 32768> owner_path{};
+            if (!GetModuleFileNameW(reinterpret_cast<HMODULE>(module_base), game_path.data(),
+                    static_cast<DWORD>(game_path.size())) ||
+                !GetModuleFileNameW(owner, owner_path.data(), static_cast<DWORD>(owner_path.size()))) {
+                return false;
+            }
+            const std::filesystem::path expected_owner =
+                std::filesystem::path(game_path.data()).parent_path() / L"version.dll";
+            if (CompareStringOrdinal(owner_path.data(), -1, expected_owner.c_str(), -1, TRUE) != CSTR_EQUAL) {
+                return false;
+            }
+
+            const std::uintptr_t external_base = reinterpret_cast<std::uintptr_t>(owner);
+            constexpr std::array<std::uint8_t, 16> SETTER_BYTES{
+                0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x20, 0x8d, 0x59, 0xff, 0xb8, 0xf3, 0x01};
+            constexpr std::array<std::uint8_t, 16> GETTER_BYTES{
+                0x40, 0x57, 0x48, 0x83, 0xec, 0x20, 0x8d, 0x79, 0xff, 0xb8, 0xf3, 0x01, 0x00, 0x00, 0x66, 0x3b};
+            std::array<std::uint8_t, 16> setter_bytes{};
+            std::array<std::uint8_t, 16> getter_bytes{};
+
+            if (!platform::windows::read_memory(external_base + 0xb3c00, std::as_writable_bytes(std::span(setter_bytes))) ||
+                !platform::windows::read_memory(external_base + 0xb3b60, std::as_writable_bytes(std::span(getter_bytes))) ||
+                setter_bytes != SETTER_BYTES || getter_bytes != GETTER_BYTES) {
+                return false;
+            }
+
+            using ExternalSet = void (__fastcall*)(std::uint16_t, bool);
+            using ExternalGet = bool (__fastcall*)(std::uint16_t);
+            const ExternalSet set = reinterpret_cast<ExternalSet>(external_base + 0xb3c00);
+            const ExternalGet get = reinterpret_cast<ExternalGet>(external_base + 0xb3b60);
+
+            for (const std::uint16_t id : domain::SECONDARY_JEWEL_IDS) {
+                const bool enabled = domain::secondary_jewel_selected(mask, id);
+
+                set(id, enabled);
+                if (get(id) != enabled) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (!any) {
+            return true;
         }
         const auto initialized = platform::windows::initialize_hooks();
         if (initialized != MH_OK && initialized != MH_ERROR_ALREADY_INITIALIZED) {

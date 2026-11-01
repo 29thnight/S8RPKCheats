@@ -1,11 +1,13 @@
 #pragma once
 
 #include "ui_atlas.h"
+#include "editor_symbol.h"
 #include "../../third_party/imgui_legacy/imgui_internal.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <span>
 
 namespace s8::overlay::menu_sprites {
 
@@ -376,11 +378,24 @@ inline bool launcher_button(const UiAtlasTextures& atlases, const char* label, f
         const ImU32 ink = ImGui::GetColorU32(ImVec4(0.86f, 0.78f, 0.45f, 1.0f));
         draw.AddCircleFilled(center, edge * 0.47f, IM_COL32(35, 34, 27, 245));
         draw.AddCircle(center, edge * 0.47f, ink, 32, std::max(1.0f, scale * 1.6f));
-        for (int line = 0; line < 3; ++line) {
-            const float y = minimum.y + edge * (0.32f + 0.18f * line);
-            draw.AddLine(ImVec2(minimum.x + edge * 0.27f, y), ImVec2(minimum.x + edge * 0.73f, y), ink,
-                std::max(1.0f, edge * 0.045f));
+    }
+    const ImVec2 center((minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f);
+    const bool lit = !disabled && (hovered || ImGui::IsItemActive());
+    // Retain the native outer ring and glow; replace only its information glyph.
+    draw.AddCircleFilled(center, edge * 0.34f, ImGui::GetColorU32(lit
+        ? ImVec4(1.0f, 0.78f, 0.18f, 1) : ImVec4(0.14f, 0.13f, 0.11f, 1)), 48);
+    const ImU32 brush_ink = ImGui::GetColorU32(disabled ? ImVec4(0.42f, 0.40f, 0.32f, 1)
+        : lit ? ImVec4(0.40f, 0.23f, 0.05f, 1) : ImVec4(0.86f, 0.78f, 0.45f, 1));
+    for (const std::span<const editor_symbol::Point> shape : {
+            std::span<const editor_symbol::Point>(editor_symbol::HANDLE),
+            std::span<const editor_symbol::Point>(editor_symbol::FERRULE),
+            std::span<const editor_symbol::Point>(editor_symbol::TIP)}) {
+        std::array<ImVec2, 5> points{};
+        for (std::size_t index = 0; index < shape.size(); ++index) {
+            points[index] = ImVec2(minimum.x + shape[index].x * edge / 56.0f,
+                minimum.y + shape[index].y * edge / 56.0f);
         }
+        draw.AddConvexPolyFilled(points.data(), static_cast<int>(shape.size()), brush_ink);
     }
     if (!disabled) ImGui::RenderNavHighlight(ImRect(minimum, maximum), ImGui::GetItemID(), ImGuiNavHighlightFlags_Compact);
     return pressed;

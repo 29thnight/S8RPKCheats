@@ -248,6 +248,15 @@ void draw_corps_deployment(CorpsDeploymentPanel& panel, services::CorpsBridge& b
     ImGui::SetNextWindowSize(ImVec2(1100, 860), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("군단 배치 · 도시 무장 이동", &panel.open, ImGuiWindowFlags_NoSavedSettings)) { ImGui::End(); return; }
     ImGui::TextWrapped("%s", status_text(snapshot.status));
+    if (snapshot.busy && !snapshot.work_stage.empty()) {
+        if (snapshot.total) {
+            ImGui::Text("%.*s · %zu / %zu", static_cast<int>(snapshot.work_stage.size()), snapshot.work_stage.data(),
+                snapshot.completed, snapshot.total);
+            ImGui::ProgressBar(static_cast<float>(snapshot.completed) / static_cast<float>(snapshot.total), ImVec2(-1, 0));
+        } else {
+            ImGui::Text("%.*s · 처리 위치 %zu", static_cast<int>(snapshot.work_stage.size()), snapshot.work_stage.data(), snapshot.completed);
+        }
+    }
     ImGui::Text("이동 %zu명 · 태수/도독 교체 %zu회 · 최초 임명 %zu회 · 보류 %zu도시",
         snapshot.moved, snapshot.swapped, snapshot.appointed, snapshot.deferred);
     if (panel.error) { ImGui::TextWrapped("%s", panel.error); }

@@ -1,4 +1,5 @@
 #include "config_service_loop.h"
+#include "game_font.h"
 
 #include "config_save_service.h"
 #include "config_json.h"
@@ -87,6 +88,7 @@ bool run_config_service(UiBridge& bridge, const std::filesystem::path& path,
         const std::uint64_t observed = bridge.config_wake.observe();
         const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
+        poll_game_portrait();
         const bool reload_traits = bridge.take_trait_text_reload();
 
         if (reload_traits) {

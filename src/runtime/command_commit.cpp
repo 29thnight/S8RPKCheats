@@ -52,6 +52,7 @@ constexpr bool context_independent_command(const domain::CommandPayload& payload
         case domain::CityAction::Write:
         case domain::CityAction::Maximize:
         case domain::CityAction::ResetRevolt:
+        case domain::CityAction::ConvertSelected:
         case domain::CityAction::Cancel:
             return true;
         default:
@@ -427,6 +428,9 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetSecondaryJewels>) {
+                    if (command.raw_id && !game::set_jewel_open(runtime.jewel_open, runtime.cached_game_base, command.raw_id, command.open)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
                     runtime.secondary_jewels = command.mask;
                     request_legacy_group(runtime, domain::LegacyFeatureGroup::SecondaryJewels, true);
                     return {};

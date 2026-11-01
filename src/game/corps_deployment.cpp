@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
 #include <limits>
 #include <span>
@@ -24,7 +25,7 @@ template<class T> bool read_value(std::uintptr_t address, T& value) {
     return platform::windows::read_memory(address, std::as_writable_bytes(std::span(&value, 1)));
 }
 
-template<class T, std::size_t N> T field(const std::array<std::byte, N>& bytes, std::size_t offset) {
+template<class T> T field(std::span<const std::byte> bytes, std::size_t offset) {
     T result{};
 
     std::memcpy(&result, bytes.data() + offset, sizeof(result));
@@ -113,7 +114,8 @@ void begin_read(CorpsDeployment& state, bool build, bool apply) {
     state.snapshot.plan_valid = false;
     state.snapshot.relationships_complete = false;
     state.snapshot.completed = 0;
-    state.snapshot.total = domain::CORPS_OFFICER_CAPACITY;
+    state.snapshot.total = domain::CITY_COUNT;
+    state.snapshot.work_stage = "도시 조회";
     state.snapshot.visible_count = 0;
     state.snapshot.officer_count = 0;
     state.snapshot.moved = 0;
@@ -214,35 +216,6 @@ bool read_frontier(CorpsDeployment& state, std::size_t city) {
 
         row.frontline = row.frontline || (neighbor != domain::NO_CITY && state.city_forces[neighbor] != state.player_force);
     }
-    return true;
-}
-
-bool read_officer(CorpsDeployment& state, std::size_t slot) {
-    std::array<std::byte, 0xf0> bytes{};
-    CorpsRosterEntry row;
-
-    row.address = state.roster + slot * OFFICER_STRIDE;
-    state.parents[slot] = static_cast<std::uint16_t>(slot);
-    if (!read_value(row.address, bytes)) { state.rows[slot] = row; return false; }
-    row.id = field<std::uint16_t>(bytes, 8);
-    row.status_pair = field<std::uint16_t>(bytes, 0x10);
-    row.force = field<std::uintptr_t>(bytes, 0x18);
-    row.city_pointer = field<std::uintptr_t>(bytes, 0x20);
-    row.city = city_index_from_pointer(state.city_table, row.city_pointer);
-    row.loyalty = field<std::uint8_t>(bytes, 0xec);
-    std::memcpy(row.attributes.data(), bytes.data() + 0xaa, row.attributes.size());
-    if (row.id == 0 || row.id > domain::CORPS_OFFICER_CAPACITY) { state.rows[slot] = row; return true; }
-    if (row.city != domain::NO_CITY && row.force == state.player_force && employed(status(row)) &&
-        state.snapshot.cities[row.city].player_owned) {
-        ++state.snapshot.cities[row.city].current_count;
-        row.selected = state.snapshot.cities[row.city].selected;
-        if (row.selected) { state.work_order[state.count++] = static_cast<std::uint16_t>(slot); }
-    }
-    const std::uint16_t previous = state.id_to_row[row.id];
-
-    if (previous != NO_CORPS_ROW && state.rows[previous].selected && row.selected) { return false; }
-    if (previous == NO_CORPS_ROW || row.selected) { state.id_to_row[row.id] = static_cast<std::uint16_t>(slot); }
-    state.rows[slot] = row;
     return true;
 }
 
@@ -595,7 +568,45 @@ void step_read(CorpsDeployment& state) {
             begin_corps_sort(state, CorpsSort::Roster, state.building ? CorpsStage::RelationCandidate : CorpsStage::Idle);
             return;
         }
-        if (!read_officer(state, state.cursor++)) { fail(state, domain::CorpsStatus::ReadFailed); }
+        // One admitted read unit collects up to 32 contiguous records. Decode
+        // their headers locally instead of one process-memory call per officer.
+        constexpr std::size_t BATCH_SIZE = 32;
+        std::array<std::byte, BATCH_SIZE * OFFICER_STRIDE> block{};
+        const std::size_t count = std::min(BATCH_SIZE, domain::CORPS_OFFICER_CAPACITY - state.cursor);
+        const std::size_t length = (count - 1) * OFFICER_STRIDE + 0xf0;
+
+        if (!platform::windows::read_memory(state.roster + state.cursor * OFFICER_STRIDE,
+                std::span(block).first(length))) {
+            fail(state, domain::CorpsStatus::ReadFailed);
+            return;
+        }
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::size_t slot = state.cursor++;
+            const std::span<const std::byte> bytes = std::span(block).subspan(index * OFFICER_STRIDE, 0xf0);
+            CorpsRosterEntry row;
+
+            row.address = state.roster + slot * OFFICER_STRIDE;
+            state.parents[slot] = static_cast<std::uint16_t>(slot);
+            row.id = field<std::uint16_t>(bytes, 8);
+            row.status_pair = field<std::uint16_t>(bytes, 0x10);
+            row.force = field<std::uintptr_t>(bytes, 0x18);
+            row.city_pointer = field<std::uintptr_t>(bytes, 0x20);
+            row.city = city_index_from_pointer(state.city_table, row.city_pointer);
+            row.loyalty = field<std::uint8_t>(bytes, 0xec);
+            std::memcpy(row.attributes.data(), bytes.data() + 0xaa, row.attributes.size());
+            if (row.id == 0 || row.id > domain::CORPS_OFFICER_CAPACITY) { state.rows[slot] = row; continue; }
+            if (row.city != domain::NO_CITY && row.force == state.player_force && employed(status(row)) &&
+                state.snapshot.cities[row.city].player_owned) {
+                ++state.snapshot.cities[row.city].current_count;
+                row.selected = state.snapshot.cities[row.city].selected;
+                if (row.selected) { state.work_order[state.count++] = static_cast<std::uint16_t>(slot); }
+            }
+            const std::uint16_t previous = state.id_to_row[row.id];
+
+            if (previous != NO_CORPS_ROW && state.rows[previous].selected && row.selected) { fail(state, domain::CorpsStatus::ReadFailed); return; }
+            if (previous == NO_CORPS_ROW || row.selected) { state.id_to_row[row.id] = static_cast<std::uint16_t>(slot); }
+            state.rows[slot] = row;
+        }
     }
 }
 
@@ -708,7 +719,7 @@ domain::CorpsStatus request_corps_deployment(CorpsDeployment& state, std::uintpt
 void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, std::uintptr_t game_root,
     std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units,
     const domain::WorkBudget& work_budget) {
-    if (state.stopping || work_budget.exhausted() || !bind(state, module_base, game_root, player, epoch)) { return; }
+    if (state.stopping || !bind(state, module_base, game_root, player, epoch)) { return; }
     observe_calendar(state, real_milliseconds);
     if (state.stage == CorpsStage::Idle) { next_auto_target(state); }
     if (state.stage != CorpsStage::Idle && state.stage != CorpsStage::Rollback) {
@@ -724,15 +735,22 @@ void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, s
     const std::uint64_t write_sequence = state.write_sequence;
     const std::size_t budget = std::min<std::size_t>(max_units, restoring ? 32 : 256);
 
-    for (std::size_t unit = 0; unit < budget && state.stage != CorpsStage::Idle && !work_budget.exhausted(); ++unit) {
+    // The runtime service admits this work before resolving its context. Include
+    // one item in that admitted unit so binding cannot consume every slice.
+    for (std::size_t unit = 0; unit < budget && state.stage != CorpsStage::Idle && (unit == 0 || !work_budget.exhausted()); ++unit) {
         if (state.stage >= CorpsStage::Cities && state.stage <= CorpsStage::Roster) {
             step_read(state);
         } else if (state.stage == CorpsStage::Sort) {
             const CorpsSort kind = state.sort_kind;
 
-            if (step_corps_sort(state) && kind == CorpsSort::Roster) {
-                if (state.building) { begin_corps_relationships(state); }
-                else { finish(state, domain::CorpsStatus::Ready); }
+            for (std::size_t item = 0; item < 32; ++item) {
+                if (step_corps_sort(state)) {
+                    if (kind == CorpsSort::Roster) {
+                        if (state.building) { begin_corps_relationships(state); }
+                        else { finish(state, domain::CorpsStatus::Ready); }
+                    }
+                    break;
+                }
             }
         } else if (state.stage >= CorpsStage::RelationCandidate && state.stage <= CorpsStage::RelationMerge) {
             if (step_corps_relationships(state)) { begin_corps_plan(state); }
@@ -756,7 +774,24 @@ void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, s
         state.snapshot.completed = state.cursor;
         if (!restoring && state.write_sequence != write_sequence) { break; }
     }
-    if (state.snapshot.busy) { ++state.snapshot.revision; }
+    if (state.snapshot.busy) {
+        if (state.stage == CorpsStage::Cities || state.stage == CorpsStage::Frontiers || state.stage == CorpsStage::Roster) {
+            state.snapshot.work_stage = state.stage == CorpsStage::Cities ? "도시 조회" :
+                state.stage == CorpsStage::Frontiers ? "전선 확인" : "무장 조회";
+            state.snapshot.completed = state.cursor;
+            state.snapshot.total = state.stage == CorpsStage::Roster ? domain::CORPS_OFFICER_CAPACITY : domain::CITY_COUNT;
+        } else if (state.stage == CorpsStage::Sort) {
+            state.snapshot.work_stage = "목록 정렬";
+            state.snapshot.completed = std::bit_width(state.sort_width) - 1;
+            state.snapshot.total = state.sort_count > 1 ? std::bit_width(state.sort_count - 1) : 0;
+        } else {
+            state.snapshot.work_stage = state.stage >= CorpsStage::RelationCandidate && state.stage <= CorpsStage::RelationMerge
+                ? "관계 확인" : state.stage >= CorpsStage::PlanInitialize && state.stage <= CorpsStage::PlanFinish
+                ? "배치 계산" : "배치 적용·복구";
+            state.snapshot.total = 0;
+        }
+        ++state.snapshot.revision;
+    }
 }
 
 bool stop_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, domain::GameEpoch epoch) {

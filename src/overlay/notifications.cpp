@@ -1,4 +1,5 @@
 #include "notifications.h"
+#include "../domain/native_ui_layout.h"
 #include "../../third_party/imgui_legacy/imgui.h"
 
 #include <algorithm>
@@ -76,20 +77,26 @@ ToastText wrap_toast_text(const ImFont& font, float font_size, float width, cons
     return result;
 }
 
-void draw_paper_strip(ImDrawList& draw, const UiAtlasTexture& paper, ImVec2 minimum,
+void draw_paper_strip(ImDrawList& draw, const UiAtlasTextures& atlases, ImVec2 minimum,
     ImVec2 maximum, float edge, float opacity) {
     const float width = maximum.x - minimum.x;
     edge = std::min(edge, width * 0.25f);
     const std::array<float, 4> xs{minimum.x, minimum.x + edge, maximum.x - edge, maximum.x};
     const std::array<float, 4> alphas{0, opacity, opacity, 0};
+    const bool native = atlases[0].height >= 1024;
+    const UiAtlasTexture& paper = atlases[native ? 0 : 2];
+    const domain::native_ui::Rect region = native ? domain::native_ui::NOTICE : domain::native_ui::Rect{0, 304, 1280, 368};
+    const bool textured = paper.texture && paper.width >= region.right && paper.height >= region.bottom;
+
     for (std::size_t segment = 0; segment < 3; ++segment) {
         const ImVec2 left(xs[segment], minimum.y), right(xs[segment + 1], maximum.y);
-        if (paper.texture && paper.width >= 1280 && paper.height >= 368) {
-            const float u0 = (0.5f + (xs[segment] - minimum.x) / width * 1279.0f) / paper.width;
-            const float u1 = (0.5f + (xs[segment + 1] - minimum.x) / width * 1279.0f) / paper.width;
+        if (textured) {
+            const float source_width = static_cast<float>(region.right - region.left - 1);
+            const float u0 = (region.left + 0.5f + (xs[segment] - minimum.x) / width * source_width) / paper.width;
+            const float u1 = (region.left + 0.5f + (xs[segment + 1] - minimum.x) / width * source_width) / paper.width;
             const int vertex_begin = draw.VtxBuffer.Size;
-            draw.AddImage(paper.texture, left, right, ImVec2(u0, 304.5f / paper.height),
-                ImVec2(u1, 367.5f / paper.height), IM_COL32_WHITE);
+            draw.AddImage(paper.texture, left, right, ImVec2(u0, (region.top + 0.5f) / paper.height),
+                ImVec2(u1, (region.bottom - 0.5f) / paper.height), IM_COL32_WHITE);
             for (int vertex = vertex_begin; vertex < draw.VtxBuffer.Size; ++vertex) {
                 ImDrawVert& value = draw.VtxBuffer[vertex];
                 const float t = std::clamp((value.pos.x - left.x) / (right.x - left.x), 0.0f, 1.0f);
@@ -181,7 +188,7 @@ void draw_notifications(Notifications& state, services::UiBridge& bridge, float 
         const float width = std::max(1.0f, std::min(760.0f * scale, viewport.Size.x - 32.0f));
         const float padding = std::min(64.0f * scale, width * 0.2f);
         const float text_width = std::max(1.0f, width - padding * 2);
-        const float font_size = 28.0f * scale;
+        const float font_size = 19.0f * scale;
         const ImFont& font = *ImGui::GetFont();
         float bottom = viewport.Pos.y + viewport.Size.y - 112.0f * hud_scale;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -190,7 +197,7 @@ void draw_notifications(Notifications& state, services::UiBridge& bridge, float 
         for (std::size_t index = 0; index < std::min<std::size_t>(state.active_count, 4); ++index) {
             const Notification& notice = state.active[(state.active_begin + state.active_count - 1 - index) % state.active.size()];
             const ToastText text = wrap_toast_text(font, font_size, text_width, notice.message);
-            const float height = std::max(44.0f * scale, font_size * text.count + 16.0f * scale);
+            const float height = std::max(44.0f * scale, font_size * text.count + 24.0f * scale);
             if (bottom - height < viewport.Pos.y + viewport.Size.y * 0.35f) break;
             const float age = std::chrono::duration<float>(now - notice.created).count();
             const float opacity = std::clamp((notice.lifetime_seconds - age) / 0.6f, 0.0f, 1.0f) * ImGui::GetStyle().Alpha;
@@ -201,7 +208,7 @@ void draw_notifications(Notifications& state, services::UiBridge& bridge, float 
             std::snprintf(name.data(), name.size(), "##NotificationToast%zu", index);
             if (ImGui::Begin(name.data(), nullptr, FLAGS)) {
                 ImDrawList& draw = *ImGui::GetWindowDrawList();
-                draw_paper_strip(draw, atlases[2], position, ImVec2(position.x + width, bottom), padding, opacity);
+                draw_paper_strip(draw, atlases, position, ImVec2(position.x + width, bottom), padding, opacity);
                 const ImU32 ink = IM_COL32(42, 35, 28, static_cast<int>(255 * opacity));
                 const float first_y = position.y + (height - font_size * text.count) * 0.5f;
                 for (std::size_t line = 0; line < text.count; ++line) {

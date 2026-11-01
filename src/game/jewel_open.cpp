@@ -1,5 +1,7 @@
 #include "jewel_open.h"
 #include "secondary_jewel_hook.h"
+#include "../domain/secondary_jewel_definitions.h"
+#include <algorithm>
 #include "../platform/windows/process_memory.h"
 
 #include <array>
@@ -35,6 +37,26 @@ bool apply(std::uintptr_t game_base, bool enabled, bool& changed) {
 }
 
 } // namespace
+
+bool set_jewel_open(JewelOpen& state, std::uintptr_t game_base, std::uint16_t raw_id, bool open) {
+    const auto found = std::find_if(domain::SECONDARY_JEWEL_DEFINITIONS.begin(), domain::SECONDARY_JEWEL_DEFINITIONS.end(),
+        [raw_id](const domain::SecondaryJewelDefinition& definition) { return definition.raw_id == raw_id; });
+    if (!game_base || found == domain::SECONDARY_JEWEL_DEFINITIONS.end()) return false;
+    const std::size_t byte = raw_id >> 3;
+    const std::uint8_t bit = static_cast<std::uint8_t>(1u << (raw_id & 7));
+    std::uint8_t value = 0;
+    const std::uintptr_t address = game_base + 0x71e0 + byte;
+    if (!platform::windows::read_memory(address, std::as_writable_bytes(std::span(&value, 1)))) return false;
+    value = open ? value | bit : value & ~bit;
+    if (!platform::windows::write_memory(address, std::as_bytes(std::span(&value, 1)))) return false;
+
+    // An individual edit takes precedence over the repeating full-unlock setting.
+    // Keep every other jewel bit as it is instead of clearing the whole bitmap.
+    state.preferred = false;
+    if (state.bitmap) (*state.bitmap)[byte] = value;
+    reset_secondary_jewel_cache();
+    return true;
+}
 
 bool set_all_jewels_open(JewelOpen& state, std::uintptr_t game_base, bool enabled) {
     state.preferred = enabled;

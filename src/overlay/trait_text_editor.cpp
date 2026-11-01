@@ -43,6 +43,7 @@ void draw_rows(FeatureMenu& menu, services::CommandMailbox& mailbox, std::size_t
 
     TraitTextEditor& editor = menu.trait_text_editor;
     domain::TraitTextEdits& rows = editor.rows[tab];
+    const bool external = tab != 0 && menu.snapshot.traits.catalog == domain::TraitApplyStatus::ExternalRuntime;
     const bool locked = menu.pending.has_value() || editor.save_pending || editor.save_rows || !menu.ready;
 
     if (rows.empty()) {
@@ -111,11 +112,61 @@ void draw_rows(FeatureMenu& menu, services::CommandMailbox& mailbox, std::size_t
             ImGui::TextUnformatted("설명 (빈 값은 원문 사용)");
 
             if (ImGui::InputTextMultiline("##trait_text_description", editor.description.data(),
-                    editor.description.size(), ImVec2(-1, 180.0f * menu.dpi_scale))) {
+                    editor.description.size(), ImVec2(-1, 100.0f * menu.dpi_scale))) {
                 row.description.assign(editor.description.data());
                 editor.dirty[tab] = true;
                 editor.validation = domain::validate_trait_text_edit(row);
                 editor.invalid_row = static_cast<std::size_t>(selected);
+            }
+
+            if (row.effects && ImGui::BeginTable("trait_effect_rows", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("효과 종류", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+                ImGui::TableSetupColumn("값", ImGuiTableColumnFlags_WidthFixed, 100.0f * menu.dpi_scale);
+                ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 100.0f * menu.dpi_scale);
+                ImGui::TableHeadersRow();
+
+                for (std::size_t index = 0; index < row.effects->size(); ++index) {
+                    domain::TraitEffect& effect = (*row.effects)[index];
+                    std::string label = effect.effect_id == 0 ? "(없음)" : std::to_string(effect.effect_id);
+
+                    if (menu.trait_effects) {
+                        const auto definition = menu.trait_effects->find(effect.effect_id);
+
+                        if (definition != menu.trait_effects->end()) {
+                            label += " " + definition->second.text;
+                        }
+                    }
+                    ImGui::PushID(static_cast<int>(index));
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::SetNextItemWidth(-1);
+
+                    if (ImGui::BeginCombo("##effect_type", label.c_str())) {
+                        if (ImGui::Selectable("(없음)", effect.effect_id == 0)) {
+                            effect = {};
+                            editor.dirty[tab] = true;
+                        }
+                        if (menu.trait_effects) {
+                            for (const auto& [id, definition] : *menu.trait_effects) {
+                                const std::string choice = std::to_string(id) + " " + definition.text;
+
+                                if (ImGui::Selectable(choice.c_str(), effect.effect_id == id)) {
+                                    effect.effect_id = id;
+                                    editor.dirty[tab] = true;
+                                }
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::TableNextColumn();
+                    ImGui::SetNextItemWidth(-1);
+                    editor.dirty[tab] |= ImGui::InputScalar("##effect_value", ImGuiDataType_U16, &effect.value1);
+                    ImGui::TableNextColumn();
+                    ImGui::SetNextItemWidth(-1);
+                    editor.dirty[tab] |= ImGui::InputScalar("##effect_parameter", ImGuiDataType_U16, &effect.value2);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
             }
 
             if (ImGui::CollapsingHeader("원문 설명")) {
@@ -145,15 +196,23 @@ void draw_rows(FeatureMenu& menu, services::CommandMailbox& mailbox, std::size_t
     if (ImGui::Button("게임에 적용") && validate_rows(editor, tab)) {
 
         own::shared_owner<const domain::TraitTextEdits> request_rows = own::make_shared<domain::TraitTextEdits>(rows);
-        const domain::RequestId request{++menu.next_request};
-        const domain::Result<void> accepted = mailbox.push({request, menu.epoch,
-            domain::ApplyTraitTextEdits{tab != 0, std::move(request_rows)}});
 
-        if (accepted) {
-            menu.pending = request;
-            menu.pending_notice = "기재 텍스트 적용을 요청했습니다.";
+        if (external) {
+            editor.save_rows = std::move(request_rows);
+            editor.save_embedded = true;
+            editor.apply_external = true;
+            editor.save_status.reset();
         } else {
-            menu.error = accepted.error();
+            const domain::RequestId request{++menu.next_request};
+            const domain::Result<void> accepted = mailbox.push({request, menu.epoch,
+                domain::ApplyTraitTextEdits{tab != 0, std::move(request_rows)}});
+
+            if (accepted) {
+                menu.pending = request;
+                menu.pending_notice = "기재 편집 적용을 요청했습니다.";
+            } else {
+                menu.error = accepted.error();
+            }
         }
     }
 
@@ -162,6 +221,7 @@ void draw_rows(FeatureMenu& menu, services::CommandMailbox& mailbox, std::size_t
     if (ImGui::Button("파일에 저장") && validate_rows(editor, tab)) {
         editor.save_rows = own::make_shared<domain::TraitTextEdits>(rows);
         editor.save_embedded = tab != 0;
+        editor.apply_external = false;
         editor.save_status.reset();
     }
 
@@ -177,8 +237,12 @@ void draw_rows(FeatureMenu& menu, services::CommandMailbox& mailbox, std::size_t
     }
 
     ImGui::EndDisabled();
+
+    if (external) {
+        ImGui::TextDisabled("게임에 적용: 설정을 저장한 뒤 VERSION.dll의 설정 로드를 요청합니다.");
+    }
     ImGui::TextDisabled("이름 5글자, 설명 512글자까지. 원문의 서식 자리표시자를 바꿀 수 없습니다.");
-    ImGui::TextDisabled("저장 파일: %s", tab == 0 ? "trait_texts.ini" : "S8RPK_traits_default.json");
+    ImGui::TextDisabled("저장 파일: %s", tab == 0 ? "trait_texts.ini" : "현재 로드된 기재 JSON 파일");
 }
 
 } // namespace
@@ -194,16 +258,20 @@ void update_trait_text_editor(TraitTextEditor& editor, const domain::TraitContro
 
         if (*status == services::ConfigSaveStatus::Completed) {
             editor.dirty[editor.save_embedded ? 1 : 0] = false;
-            bridge.publish_notice("기재 텍스트 파일을 저장했습니다.");
+            if (!editor.apply_external) {
+                bridge.publish_notice("기재 편집 파일을 저장했습니다.");
+            }
         } else if (*status == services::ConfigSaveStatus::Conflict) {
             bridge.publish_notice("기재 파일이 외부에서 변경되었습니다. 다시 읽은 뒤 저장해 주세요.");
         } else {
-            bridge.publish_notice("기재 텍스트 파일을 저장하지 못했습니다.");
+            if (!editor.apply_external) {
+                bridge.publish_notice("기재 편집 파일을 저장하지 못했습니다.");
+            }
         }
     }
 
     if (editor.save_rows && !editor.save_pending &&
-        bridge.request_trait_text_save({editor.save_embedded, editor.save_rows})) {
+        bridge.request_trait_text_save({editor.save_embedded, editor.save_rows, editor.apply_external})) {
         editor.save_pending = true;
         editor.save_rows = {};
     }
@@ -228,48 +296,24 @@ void update_trait_text_editor(TraitTextEditor& editor, const domain::TraitContro
     }
 }
 
-void draw_trait_text_editor(FeatureMenu& menu, services::CommandMailbox& mailbox) {
-
+void draw_trait_text_editor_content(FeatureMenu& menu, services::CommandMailbox& mailbox) {
     TraitTextEditor& editor = menu.trait_text_editor;
+    ImGui::Text("확장 기재: %s", domain::trait_apply_status_text(menu.snapshot.traits.catalog));
 
-    if (!editor.open) {
-        return;
+    if (menu.error) {
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f), "적용 요청 실패 (%d)", static_cast<int>(menu.error->code));
     }
 
-    ImGui::SetNextWindowSize(ImVec2(780.0f * menu.dpi_scale, 610.0f * menu.dpi_scale), ImGuiCond_FirstUseEver);
-
-    if (ImGui::Begin("기재 이름·설명 편집", &editor.open)) {
-        ImGui::Text("확장 기재: %s", domain::trait_apply_status_text(menu.snapshot.traits.catalog));
-        ImGui::Text("기본 텍스트: %s", domain::trait_apply_status_text(menu.snapshot.traits.legacy_text));
-
-        if (menu.error) {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.3f, 1.0f), "적용 요청 실패 (%d)", static_cast<int>(menu.error->code));
-        }
-
-        if (editor.save_pending || editor.save_rows) {
-            ImGui::TextUnformatted("파일 저장 대기 중입니다.");
-        } else if (editor.save_status) {
-            ImGui::Text("파일 저장: %s", *editor.save_status == services::ConfigSaveStatus::Completed ? "완료" :
-                *editor.save_status == services::ConfigSaveStatus::Conflict ? "외부 변경과 충돌" : "실패");
-        }
-
-        if (ImGui::BeginTabBar("trait_text_tabs")) {
-
-            if (ImGui::BeginTabItem("기본 72개")) {
-                draw_rows(menu, mailbox, 0);
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("확장 기재")) {
-                draw_rows(menu, mailbox, 1);
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
-        }
+    if (editor.save_pending || editor.save_rows) {
+        ImGui::TextUnformatted("파일 저장 대기 중입니다.");
+    } else if (editor.save_status) {
+        ImGui::Text("%s: %s", editor.apply_external ? "저장·외부 적용 요청" : "파일 저장",
+            *editor.save_status == services::ConfigSaveStatus::Completed ? "완료" :
+            *editor.save_status == services::ConfigSaveStatus::Conflict ? "외부 변경과 충돌" : "실패");
     }
 
-    ImGui::End();
+    draw_rows(menu, mailbox, 1);
+
 }
 
 } // namespace s8::overlay

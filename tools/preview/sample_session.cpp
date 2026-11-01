@@ -199,7 +199,14 @@ domain::Result<void> SampleSession::apply(const domain::CommandPayload& payload)
         else if constexpr (std::is_same_v<T, domain::SetTerrainBonus>) config.terrain_bonus = value.table;
         else if constexpr (std::is_same_v<T, domain::SetSiegeHealRate>) config.siege_heal_rate = value.rate;
         else if constexpr (std::is_same_v<T, domain::SetAllJewelsOpen>) config.all_jewels_open = value.enabled;
-        else if constexpr (std::is_same_v<T, domain::SetSecondaryJewels>) config.secondary_jewels = value.mask;
+        else if constexpr (std::is_same_v<T, domain::SetSecondaryJewels>) {
+            config.secondary_jewels = value.mask;
+            if (value.raw_id) {
+                std::uint8_t& byte = (*config.jewel_bitmap)[value.raw_id >> 3];
+                const std::uint8_t bit = static_cast<std::uint8_t>(1u << (value.raw_id & 7));
+                byte = value.open ? byte | bit : byte & ~bit;
+            }
+        }
         else if constexpr (std::is_same_v<T, domain::SetDomesticsMultipliers>) config.domestics = value.multipliers;
         else if constexpr (std::is_same_v<T, domain::SetMissionAppointmentLimit>) config.mission_appointment_limit = value.value;
         else if constexpr (std::is_same_v<T, domain::RestoreMissionAppointmentLimit>) config.mission_appointment_limit = 10;

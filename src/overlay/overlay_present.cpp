@@ -1,8 +1,10 @@
 #include "overlay_present.h"
 #include "menu_sprites.h"
+#include "../services/game_font.h"
 #include "../platform/windows/speed_clock.h"
 #include "../../third_party/imgui_legacy/imgui.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace s8::overlay {
@@ -12,6 +14,8 @@ namespace {
 void clear_texture_bindings(FeatureMenu& menu) {
     menu.range_textures.fill(nullptr);
     menu.ui_atlases = {};
+    menu.portrait_texture = {};
+    menu.portrait_face = ~0u;
 }
 
 bool upload_image(ID3D11Device* device, const services::RangeImage& image,
@@ -95,6 +99,9 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         state.render_retry_ms = 0;
     }
     state.target_swap_chain.store(swap_chain, std::memory_order_release);
+    if (!state.renderer.imgui && !services::game_font_view()) {
+        return;
+    }
     const ULONGLONG now_ms = GetTickCount64();
 
     if (state.render_failed.load(std::memory_order_acquire) && now_ms < state.render_retry_ms) {
@@ -104,13 +111,14 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         request_feature_menu_toggle(state.menu);
     }
     update_feature_menu(state.menu, state.bridge);
-    // Match the game's client-pixel HUD and the preview. Applying Windows
-    // desktop DPI here enlarged a 900 x 620 menu to 1350 x 930 at 150% DPI.
-    state.menu.dpi_scale = state.menu.snapshot.ui_scale;
     const bool rendered = render_dx11_overlay(state.renderer, swap_chain, [](void* value) {
         OverlayPresent& state = *static_cast<OverlayPresent*>(value);
 
-        ImGui::GetIO().FontGlobalScale = state.menu.snapshot.ui_scale;
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const float resolution_scale = std::min(display.x / 1920.0f, display.y / 1080.0f);
+
+        state.menu.dpi_scale = 1.2f * resolution_scale * state.menu.snapshot.ui_scale;
+        ImGui::GetIO().FontGlobalScale = state.menu.dpi_scale;
         menu_sprites::ThemeScope skin(state.menu.dpi_scale);
 
         if (!state.renderer.range_textures_loaded) {
@@ -130,13 +138,27 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
             }
         }
         upload_ui_atlases(state, GetTickCount64());
-        draw_feature_menu(state.menu, state.bridge.commands);
+        const domain::OfficerBasicValues* basic = state.menu.protagonist_detail && state.menu.snapshot.protagonist_basic ?
+            &*state.menu.snapshot.protagonist_basic :
+            state.menu.officer_list_open && state.menu.snapshot.selected_officer ? &state.menu.snapshot.selected_officer->basic : nullptr;
+        if (state.menu.open && basic) {
+            const unsigned face = (*basic)[13];
+            if (services::request_game_portrait(face)) state.bridge.config_wake.signal();
+            const own::shared_owner<const services::GamePortrait> portrait = services::game_portrait_view();
+            if (portrait && portrait->face == face && state.renderer.portrait_face != face) {
+                state.renderer.portrait_texture = nullptr;
+                state.menu.portrait_texture = {};
+                state.renderer.portrait_face = face;
+                state.menu.portrait_face = face;
+                if (portrait->image && upload_image(state.renderer.device.get(), *portrait->image, state.renderer.portrait_texture)) {
+                    state.menu.portrait_texture = {state.renderer.portrait_texture.get(), portrait->image->width, portrait->image->height};
+                }
+            }
+        }
+        draw_feature_menu(state.menu, state.bridge);
         if (state.menu.open) {
             draw_officer_roster(state.menu, state.bridge);
             draw_protagonist_abilities(state.menu, state.bridge);
-            draw_officer_tools(state.menu, state.bridge);
-            draw_city_management(state.menu.city_management, state.bridge, state.menu.epoch,
-                state.menu.next_request, state.menu.officer_names ? &*state.menu.officer_names : nullptr);
             draw_corps_deployment(state.menu.corps_deployment, state.bridge.corps_deployment, state.bridge.commands,
                 state.menu.epoch, state.menu.next_request, state.menu.officer_names ? &*state.menu.officer_names : nullptr);
             draw_debug_tools(state.menu.debug_tools, state.bridge.debug_tools, state.menu.epoch);
@@ -145,7 +167,7 @@ void render_overlay(OverlayPresent& state, IDXGISwapChain* swap_chain) {
         }
         draw_notifications(state.menu.notifications, state.bridge, state.menu.snapshot.notification_speed,
             state.menu.ui_atlases, state.menu.epoch);
-    }, &state);
+    }, &state, state.menu.open && (!state.menu.collapsed || state.menu.officer_list_open || state.menu.protagonist_detail || state.menu.secondary_jewel_window));
     if (rendered) {
         if (state.menu.open) {
             state.bridge.ui_rendered.store(true);

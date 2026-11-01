@@ -15,12 +15,14 @@ namespace s8::services { class UiBridge; }
 namespace s8::overlay {
 
 struct CityManagementPanel {
-    bool open = false;
+    bool manual_editing = false;
     bool was_open = false;
     bool settings_dirty = false;
     bool routes_dirty = false;
     bool route_save_pending = false;
     bool technology_requested = false;
+    std::uint64_t selected_cities = 0;
+    int conversion = 0;
     domain::GameEpoch epoch{};
     std::uint64_t revision = 0;
     std::optional<domain::RequestId> pending;

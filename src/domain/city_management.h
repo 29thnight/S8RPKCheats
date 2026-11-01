@@ -59,7 +59,7 @@ struct CitySupportRoutes {
 
 enum class CityAction : std::uint8_t {
     Refresh, Write, Maximize, ResetRevolt, Support, RunRoutes, Cancel,
-    RefreshTechnology, WriteTechnology, MaximizeTechnology
+    RefreshTechnology, WriteTechnology, MaximizeTechnology, ConvertSelected
 };
 
 struct CityRequest {
@@ -70,6 +70,7 @@ struct CityRequest {
     std::uint16_t force_lord = NO_CITY_OFFICER;
     std::uint8_t technology = 0;
     CitySupportRoute support;
+    std::uint64_t selected_cities = 0;
 };
 
 struct SetCitySettings { CitySettings settings; };

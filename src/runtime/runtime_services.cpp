@@ -4,6 +4,7 @@
 #include "../platform/windows/config_commit.h"
 #include "../platform/windows/speed_clock.h"
 #include "../services/config_service_loop.h"
+#include "../services/game_font.h"
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
 
 #include <array>
@@ -97,12 +98,14 @@ void publish_image_resources(services::UiBridge& bridge, HMODULE module, bool co
         }
         bridge.publish_range_images(std::move(ranges));
 
-        services::UiAtlasImages atlases;
-        for (std::size_t i = 0; i < atlases.size() && !stop.stop_requested(); ++i) {
-            atlases[i] = decode_image_resource(factory.get(), module, static_cast<WORD>(301 + i));
+        if (!services::publish_game_ui_images(bridge)) {
+            services::UiAtlasImages atlases;
+
+            for (std::size_t i = 0; i < atlases.size() && !stop.stop_requested(); ++i) {
+                atlases[i] = decode_image_resource(factory.get(), module, static_cast<WORD>(301 + i));
+            }
+            bridge.publish_ui_atlas_images(std::move(atlases));
         }
-        // Retained CPU pixels support a later renderer/device recreation.
-        bridge.publish_ui_atlas_images(std::move(atlases));
     } catch (...) {
         OutputDebugStringW(L"S8RPKCheats: optional UI images unavailable; using standard controls.\n");
     }
@@ -122,6 +125,7 @@ std::expected<void, int> start_runtime_services(RuntimeServices& state, HWND gam
             const platform::windows::RealClockScope real_clock;
             const ComApartment apartment;
 
+            services::prepare_game_font();
             publish_image_resources(state.overlay.bridge, reinterpret_cast<HMODULE>(plugin_module),
                 SUCCEEDED(apartment.status), stop);
             domain::NamedSpecialties named{};

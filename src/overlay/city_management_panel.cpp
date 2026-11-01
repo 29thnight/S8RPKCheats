@@ -117,14 +117,11 @@ void choose_force(CityManagementPanel& panel, const domain::CitySnapshot& snapsh
 void draw_settings(CityManagementPanel& panel, services::CommandMailbox& commands, std::uint64_t& next_request) {
     ImGui::TextUnformatted("자동 환전 · 평정에 진입할 때 모든 도시의 초과 군량을 금으로 바꿉니다.");
     panel.settings_dirty = ImGui::Checkbox("자동 환전", &panel.settings.auto_exchange) || panel.settings_dirty;
-    ImGui::SameLine();
     panel.settings_dirty = ImGui::Checkbox("반란 카운트 항상 0", &panel.settings.revolt_always_zero) || panel.settings_dirty;
     ImGui::SetNextItemWidth(130);
     panel.settings_dirty = ImGui::InputScalar("군량 한도", ImGuiDataType_U32, &panel.settings.grain_limit) || panel.settings_dirty;
-    ImGui::SameLine();
     ImGui::SetNextItemWidth(130);
     panel.settings_dirty = ImGui::InputScalar("남길 군량", ImGuiDataType_U32, &panel.settings.retained_grain) || panel.settings_dirty;
-    ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     panel.settings_dirty = ImGui::InputScalar("군량/금 비율", ImGuiDataType_U32, &panel.settings.exchange_rate) || panel.settings_dirty;
     ImGui::BeginDisabled(!panel.settings_dirty || !domain::valid_city_settings(panel.settings));
@@ -134,15 +131,11 @@ void draw_settings(CityManagementPanel& panel, services::CommandMailbox& command
         }
     }
     ImGui::EndDisabled();
-    ImGui::SameLine();
     if (ImGui::Button("모든 도시 반란 0")) {
         request_action(panel, commands, next_request, domain::CityAction::ResetRevolt);
     }
     ImGui::Separator();
     for (std::size_t field = 0; field < domain::CITY_FIELD_COUNT - 1; ++field) {
-        if (field != 0 && field != 4) {
-            ImGui::SameLine();
-        }
         std::array<char, 64> label{};
 
         std::snprintf(label.data(), label.size(), "전체 %s 최대", domain::CITY_FIELD_NAMES[field].data());
@@ -158,10 +151,11 @@ void draw_city_table(CityManagementPanel& panel, const domain::CitySnapshot& sna
     constexpr ImGuiTableFlags FLAGS = ImGuiTableFlags_BordersInner | ImGuiTableFlags_RowBg |
         ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
 
-    if (!ImGui::BeginTable("##cities", 10, FLAGS, ImVec2(0, 0))) {
+    if (!ImGui::BeginTable("##cities", 11, FLAGS, ImVec2(0, 420 * ImGui::GetIO().FontGlobalScale))) {
         return;
     }
-    ImGui::TableSetupScrollFreeze(1, 1);
+    ImGui::TableSetupScrollFreeze(2, 1);
+    ImGui::TableSetupColumn("선택", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
     ImGui::TableSetupColumn("도시", ImGuiTableColumnFlags_WidthFixed, 86);
     for (const std::string_view field : domain::CITY_FIELD_NAMES) {
         ImGui::TableSetupColumn(field.data(), ImGuiTableColumnFlags_WidthFixed, 100);
@@ -177,14 +171,17 @@ void draw_city_table(CityManagementPanel& panel, const domain::CitySnapshot& sna
             ImGui::PushID(city);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            bool selected = (panel.selected_cities & (std::uint64_t{1} << index)) != 0;
+            if (ImGui::Checkbox("##selected", &selected)) panel.selected_cities ^= std::uint64_t{1} << index;
+            ImGui::TableNextColumn();
             ImGui::TextUnformatted(domain::CITY_NAMES[index].data());
             for (std::size_t field = 0; field < domain::CITY_FIELD_COUNT; ++field) {
-                ImGui::TableSetColumnIndex(static_cast<int>(field + 1));
+                ImGui::TableSetColumnIndex(static_cast<int>(field + 2));
                 if (!snapshot.cities[index].valid) {
                     ImGui::TextDisabled("—");
                     continue;
                 }
-                if (field == static_cast<std::size_t>(domain::CityField::Revolt)) {
+                if ((!panel.manual_editing && field <= static_cast<std::size_t>(domain::CityField::Troops)) || field == static_cast<std::size_t>(domain::CityField::Revolt)) {
                     ImGui::Text("%u", snapshot.cities[index].values[field]);
                     continue;
                 }
@@ -355,24 +352,31 @@ void draw_transport(CityManagementPanel& panel, const domain::CitySnapshot& snap
 
 void draw_technologies(CityManagementPanel& panel, const domain::CitySnapshot& snapshot,
     services::CommandMailbox& commands, std::uint64_t& next_request, const domain::OfficerNames* names) {
-    if (!panel.technology_requested && !panel.pending) {
-        request_action(panel, commands, next_request, domain::CityAction::RefreshTechnology);
-        panel.technology_requested = true;
+    if (!panel.technology_requested && !panel.pending && !snapshot.busy) {
+        domain::CityRequest request;
+
+        request.action = domain::CityAction::RefreshTechnology;
+        panel.technology_requested = submit(panel, commands, next_request, request);
     }
     if (ImGui::Button("세력 기술 다시 읽기")) {
         request_action(panel, commands, next_request, domain::CityAction::RefreshTechnology);
     }
     ImGui::TextDisabled("보병·기병·궁병·함선 0~3, 병기 0~5. 현재 군주를 다시 확인한 뒤 적용합니다.");
+    const float technology_width = ImGui::CalcTextSize("000").x + ImGui::GetFrameHeight() * 2.0f +
+        ImGui::GetStyle().ItemInnerSpacing.x * 2.0f + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float force_width = ImGui::CalcTextSize("손견(문대) 세력").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float maximum_width = ImGui::CalcTextSize("MAX").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+
     if (!ImGui::BeginTable("##faction_technologies", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInner |
-            ImGuiTableFlags_ScrollY)) {
+            ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit, ImVec2(0, 420 * ImGui::GetIO().FontGlobalScale))) {
         return;
     }
-    ImGui::TableSetupColumn("세력 (군주)", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("세력 (군주)", ImGuiTableColumnFlags_WidthFixed, force_width);
     for (const std::string_view technology : domain::CITY_TECHNOLOGY_NAMES) {
-        ImGui::TableSetupColumn(technology.data(), ImGuiTableColumnFlags_WidthFixed, 92);
+        ImGui::TableSetupColumn(technology.data(), ImGuiTableColumnFlags_WidthFixed, technology_width);
     }
-    ImGui::TableSetupColumn("전체", ImGuiTableColumnFlags_WidthFixed, 50);
-    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableSetupColumn("전체", ImGuiTableColumnFlags_WidthFixed, maximum_width);
+    ImGui::TableSetupScrollFreeze(1, 1);
     ImGui::TableHeadersRow();
     for (std::size_t faction = 0; faction < snapshot.factions.size(); ++faction) {
         const domain::CityFactionTechnology& row = snapshot.factions[faction];
@@ -461,6 +465,7 @@ void draw_city_management(CityManagementPanel& panel, services::UiBridge& bridge
         panel.technology_requested = false;
         panel.revision = 0;
         panel.selected_force = domain::NO_CITY_OFFICER;
+        panel.selected_cities = 0;
         panel.settings_dirty = false;
         panel.routes_dirty = false;
         panel.local_error = nullptr;
@@ -492,20 +497,11 @@ void draw_city_management(CityManagementPanel& panel, services::UiBridge& bridge
         }
         panel.revision = snapshot.revision;
     }
-    if (!panel.open) {
-        panel.was_open = false;
-        panel.technology_requested = false;
-        return;
-    }
     if (!panel.was_open && !panel.pending) {
         request_action(panel, commands, next_request, domain::CityAction::Refresh);
     }
     panel.was_open = true;
-    ImGui::SetNextWindowSize(ImVec2(1000, 760), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("도시 관리", &panel.open, ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::End();
-        return;
-    }
+    ImGui::BeginChild("##integrated_city_management", ImVec2(0, 620 * ImGui::GetIO().FontGlobalScale));
     ImGui::Text("%s  %zu / %zu · 성공 %zu", status_text(snapshot.status), snapshot.completed, snapshot.total, snapshot.succeeded);
     if (panel.local_error) {
         ImGui::TextWrapped("%s", panel.local_error);
@@ -527,14 +523,32 @@ void draw_city_management(CityManagementPanel& panel, services::UiBridge& bridge
     ImGui::EndDisabled();
     if (!snapshot.available || snapshot.epoch != epoch) {
         ImGui::TextWrapped("도시 데이터 테이블이 준비되기를 기다립니다.");
-        ImGui::End();
+        ImGui::EndChild();
         return;
     }
     ImGui::BeginDisabled(panel.pending.has_value() || snapshot.locks_commands);
     if (ImGui::BeginTabBar("##city_tabs")) {
         if (ImGui::BeginTabItem("도시 리스트")) {
-            draw_settings(panel, commands, next_request);
+            if (ImGui::Button("도시 전체 선택")) panel.selected_cities = (std::uint64_t{1} << domain::CITY_COUNT) - 1;
+            ImGui::SameLine();
+            if (ImGui::Button("선택 해제")) panel.selected_cities = 0;
+            ImGui::SetNextItemWidth(-1);
+            ImGui::Combo("##conversion", &panel.conversion, "대도시\0방목도시\0농경도시\0상업도시\0");
+            ImGui::BeginDisabled(panel.selected_cities == 0 || snapshot.busy);
+            if (ImGui::Button("선택 도시의 종류·내정 한도 변환")) {
+                domain::CityRequest request;
+                request.action = domain::CityAction::ConvertSelected;
+                request.selected_cities = panel.selected_cities;
+                request.value = static_cast<std::uint32_t>(panel.conversion);
+                submit(panel, commands, next_request, request);
+            }
+            ImGui::EndDisabled();
+            ImGui::TextWrapped("체크한 도시만 변경합니다. 기존 고정 도시군 설정과 별개인 일회성 편집입니다.");
             draw_city_table(panel, snapshot, commands, next_request);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("자동화")) {
+            draw_settings(panel, commands, next_request);
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("수송")) {
@@ -548,7 +562,7 @@ void draw_city_management(CityManagementPanel& panel, services::UiBridge& bridge
         ImGui::EndTabBar();
     }
     ImGui::EndDisabled();
-    ImGui::End();
+    ImGui::EndChild();
 }
 
 } // namespace s8::overlay

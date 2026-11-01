@@ -63,6 +63,8 @@ enum class MenuPage : std::uint8_t {
 struct FeatureMenu {
     std::array<void*, 11> range_textures{};
     UiAtlasTextures ui_atlases{};
+    UiAtlasTexture portrait_texture{};
+    unsigned portrait_face = ~0u;
     MenuPage page = MenuPage::Overview;
     bool home_screen = true;
     int status_filter = 0;
@@ -96,6 +98,9 @@ struct FeatureMenu {
     bool file_log_failed = false;
     std::uint64_t file_log_dropped = 0;
     bool collapsed = false;
+    float launcher_x = -1.0f;
+    float launcher_y = -1.0f;
+    bool launcher_dragging = false;
     bool toggle_collapse = false;
     bool auto_load_applied = false;
     bool auto_load_collapse = false;
@@ -110,6 +115,9 @@ struct FeatureMenu {
     MenuFloatDraft notification_speed_draft{100.0f};
     bool mission_appointment_limit_editing = false;
     bool secondary_jewel_window = false;
+    int jewel_category = 0;
+    std::uint16_t jewel_selected_id = 2;
+    bool pk_editors_unlocked = false;
     bool protagonist_detail = false;
     bool officer_list_open = false;
     std::optional<std::uint16_t> officer_open_request;
@@ -174,9 +182,8 @@ struct FeatureMenu {
 void on_feature_menu_completion(FeatureMenu& menu, const services::CommandCompletion& completion);
 void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge);
 void request_feature_menu_toggle(FeatureMenu& menu);
-void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox);
+void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge);
 void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge);
 void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge);
-void draw_officer_tools(FeatureMenu& menu, services::UiBridge& bridge);
 
 } // namespace s8::overlay

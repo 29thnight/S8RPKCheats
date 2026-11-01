@@ -56,6 +56,7 @@ target_compile_definitions(s8_ui_preview PRIVATE SDL_MAIN_HANDLED IMGUI_ENABLE_T
     S8_PREVIEW_RESOURCE_DIR="${S8_ROOT}/resources")
 target_link_libraries(s8_ui_preview PRIVATE SDL2::SDL2 SDL2_image::SDL2_image Threads::Threads)
 if(WIN32)
+    target_sources(s8_ui_preview PRIVATE ${S8_ROOT}/src/services/game_font.cpp)
     set_target_properties(s8_ui_preview PROPERTIES WIN32_EXECUTABLE TRUE)
     if(MSVC)
         target_link_options(s8_ui_preview PRIVATE /ENTRY:mainCRTStartup)

@@ -2,6 +2,11 @@
 #include "trait_text_config.h"
 #include "../platform/windows/config_commit.h"
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
+#include <array>
 #include <string_view>
 #include <utility>
 
@@ -71,6 +76,44 @@ void TraitTextService::poll(UiBridge& bridge) {
     case platform::windows::ConfigCommitStatus::Completed:
         baseline = std::move(*bytes);
         status = ConfigSaveStatus::Completed;
+
+        if (request->apply_external) {
+            // VERSION.dll v1.4.7: F9 editor's Settings Load button.
+            HWND editor = nullptr;
+            HWND candidate = nullptr;
+            HMODULE owner = nullptr;
+            std::array<wchar_t, 32768> module_path{};
+
+            while ((candidate = FindWindowExW(nullptr, candidate, L"SAN8R_EditorGUI", nullptr)) != nullptr) {
+                DWORD process_id = 0;
+
+                GetWindowThreadProcessId(candidate, &process_id);
+                if (process_id == GetCurrentProcessId()) {
+                    editor = candidate;
+                    break;
+                }
+            }
+            const LONG_PTR procedure = editor ? GetWindowLongPtrW(editor, GWLP_WNDPROC) : 0;
+            const std::filesystem::path expected_module = embedded_path.parent_path() / L"version.dll";
+            const bool supported = procedure &&
+                GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                    reinterpret_cast<LPCWSTR>(procedure), &owner) &&
+                GetModuleFileNameW(owner, module_path.data(), static_cast<DWORD>(module_path.size())) &&
+                CompareStringOrdinal(module_path.data(), -1, expected_module.c_str(), -1, TRUE) == CSTR_EQUAL &&
+                static_cast<std::uintptr_t>(procedure) - reinterpret_cast<std::uintptr_t>(owner) == 0x14cc0;
+            DWORD_PTR result = 0;
+
+            if (!supported) {
+                bridge.publish_notice("기재 설정은 저장했지만 호환되는 VERSION.dll 기재 에디터를 찾지 못했습니다.");
+                status = ConfigSaveStatus::Failed;
+            } else if (!SendMessageTimeoutW(editor, WM_COMMAND, 0x40a, 0,
+                    SMTO_ABORTIFHUNG | SMTO_BLOCK, 3000, &result)) {
+                bridge.publish_notice("기재 설정은 저장했지만 VERSION.dll의 적용 요청 처리가 완료되지 않았습니다.");
+                status = ConfigSaveStatus::Failed;
+            } else {
+                bridge.publish_notice("기재 설정을 저장하고 VERSION.dll에 설정 로드 명령을 전달했습니다.");
+            }
+        }
         break;
     case platform::windows::ConfigCommitStatus::Conflict:
         status = ConfigSaveStatus::Conflict;

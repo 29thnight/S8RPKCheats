@@ -4,6 +4,7 @@
 #include "trait_runtime.h"
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +19,7 @@ struct TraitTextEdit {
     std::string original_description;
     std::string name;
     std::string description;
+    std::optional<std::array<TraitEffect, 6>> effects;
 };
 
 using TraitTextEdits = std::vector<TraitTextEdit>;

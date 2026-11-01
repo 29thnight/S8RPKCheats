@@ -1,4 +1,5 @@
 #include "trait_text_config.h"
+#include "trait_runtime_config.h"
 #include "../../third_party/nlohmann_json/single_include/nlohmann/json.hpp"
 
 #include <algorithm>
@@ -224,59 +225,59 @@ domain::Result<std::string> update_embedded_trait_text_config(std::string_view s
     std::vector<Replacement> changes{};
     std::size_t metadata_begin = std::string_view::npos;
 
-    if (!root.is_object() || !root.contains("customNames") || !root["customNames"].is_object()) {
+    if (!read_trait_runtime_config(source) || !root.contains("customNames") || !root["customNames"].is_object()) {
         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
     }
+    nlohmann::json traits = root["traits"];
+
+    for (const domain::TraitTextEdit& row : rows) {
+        if (!row.embedded || domain::validate_trait_text_edit(row) != domain::TraitTextValidation::Valid) {
+            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+        }
+        if (row.effects) {
+            for (nlohmann::json& trait : traits) {
+                if (trait["index"].get<int>() != row.trait_id - 1) {
+                    continue;
+                }
+                for (std::size_t index = 0; index < row.effects->size(); ++index) {
+                    const domain::TraitEffect& effect = (*row.effects)[index];
+
+                    trait["effects"][index]["type"] = effect.effect_id;
+                    trait["effects"][index]["value"] = effect.value1;
+                    trait["effects"][index]["param"] = effect.value2;
+                }
+            }
+        }
+    }
     for (const JsonMember& member : members(source, source.find('{'))) {
+        if (member.key == "traits") {
+            changes.push_back({member.begin, member.end, traits.dump(2)});
+        }
         if (member.key == "customNames") {
             metadata_begin = member.begin;
-            break;
         }
     }
     if (metadata_begin == std::string_view::npos) {
         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
     }
 
-    const std::vector<JsonMember> metadata = members(source, metadata_begin);
+    nlohmann::json metadata = root["customNames"];
 
     for (const domain::TraitTextEdit& row : rows) {
-        if (!row.embedded || domain::validate_trait_text_edit(row) != domain::TraitTextValidation::Valid) {
-            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
-        }
         if (row.name.empty() && row.description.empty()) {
             continue;
         }
 
-        const std::string key = std::to_string(row.trait_id - 1);
-        bool found = false;
+        nlohmann::json& entry = metadata[std::to_string(row.trait_id - 1)];
 
-        if (!root["customNames"].contains(key) || !root["customNames"][key].is_object()) {
-            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+        if (!row.name.empty()) {
+            entry["name"] = row.name;
         }
-        for (const JsonMember& trait : metadata) {
-            if (trait.key != key) {
-                continue;
-            }
-
-            bool name_found = row.name.empty();
-            bool description_found = row.description.empty();
-
-            for (const JsonMember& field : members(source, trait.begin)) {
-                if (field.key == "name" && !row.name.empty()) {
-                    changes.push_back({field.begin, field.end, nlohmann::json(row.name).dump()});
-                    name_found = true;
-                } else if (field.key == "desc" && !row.description.empty()) {
-                    changes.push_back({field.begin, field.end, nlohmann::json(row.description).dump()});
-                    description_found = true;
-                }
-            }
-            found = name_found && description_found;
-            break;
-        }
-        if (!found) {
-            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+        if (!row.description.empty()) {
+            entry["desc"] = row.description;
         }
     }
+    changes.push_back({metadata_begin, value_end(source, metadata_begin), metadata.dump(2)});
     std::sort(changes.begin(), changes.end(), [](const Replacement& left, const Replacement& right) {
         return left.begin > right.begin;
     });

@@ -191,6 +191,8 @@ bool probe_assertion(std::string_view verb, std::string_view value) {
     } else if (verb == "expect-mouse-capture") {
         require(ImGui::GetIO().WantCaptureMouse == (value == "yes"),
             "Unexpected mouse capture outside the minimized launcher");
+    } else if (verb == "expect-item-absent") {
+        require(!find_item(value).has_value(), "Hidden PK editor is still rendered");
     } else if (verb == "expect-item-fit") {
         const auto item = find_item(value);
         if (!item || !item->fits_clip)

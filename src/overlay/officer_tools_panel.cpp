@@ -1,4 +1,5 @@
 #include "officer_tools_panel.h"
+#include "menu_sprites.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
 
@@ -63,51 +64,59 @@ bool active_job(const domain::OfficerToolProgress& progress) {
 
 template <std::size_t N>
 void draw_training_choices(const char* title, const std::array<const char*, N>& names,
-    std::array<domain::TrainingChoice, N>& choices, float scale) {
-    if (!ImGui::CollapsingHeader(title)) {
-        return;
-    }
+    std::array<domain::TrainingChoice, N>& choices, float scale, const UiAtlasTextures& atlases) {
+    constexpr bool tactics = N == 35;
+    constexpr std::array<const char*, 7> tactic_groups{"보병", "기병", "궁병", "함선", "군략", "보조", "둔갑"};
+    constexpr std::array<const char*, 4> skill_groups{"임무", "지모", "병과", "군사"};
+    constexpr std::size_t columns = tactics ? 5 : 6;
+    constexpr std::size_t groups = N / columns;
     ImGui::PushID(title);
-    if (ImGui::Button("모두 선택")) {
-        for (domain::TrainingChoice& choice : choices) {
-            choice.enabled = true;
-        }
+    ImGui::TextUnformatted(title);
+    if (ImGui::Button("최대")) {
+        for (domain::TrainingChoice& choice : choices) choice = {true, 3};
     }
     ImGui::SameLine();
-    if (ImGui::Button("선택 해제")) {
-        for (domain::TrainingChoice& choice : choices) {
-            choice.enabled = false;
-        }
+    if (ImGui::Button("최소")) {
+        for (domain::TrainingChoice& choice : choices) choice = {true, 0};
     }
     ImGui::SameLine();
-    if (ImGui::Button("선택 항목 레벨 3")) {
-        for (domain::TrainingChoice& choice : choices) {
-            if (choice.enabled) {
-                choice.level = 3;
-            }
-        }
+    if (ImGui::Button("변경 제외")) {
+        for (domain::TrainingChoice& choice : choices) choice.enabled = false;
     }
-    if (ImGui::BeginTable("##training", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
-        ImGui::TableSetupColumn("적용", ImGuiTableColumnFlags_WidthFixed, 40 * scale);
-        ImGui::TableSetupColumn("항목");
-        ImGui::TableSetupColumn("숙련도", ImGuiTableColumnFlags_WidthFixed, 100 * scale);
-        ImGui::TableHeadersRow();
-        for (std::size_t i = 0; i < N; ++i) {
-            domain::TrainingChoice& choice = choices[i];
-            int level = choice.level;
-
-            ImGui::PushID(static_cast<int>(i));
+    const float cell_width = std::max(78.0f * scale, ImGui::CalcTextSize("강격").x + 28.0f * scale);
+    if (ImGui::BeginTable("##training", static_cast<int>(columns + 1),
+            ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_ScrollX,
+            ImVec2(0, (groups * 44.0f + 18.0f) * scale), cell_width * (columns + 1))) {
+        for (std::size_t group = 0; group < groups; ++group) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::Checkbox("##enabled", &choice.enabled);
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(names[i]);
-            ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::Combo("##level", &level, "0\0I\0II\0III\0")) {
-                choice.level = static_cast<std::uint8_t>(level);
+            ImGui::TextUnformatted(tactics ? tactic_groups[group] : skill_groups[group]);
+            for (std::size_t column = 0; column < columns; ++column) {
+                const std::size_t index = group * columns + column;
+                domain::TrainingChoice& choice = choices[index];
+                ImGui::TableNextColumn();
+                ImGui::PushID(static_cast<int>(index));
+                if (menu_sprites::sprite_button(atlases, names[index],
+                        ImVec2(ImGui::GetContentRegionAvail().x, 28 * scale))) {
+                    if (!choice.enabled) choice = {true, 0};
+                    else if (choice.level < 3) ++choice.level;
+                    else choice.enabled = false;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("클릭: 변경 제외 → 0 → 1 → 2 → 3 → 변경 제외\n우클릭: 변경 제외");
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) choice.enabled = false;
+                const ImVec2 position = ImGui::GetCursorScreenPos();
+                ImDrawList& draw = *ImGui::GetWindowDrawList();
+                const float bar = std::min(18.0f * scale, (ImGui::GetContentRegionAvail().x - 8 * scale) / 3);
+                for (int level = 0; level < 3; ++level) {
+                    const ImU32 color = !choice.enabled ? IM_COL32(130, 126, 113, 255) : level < choice.level
+                        ? tactics ? IM_COL32(245, 205, 48, 255) : IM_COL32(126, 211, 215, 255)
+                        : IM_COL32(52, 49, 41, 255);
+                    const float x = position.x + level * (bar + 3 * scale);
+                    draw.AddRectFilled(ImVec2(x, position.y), ImVec2(x + bar, position.y + 5 * scale), color, 2 * scale);
+                }
+                ImGui::Dummy(ImVec2(0, 8 * scale));
+                ImGui::PopID();
             }
-            ImGui::PopID();
         }
         ImGui::EndTable();
     }
@@ -451,13 +460,11 @@ void draw_scenario(OfficerToolsPanel& panel, const domain::OfficerToolsView& vie
 } // namespace
 
 std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerToolsPanel& panel,
-    const domain::OfficerToolsView& view, const domain::OfficerNames* names, float scale, bool can_submit) {
+    const domain::OfficerToolsView& view, const domain::OfficerNames* names, float scale,
+    OfficerToolsSection section, const UiAtlasTextures& atlases, bool can_submit) {
     std::optional<domain::OfficerToolsRequest> output;
     panel.open_officer.reset();
 
-    if (!panel.open) {
-        return output;
-    }
     if (panel.epoch != view.epoch) {
         panel.epoch = view.epoch;
         panel.child_years.fill(0);
@@ -474,29 +481,23 @@ std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerTools
         panel.spouse_order_selection.fill(0);
         panel.spouse_order_positions.fill(0);
     }
-    ImGui::SetNextWindowSize(ImVec2(760 * scale, 650 * scale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("무장·가족·시나리오 도구###OfficerTools", &panel.open)) {
-        ImGui::End();
-        return output;
-    }
     if (view.request_status != domain::OfficerToolStatus::Idle) {
         ImGui::Text("최근 요청: %s", view.request_status == domain::OfficerToolStatus::Preparing
             ? "접수됨" : status_label(view.request_status));
     }
     ImGui::BeginDisabled(!can_submit);
-    if (ImGui::BeginTabBar("##officer_tools_tabs")) {
-        if (ImGui::BeginTabItem("전법·특기 일괄 편집")) {
+    {
+        if (section == OfficerToolsSection::Training) {
             ImGui::TextWrapped("선택한 전법과 특기의 숙련도를 전체 유효 무장에 적용합니다.");
-            draw_training_choices("전법 35종", TACTIC_NAMES, panel.training.tactics, scale);
-            draw_training_choices("특기 24종", SKILL_NAMES, panel.training.skills, scale);
+            draw_training_choices("전법 35종", TACTIC_NAMES, panel.training.tactics, scale, atlases);
+            draw_training_choices("특기 24종", SKILL_NAMES, panel.training.skills, scale, atlases);
             ImGui::BeginDisabled(active_job(view.progress));
             if (ImGui::Button("전체 무장에 적용")) {
                 issue(output, view.epoch, panel.training);
             }
             ImGui::EndDisabled();
-            ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("랜덤 기재")) {
+        if (section == OfficerToolsSection::RandomTraits) {
             ImGui::TextWrapped("기존 기재를 유지하고 빈 슬롯만 중복 없이 채웁니다.");
             ImGui::Checkbox("황금 · 1등급", &panel.random.grades[0]);
             ImGui::SameLine();
@@ -513,9 +514,8 @@ std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerTools
                 issue(output, view.epoch, panel.random);
             }
             ImGui::EndDisabled();
-            ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("자녀·배우자")) {
+        if (section == OfficerToolsSection::Family) {
             if (ImGui::Button("가족 목록 새로고침")) {
                 issue(output, view.epoch, domain::RefreshFamilyTools{});
             }
@@ -526,22 +526,18 @@ std::optional<domain::OfficerToolsRequest> draw_officer_tools_panel(OfficerTools
             }
             if (ImGui::CollapsingHeader("임신 슬롯·배우자 교체", ImGuiTreeNodeFlags_DefaultOpen)) {
                 draw_pregnancy(panel, view, names, scale, output);
-                draw_spouses(panel, view, names, scale, output);
+                if (panel.manual_editing) draw_spouses(panel, view, names, scale, output);
             }
-            ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("시나리오")) {
+        if (section == OfficerToolsSection::Scenario) {
             draw_scenario(panel, view, names, scale, output);
-            ImGui::EndTabItem();
         }
-        ImGui::EndTabBar();
     }
     draw_progress(view.progress);
     if (active_job(view.progress) && ImGui::Button("남은 일괄 작업 중단")) {
         issue(output, view.epoch, domain::CancelOfficerToolJob{});
     }
     ImGui::EndDisabled();
-    ImGui::End();
     return output;
 }
 

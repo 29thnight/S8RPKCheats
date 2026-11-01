@@ -77,7 +77,7 @@ bool basic_city_action(domain::CityAction action) {
     switch (action) {
     case domain::CityAction::Refresh: case domain::CityAction::Write:
     case domain::CityAction::Maximize: case domain::CityAction::ResetRevolt:
-    case domain::CityAction::Cancel:
+    case domain::CityAction::Cancel: case domain::CityAction::ConvertSelected:
         return true;
     default:
         return false;
@@ -270,7 +270,8 @@ void start_work(CityManagement& state, CityWork work) {
     state.work_result = domain::CityWorkStatus::Complete;
     state.cursor = 0;
     state.snapshot.busy = true;
-    state.snapshot.locks_commands = work == CityWork::Maximize || work == CityWork::Support || work == CityWork::Routes;
+    state.snapshot.locks_commands = work == CityWork::Maximize || work == CityWork::Support ||
+        work == CityWork::Routes || work == CityWork::ConvertSelected;
     state.snapshot.status = domain::CityWorkStatus::Working;
     state.snapshot.completed = 0;
     state.snapshot.succeeded = 0;
@@ -707,6 +708,13 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
     }
     state.request = request;
     switch (request.action) {
+    case domain::CityAction::ConvertSelected:
+        if (request.value > 3 || request.selected_cities == 0 ||
+            (request.selected_cities >> domain::CITY_COUNT) != 0) {
+            return domain::CityWorkStatus::InvalidRequest;
+        }
+        start_work(state, CityWork::ConvertSelected);
+        break;
     case domain::CityAction::WriteTechnology: case domain::CityAction::MaximizeTechnology: {
         const domain::CityWorkStatus result = write_faction_technology(state, request);
 
@@ -774,7 +782,7 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
 void tick_city_management(CityManagement& state, std::uintptr_t module_base, std::uintptr_t game_root,
     std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items,
     const domain::WorkBudget& work_budget) {
-    if (state.stopping || work_budget.exhausted() || !bind_city_session(state, module_base, game_root, player, epoch)) {
+    if (state.stopping || !bind_city_session(state, module_base, game_root, player, epoch)) {
         return;
     }
     if (state.recovery_count != 0 && !restore_bound_data(state)) {
@@ -796,7 +804,7 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
         const bool manual_revolt = state.work == CityWork::Revolt &&
             state.request.action == domain::CityAction::ResetRevolt;
         if (state.work != CityWork::Idle && state.work != CityWork::Refresh &&
-            state.work != CityWork::Maximize && !manual_revolt) {
+            state.work != CityWork::Maximize && state.work != CityWork::ConvertSelected && !manual_revolt) {
             end_work(state, domain::CityWorkStatus::SessionChanged);
         }
     }
@@ -808,7 +816,9 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
         end_work(state, domain::CityWorkStatus::SessionChanged);
         return;
     }
-    for (std::size_t step = 0; step < max_items && state.work != CityWork::Idle && !work_budget.exhausted(); ++step) {
+    // The runtime service admits this work before resolving its context. Include
+    // one item in that admitted unit so binding cannot consume every slice.
+    for (std::size_t step = 0; step < max_items && state.work != CityWork::Idle && (step == 0 || !work_budget.exhausted()); ++step) {
         domain::CityWorkStatus result = domain::CityWorkStatus::Complete;
 
         if (state.work == CityWork::Routes || state.work == CityWork::Support) {
@@ -842,6 +852,36 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
             case CityWork::Maximize:
                 result = write_city_field(state, city, state.request.field, domain::city_field_maximum(state.request.field));
                 break;
+            case CityWork::ConvertSelected: {
+                if ((state.request.selected_cities & (std::uint64_t{1} << city)) == 0) {
+                    result = domain::CityWorkStatus::NoResources;
+                    break;
+                }
+                // Native city type byte and the same limit profiles used by city_conversion.cpp.
+                constexpr std::array<std::uint8_t, 4> TYPES{128, 208, 48, 88};
+                constexpr std::array<std::array<std::uint16_t, 4>, 4> LIMITS{{
+                    {9000, 12000, 9000, 4000}, {1500, 3000, 4500, 1500},
+                    {6500, 5000, 0, 0}, {5000, 6500, 0, 0}}};
+                const std::uintptr_t address = state.city_table + city * CITY_STRIDE;
+                std::array<CityDataWrite, 5> writes{};
+                const std::size_t count = state.request.value < 2 ? 5 : 3;
+                writes[0] = {address + 0x10, 0, TYPES[state.request.value], 1};
+                for (std::size_t index = 1; index < count; ++index) {
+                    writes[index] = {address + 0xd0 + (index - 1) * 4, 0,
+                        LIMITS[state.request.value][index - 1], 2};
+                }
+                bool read = true;
+                for (CityDataWrite& write : std::span(writes).first(count)) {
+                    if (!platform::windows::read_memory(write.address,
+                            std::as_writable_bytes(std::span(&write.before, 1)).first(write.width))) {
+                        read = false;
+                        break;
+                    }
+                }
+                result = read ? write_transaction(state, std::span(writes).first(count)) : domain::CityWorkStatus::ReadFailed;
+                if (result == domain::CityWorkStatus::Complete) read_city_row(state, city);
+                break;
+            }
             case CityWork::Revolt:
                 result = write_city_field(state, city, domain::CityField::Revolt, 0);
                 break;

@@ -24,6 +24,11 @@ struct Dx11Overlay {
     winrt::com_ptr<ID3D11RenderTargetView> render_target;
     std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 11> range_textures;
     bool range_textures_loaded = false;
+    winrt::com_ptr<ID3D11ShaderResourceView> portrait_texture;
+    unsigned portrait_face = ~0u;
+    winrt::com_ptr<ID3D11Texture2D> backdrop;
+    winrt::com_ptr<ID3D11ShaderResourceView> backdrop_view;
+    winrt::com_ptr<ID3D11PixelShader> blur_shader;
     std::array<winrt::com_ptr<ID3D11ShaderResourceView>, 5> ui_atlas_textures;
     bool ui_atlases_loaded = false;
     std::uint64_t ui_atlas_retry_ms = 0;
@@ -35,7 +40,7 @@ struct Dx11Overlay {
 };
 
 bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain);
-bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawUi draw, void* context);
+bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawUi draw, void* context, bool blur_background);
 void release_dx11_render_target(Dx11Overlay& overlay);
 void release_dx11_ui_atlases(Dx11Overlay& overlay);
 void shutdown_dx11_overlay(Dx11Overlay& overlay);

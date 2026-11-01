@@ -9,7 +9,7 @@
 
 namespace s8::game {
 
-enum class CityWork { Idle, Refresh, Maximize, Revolt, Exchange, Support, Routes, Technology };
+enum class CityWork { Idle, Refresh, Maximize, Revolt, Exchange, Support, Routes, Technology, ConvertSelected };
 
 struct CityDataWrite {
     std::uintptr_t address = 0;

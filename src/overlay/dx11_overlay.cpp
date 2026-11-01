@@ -1,13 +1,17 @@
 #include "dx11_overlay.h"
+#include "game_font_atlas.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
 #include "../../third_party/imgui_legacy/imgui_impl_dx11.h"
 #include "../../third_party/imgui_legacy/imgui_impl_win32.h"
 
 #include <array>
+#include <d3dcompiler.h>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <vector>
 
 namespace s8::overlay {
 namespace {
@@ -179,9 +183,10 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.75f, 0.00f, 0.42f);
     colors[ImGuiCol_TabSelected] = ImVec4(1.00f, 0.75f, 0.00f, 0.58f);
     // Game HUD coordinates are client pixels, not Windows desktop DIPs. Keep
-    // the same 18 px base as the standalone preview; user scaling is applied
+    // the same 16 px base as the standalone preview; user scaling is applied
     // once through FontGlobalScale together with the layout scale.
-    load_korean_font(18.0f);
+    load_korean_font(16.0f);
+    load_game_font(16.0f);
     overlay.window = description.OutputWindow;
     if (!ImGui_ImplWin32_Init(overlay.window)) {
         ImGui::DestroyContext(overlay.imgui);
@@ -207,7 +212,7 @@ bool initialize_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain) {
     return true;
 }
 
-bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawUi draw, void* context) {
+bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawUi draw, void* context, bool blur_background) {
     if (!swap_chain || !draw) {
         return false;
     }
@@ -223,6 +228,73 @@ bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawU
     ImGui_ImplWin32_NewFrame();
     overlay.input.deliver();
     ImGui::NewFrame();
+    if (blur_background) {
+        winrt::com_ptr<ID3D11Texture2D> backbuffer;
+        if (SUCCEEDED(swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), backbuffer.put_void()))) {
+            D3D11_TEXTURE2D_DESC source{};
+            backbuffer->GetDesc(&source);
+            if (!overlay.blur_shader) {
+                constexpr char shader[] = R"(
+Texture2D scene : register(t0);
+SamplerState linear_sampler : register(s0);
+struct Input { float4 pos : SV_POSITION; float4 color : COLOR0; float2 uv : TEXCOORD0; };
+float4 main(Input input) : SV_Target {
+    uint width, height, levels;
+    scene.GetDimensions(0, width, height, levels);
+    float2 step = 8.0 / float2(width, height);
+    float3 color = scene.SampleLevel(linear_sampler, input.uv, 3).rgb * 4;
+    color += scene.SampleLevel(linear_sampler, input.uv + float2(step.x, 0), 3).rgb * 2;
+    color += scene.SampleLevel(linear_sampler, input.uv - float2(step.x, 0), 3).rgb * 2;
+    color += scene.SampleLevel(linear_sampler, input.uv + float2(0, step.y), 3).rgb * 2;
+    color += scene.SampleLevel(linear_sampler, input.uv - float2(0, step.y), 3).rgb * 2;
+    color += scene.SampleLevel(linear_sampler, input.uv + step, 3).rgb;
+    color += scene.SampleLevel(linear_sampler, input.uv - step, 3).rgb;
+    color += scene.SampleLevel(linear_sampler, input.uv + float2(step.x, -step.y), 3).rgb;
+    color += scene.SampleLevel(linear_sampler, input.uv + float2(-step.x, step.y), 3).rgb;
+    return float4(color / 16, 1);
+})";
+                winrt::com_ptr<ID3DBlob> bytecode;
+                winrt::com_ptr<ID3DBlob> errors;
+                if (SUCCEEDED(D3DCompile(shader, sizeof(shader) - 1, nullptr, nullptr, nullptr, "main", "ps_4_0",
+                        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, bytecode.put(), errors.put()))) {
+                    overlay.device->CreatePixelShader(bytecode->GetBufferPointer(), bytecode->GetBufferSize(), nullptr,
+                        overlay.blur_shader.put());
+                } else if (errors) OutputDebugStringA(static_cast<const char*>(errors->GetBufferPointer()));
+            }
+            if (!overlay.backdrop) {
+                D3D11_TEXTURE2D_DESC texture = source;
+                texture.MipLevels = 0;
+                texture.ArraySize = 1;
+                texture.SampleDesc = {1, 0};
+                texture.Usage = D3D11_USAGE_DEFAULT;
+                texture.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+                texture.CPUAccessFlags = 0;
+                texture.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+                if (SUCCEEDED(overlay.device->CreateTexture2D(&texture, nullptr, overlay.backdrop.put()))) {
+                    if (FAILED(overlay.device->CreateShaderResourceView(overlay.backdrop.get(), nullptr, overlay.backdrop_view.put()))) {
+                        overlay.backdrop = nullptr;
+                    }
+                }
+            }
+            if (overlay.backdrop_view && overlay.blur_shader) {
+                if (source.SampleDesc.Count > 1) {
+                    overlay.context->ResolveSubresource(overlay.backdrop.get(), 0, backbuffer.get(), 0, source.Format);
+                } else {
+                    overlay.context->CopySubresourceRegion(overlay.backdrop.get(), 0, 0, 0, 0, backbuffer.get(), 0, nullptr);
+                }
+                overlay.context->GenerateMips(overlay.backdrop_view.get());
+                ImDrawList& background = *ImGui::GetBackgroundDrawList();
+                background.AddCallback([](const ImDrawList*, const ImDrawCmd* command) {
+                    Dx11Overlay& renderer = *static_cast<Dx11Overlay*>(command->UserCallbackData);
+                    renderer.context->PSSetShader(renderer.blur_shader.get(), nullptr, 0);
+                }, &overlay);
+                const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+                background.AddImage(overlay.backdrop_view.get(), viewport.Pos,
+                    ImVec2(viewport.Pos.x + viewport.Size.x, viewport.Pos.y + viewport.Size.y));
+                background.AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+            }
+        }
+    }
     draw(context);
     ImGui::Render();
 
@@ -244,6 +316,8 @@ bool render_dx11_overlay(Dx11Overlay& overlay, IDXGISwapChain* swap_chain, DrawU
 }
 
 void release_dx11_render_target(Dx11Overlay& overlay) {
+    overlay.backdrop_view = nullptr;
+    overlay.backdrop = nullptr;
     overlay.render_target = nullptr;
 }
 
@@ -269,7 +343,10 @@ void shutdown_dx11_overlay(Dx11Overlay& overlay) {
         ImGui::DestroyContext(overlay.imgui);
         overlay.imgui = nullptr;
     }
-    overlay.render_target = nullptr;
+    release_dx11_render_target(overlay);
+    overlay.blur_shader = nullptr;
+    overlay.portrait_texture = nullptr;
+    overlay.portrait_face = ~0u;
     for (winrt::com_ptr<ID3D11ShaderResourceView>& texture : overlay.range_textures) {
         texture = nullptr;
     }

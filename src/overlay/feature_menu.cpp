@@ -3,6 +3,8 @@
 
 #include "../../third_party/imgui_legacy/imgui.h"
 #include "../domain/secondary_jewel_definitions.h"
+#include "../domain/native_ui_layout.h"
+#include "../domain/jewel_layout.h"
 
 #include <array>
 #include <span>
@@ -14,6 +16,150 @@
 
 namespace s8::overlay {
 namespace {
+
+void open_officer_details(FeatureMenu& menu, std::uint16_t id);
+
+menu_sprites::detail::SpriteRect atlas_rect(domain::native_ui::Rect rect) {
+    return {static_cast<float>(rect.left), static_cast<float>(rect.top),
+        static_cast<float>(rect.right), static_cast<float>(rect.bottom)};
+}
+
+void draw_native_card(const FeatureMenu& menu, ImVec2 minimum, ImVec2 maximum, float scale) {
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    const menu_sprites::detail::SpriteRect region = atlas_rect(domain::native_ui::CARD);
+
+    draw.AddRectFilled(ImVec2(minimum.x + 2 * scale, minimum.y + 3 * scale),
+        ImVec2(maximum.x + 2 * scale, maximum.y + 3 * scale), IM_COL32(30, 24, 16, 42));
+    if (menu_sprites::detail::available(menu.ui_atlases[0], region)) {
+        draw.AddRectFilled(minimum, maximum, IM_COL32(237, 233, 220, 245));
+        menu_sprites::detail::nine_slice(draw, menu.ui_atlases[0], region, minimum, maximum,
+            10, 10, scale, IM_COL32(255, 255, 255, 64));
+    } else {
+        draw.AddRectFilled(minimum, maximum, IM_COL32(237, 233, 220, 220));
+        draw.AddRect(minimum, maximum, IM_COL32(154, 139, 109, 190));
+    }
+}
+
+void draw_screen_heading(const FeatureMenu& menu, domain::native_ui::Rect caption,
+    const char* fallback, const char* description, float scale) {
+    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+    const ImVec2 origin = viewport.WorkPos;
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    const menu_sprites::detail::SpriteRect title = atlas_rect(domain::native_ui::TITLE);
+
+    if (menu_sprites::detail::available(menu.ui_atlases[0], title)) {
+        menu_sprites::detail::image(draw, menu.ui_atlases[0], title, origin,
+            ImVec2(origin.x + 520 * scale, origin.y + 90 * scale), IM_COL32_WHITE);
+        menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(caption),
+            ImVec2(origin.x + 68 * scale, origin.y + 8 * scale),
+            ImVec2(origin.x + 374 * scale, origin.y + 75 * scale), IM_COL32_WHITE);
+    } else {
+        draw.AddText(ImGui::GetFont(), 42 * scale, ImVec2(origin.x + 48 * scale, origin.y + 12 * scale),
+            IM_COL32(45, 38, 26, 255), fallback);
+    }
+
+    const float description_size = 23 * scale;
+    const float width = std::min(viewport.WorkSize.x * 0.52f, 1000 * scale);
+    const ImVec2 strip(origin.x + (viewport.WorkSize.x - width) * 0.5f, origin.y + 16 * scale);
+
+    menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(domain::native_ui::NOTICE),
+        strip, ImVec2(strip.x + width, strip.y + 40 * scale), IM_COL32(255, 255, 255, 210));
+    const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(description_size, width - 24 * scale, 0, description);
+
+    draw.AddText(ImGui::GetFont(), description_size,
+        ImVec2(strip.x + (width - text.x) * 0.5f, strip.y + (40 * scale - text.y) * 0.5f),
+        IM_COL32(45, 38, 26, 255), description, nullptr, width - 24 * scale);
+}
+
+bool begin_editor_screen(FeatureMenu& menu, const char* id, bool& open, const char* description, bool protagonist = false) {
+    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+    const float scale = std::min(viewport.WorkSize.x / 1920.0f, viewport.WorkSize.y / 1080.0f);
+    const ImVec2 origin = viewport.WorkPos;
+    const ImVec2 size = viewport.WorkSize;
+
+    ImGui::SetNextWindowPos(origin, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings;
+
+    ImGui::Begin(id, nullptr, flags);
+    ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(15, 12, 10, 150));
+    draw_screen_heading(menu, domain::native_ui::EDIT, "편집", description, scale);
+
+    const ImVec2 paper_min(origin.x + size.x * 0.06f, origin.y + size.y * 0.115f);
+    const ImVec2 paper_max(origin.x + size.x * 0.94f, origin.y + size.y * 0.86f);
+
+    menu_sprites::draw_panel(menu.ui_atlases, paper_min, paper_max, scale);
+    const ImVec2 body_min(paper_min.x + 38 * scale, paper_min.y + 28 * scale);
+    ImVec2 body_max(paper_max.x - 38 * scale, paper_max.y - 28 * scale);
+    const ImVec2 subject_min(paper_min.x + (paper_max.x - paper_min.x) * 0.72f, body_min.y);
+    const ImVec2 subject_max = body_max;
+    body_max.x = subject_min.x - 20 * scale;
+    draw_native_card(menu, subject_min, subject_max, scale);
+
+    ImDrawList& subject = *ImGui::GetWindowDrawList();
+    const float card_width = subject_max.x - subject_min.x;
+    const domain::OfficerBasicValues* basic = protagonist ?
+        (menu.snapshot.protagonist_basic ? &*menu.snapshot.protagonist_basic : nullptr) :
+        (menu.snapshot.selected_officer ? &menu.snapshot.selected_officer->basic : nullptr);
+    const std::optional<std::uint16_t> officer_id = protagonist ? menu.snapshot.protagonist_id :
+        menu.snapshot.selected_officer ? std::optional<std::uint16_t>{menu.snapshot.selected_officer->id} : std::nullopt;
+    const float title_height = 42 * scale;
+    const ImVec2 title_min(subject_min.x + 12 * scale, subject_min.y + 12 * scale);
+    const ImVec2 title_max(subject_max.x - 12 * scale, title_min.y + title_height);
+    menu_sprites::detail::image(subject, menu.ui_atlases[0], atlas_rect(domain::native_ui::NAMEPLATE),
+        title_min, title_max, IM_COL32_WHITE);
+    const char* name = "무장 선택";
+    if (officer_id && menu.officer_names) {
+        const auto found = menu.officer_names->find(*officer_id);
+        if (found != menu.officer_names->end()) name = found->second.c_str();
+    }
+    subject.AddText(ImGui::GetFont(), 26 * scale, ImVec2(title_min.x + 16 * scale, title_min.y + 7 * scale),
+        IM_COL32(255, 241, 197, 255), name);
+    const float portrait_edge = std::min(card_width - 48 * scale, (subject_max.y - title_max.y) * 0.47f);
+    const ImVec2 portrait_min(subject_min.x + (card_width - portrait_edge) * 0.5f, title_max.y + 18 * scale);
+    const ImVec2 portrait_max(portrait_min.x + portrait_edge, portrait_min.y + portrait_edge);
+    if (basic && menu.portrait_face == (*basic)[13] && menu.portrait_texture.texture) {
+        subject.AddImage(menu.portrait_texture.texture, portrait_min, portrait_max);
+    } else {
+        subject.AddText(ImVec2(portrait_min.x + 8 * scale, portrait_min.y + 20 * scale), IM_COL32(96, 78, 54, 255),
+            basic ? (menu.portrait_face == (*basic)[13] ? "원본 초상화 없음" : "초상화 불러오는 중") : "무장을 선택해 주십시오");
+    }
+    float info_y = portrait_max.y + 16 * scale;
+    if (!protagonist && menu.snapshot.selected_officer && menu.snapshot.selected_officer->city) {
+        const std::string_view city = domain::CITY_NAMES[*menu.snapshot.selected_officer->city];
+        subject.AddText(ImGui::GetFont(), 24 * scale, ImVec2(subject_min.x + 24 * scale, info_y),
+            IM_COL32(100, 61, 29, 255), city.data(), city.data() + city.size());
+        info_y += 32 * scale;
+    }
+    const float map_width = std::min(card_width - 40 * scale, (subject_max.y - info_y - 20 * scale) * 340 / 225);
+    const ImVec2 map_min(subject_min.x + (card_width - map_width) * 0.5f, info_y);
+    menu_sprites::detail::image(subject, menu.ui_atlases[0], atlas_rect(domain::native_ui::MAP), map_min,
+        ImVec2(map_min.x + map_width, map_min.y + map_width * 225 / 340), IM_COL32_WHITE);
+
+    draw_native_card(menu, body_min, body_max, scale);
+    const float edge = 88 * scale;
+
+    ImGui::SetCursorScreenPos(ImVec2(origin.x + (size.x - edge) * 0.5f, origin.y + size.y * 0.93f - edge * 0.5f));
+    if (menu_sprites::back_button(menu.ui_atlases, "뒤로##editor_back", edge, scale)) {
+        open = false;
+    }
+
+    ImGui::SetCursorScreenPos(body_min);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20 * scale, 18 * scale));
+    return ImGui::BeginChild("##editor_body", ImVec2(body_max.x - body_min.x, body_max.y - body_min.y),
+        ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoBackground);
+}
+
+void end_editor_screen() {
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
 
 void update_float_draft(MenuFloatDraft& draft, float incoming, bool reset) {
 
@@ -405,6 +551,7 @@ struct FeatureItem {
 struct FeatureMenuDraw {
     FeatureMenu& menu;
     services::CommandMailbox& mailbox;
+    services::UiBridge& bridge;
 
     bool can_submit() const noexcept;
     bool submit(domain::CommandPayload payload);
@@ -420,6 +567,7 @@ struct FeatureMenuDraw {
     void draw_player_options();
     void draw_ai_growth();
     void draw_traits();
+    void draw_officer_section(OfficerToolsSection section);
     void draw_overview();
     void draw_connection_status();
     void draw_tengi_settings();
@@ -509,6 +657,8 @@ bool FeatureMenuDraw::begin_popup_edit() const {
 }
 
 void FeatureMenuDraw::draw_feature(const FeatureItem& item) {
+    if (!menu.pk_editors_unlocked && (item.id == domain::FeatureId::AutoAffinityGrowth ||
+        item.id == domain::FeatureId::ShowWidgetHero || item.id == domain::FeatureId::ShowWidgetAllOfficers)) return;
     const char* label = item.compact_label ? item.compact_label : item.label;
     bool enabled = menu.snapshot.features.get(item.id);
 
@@ -716,7 +866,7 @@ void FeatureMenuDraw::draw_range_choices(int& selected) const {
 }
 
 void FeatureMenuDraw::draw_resources() {
-    if (ImGui::CollapsingHeader("주인공 자원")) {
+    if (ImGui::CollapsingHeader("주인공 자원", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (menu.snapshot.player_resources) {
             const domain::PlayerResources& resources = *menu.snapshot.player_resources;
 
@@ -732,8 +882,23 @@ void FeatureMenuDraw::draw_resources() {
                 const domain::PlayerResource resource = static_cast<domain::PlayerResource>(index);
 
                 ImGui::PushID(static_cast<int>(index));
-                ImGui::SetNextItemWidth(150 * menu.dpi_scale);
-                ImGui::InputScalar(domain::PLAYER_RESOURCE_LABELS[index], ImGuiDataType_U32, &menu.resource_draft[index]);
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted(domain::PLAYER_RESOURCE_LABELS[index]);
+                ImGui::SameLine(170 * menu.dpi_scale);
+
+                const float field_width = std::max(80.0f * menu.dpi_scale,
+                    std::min(280.0f * menu.dpi_scale, ImGui::GetContentRegionAvail().x - 80 * menu.dpi_scale));
+                const ImVec2 field_min = ImGui::GetCursorScreenPos();
+                const ImVec2 field_max(field_min.x + field_width, field_min.y + ImGui::GetFrameHeight());
+
+                menu_sprites::detail::nine_slice(*ImGui::GetWindowDrawList(), menu.ui_atlases[3],
+                    menu_sprites::detail::COMPACT_BUTTONS[0], field_min, field_max,
+                    10, 7, menu.dpi_scale, IM_COL32_WHITE);
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.48f, 0.36f, 0.15f, menu.ui_atlases[3].texture ? 0.0f : 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.97f, 0.85f, 1.0f));
+                ImGui::SetNextItemWidth(field_width);
+                ImGui::InputScalar("##resource_value", ImGuiDataType_U32, &menu.resource_draft[index]);
+                ImGui::PopStyleColor(2);
                 ImGui::SameLine();
                 ImGui::BeginDisabled(!can_submit() ||
                     menu.resource_draft[index] > domain::player_resource_limit(resource));
@@ -897,116 +1062,201 @@ void FeatureMenuDraw::draw_tengi_settings() {
 }
 
 void FeatureMenuDraw::draw_secondary_jewels() {
-    if (menu.secondary_jewel_window) {
-        ImGui::SetNextWindowSize(ImVec2(720, 680), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("보조 보주 강제 사용 설정", &menu.secondary_jewel_window)) {
-            domain::SecondaryJewelMask mask = menu.snapshot.secondary_jewels.value_or(domain::SecondaryJewelMask{});
-            std::size_t selected_count = 0;
-
-            for (const std::uint16_t id : domain::SECONDARY_JEWEL_IDS) {
-                selected_count += domain::secondary_jewel_selected(mask, id);
-            }
-            ImGui::Text("선택: %zu / %zu", selected_count, domain::SECONDARY_JEWEL_IDS.size());
-            ImGui::SameLine();
-            if (command_button("전체 선택##secondary")) {
-                submit(domain::SetSecondaryJewels{domain::all_secondary_jewels()});
-            }
-            ImGui::SameLine();
-
-            if (command_button("전체 해제##secondary")) {
-                submit(domain::SetSecondaryJewels{});
-            }
-            ImGui::InputText("이름 검색", menu.secondary_jewel_filter.data(), menu.secondary_jewel_filter.size());
-            ImGui::TextDisabled("선택한 보주는 실제 개방된 뒤부터 적용됩니다.");
-            constexpr std::array<const char*, 11> CATEGORIES{"공통", "재야", "두령", "일반", "군사", "태수",
-                                                              "도독", "군주", "악한", "무인", "문인"};
-            for (std::size_t category = 0; category < CATEGORIES.size(); ++category) {
-                const domain::JewelCategory kind = static_cast<domain::JewelCategory>(category);
-                std::size_t total = 0, selected = 0;
-
-                for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-                    if (definition.category == kind) {
-                        ++total;
-                        selected += domain::secondary_jewel_selected(mask, definition.id);
-                    }
-                }
-                std::array<char, 96> header{};
-
-                std::snprintf(header.data(), header.size(), "%s  %zu / %zu", CATEGORIES[category], selected, total);
-
-                ImGui::PushID(static_cast<int>(category));
-                if (ImGui::CollapsingHeader(header.data(), category == 0 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None)) {
-                    if (command_button("계통 전체 선택", true)) {
-                        for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-                            if (definition.category == kind) {
-                                mask.words[definition.id >> 6] |= std::uint64_t{1} << (definition.id & 63);
-                            }
-                        }
-                        submit(domain::SetSecondaryJewels{mask});
-                    }
-                    ImGui::SameLine();
-
-                    if (command_button("계통 전체 해제", true)) {
-                        for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-                            if (definition.category == kind) {
-                                mask.words[definition.id >> 6] &= ~(std::uint64_t{1} << (definition.id & 63));
-                            }
-                        }
-                        submit(domain::SetSecondaryJewels{mask});
-                    }
-                    for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-                        if (definition.category != kind ||
-                            std::string_view(definition.name).find(menu.secondary_jewel_filter.data()) == std::string_view::npos) {
-                            continue;
-                        }
-                        bool enabled = domain::secondary_jewel_selected(mask, definition.id);
-
-                        ImGui::PushID(static_cast<int>(definition.id));
-                        if (menu.snapshot.jewel_bitmap) {
-                            const std::size_t byte_index = static_cast<std::size_t>(definition.raw_id >> 3);
-                            const bool open = ((*menu.snapshot.jewel_bitmap)[byte_index] & (1u << (definition.raw_id & 7))) != 0;
-
-                            ImGui::TextUnformatted(open ? "개방됨" : "안됨");
-                        } else {
-                            ImGui::TextDisabled("확인 불가");
-                        }
-                        ImGui::SameLine();
-
-                        if (command_checkbox(definition.name, &enabled)) {
-                            const std::uint64_t bit = std::uint64_t{1} << (definition.id & 63);
-                            if (enabled) {
-                                mask.words[definition.id >> 6] |= bit;
-                            } else {
-                                mask.words[definition.id >> 6] &= ~bit;
-                            }
-                            submit(domain::SetSecondaryJewels{mask});
-                        }
-                        ImGui::PopID();
-                    }
-                }
-                ImGui::PopID();
-            }
+    if (!menu.secondary_jewel_window || !menu.open) return;
+    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+    const float scale = std::min(viewport.WorkSize.x / 1920.0f, viewport.WorkSize.y / 1080.0f);
+    const ImVec2 origin = viewport.WorkPos;
+    ImGui::SetNextWindowPos(origin, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(viewport.WorkSize, ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("보주 편집###JewelTree", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    draw.AddRectFilled(origin, ImVec2(origin.x + viewport.WorkSize.x, origin.y + viewport.WorkSize.y), IM_COL32(15, 12, 10, 140));
+    draw_screen_heading(menu, domain::native_ui::EDIT, "보주", "보주를 눌러 개방 상태와 보조계통 적용을 변경합니다", scale);
+    const ImVec2 minimum(origin.x + viewport.WorkSize.x * 0.06f, origin.y + viewport.WorkSize.y * 0.115f);
+    const ImVec2 maximum(origin.x + viewport.WorkSize.x * 0.94f, origin.y + viewport.WorkSize.y * 0.86f);
+    menu_sprites::draw_panel(menu.ui_atlases, minimum, maximum, scale);
+    constexpr std::array<const char*, 11> categories{"공통", "재야", "두령", "일반", "군사", "태수", "도독", "군주", "악한", "무인", "문인"};
+    ImGui::SetCursorScreenPos(ImVec2(minimum.x + 10 * scale, minimum.y + 12 * scale));
+    ImGui::BeginChild("##jewel_categories", ImVec2(288 * scale, maximum.y - minimum.y - 24 * scale), false, ImGuiWindowFlags_NoBackground);
+    const ImVec2 category_origin = ImGui::GetCursorScreenPos();
+    for (int category = 0; category < static_cast<int>(categories.size()); ++category) {
+        unsigned total = 0, opened = 0;
+        for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
+            if (static_cast<int>(definition.category) != category) continue;
+            ++total;
+            if (menu.snapshot.jewel_bitmap && ((*menu.snapshot.jewel_bitmap)[definition.raw_id >> 3] & (1u << (definition.raw_id & 7)))) ++opened;
         }
-        ImGui::End();
+        const ImVec2 button_min(category_origin.x + 16 * scale, category_origin.y + (16 + category * 94) * scale);
+        const ImVec2 button_max(button_min.x + 248 * scale, button_min.y + 72 * scale);
+        ImGui::SetCursorScreenPos(button_min);
+        const bool pressed = menu_sprites::detail::button_item(categories[category], ImVec2(248 * scale, 72 * scale));
+        if (pressed) menu.jewel_category = category;
+        const bool hovered = ImGui::IsItemHovered();
+        const bool selected = menu.jewel_category == category;
+        ImDrawList& sidebar = *ImGui::GetWindowDrawList();
+        const unsigned state = hovered ? 1 : selected ? 2 : 0;
+        menu_sprites::detail::nine_slice(sidebar, menu.ui_atlases[0],
+            atlas_rect(domain::native_ui::JEWEL_CATEGORY_BUTTONS[state].atlas), button_min, button_max,
+            12, 10, scale, IM_COL32_WHITE);
+        if (hovered) {
+            // Native thin chamfered focus rim from compact_controls (0x5889d015).
+            menu_sprites::detail::nine_slice(sidebar, menu.ui_atlases[3], {1816, 0, 1932, 42},
+                ImVec2(button_min.x - 2 * scale, button_min.y - 2 * scale),
+                ImVec2(button_max.x + 2 * scale, button_max.y + 2 * scale), 10, 10, scale, IM_COL32_WHITE);
+        }
+        const ImU32 ink = hovered ? IM_COL32(66, 40, 10, 255) : IM_COL32(255, 249, 224, 255);
+        const float name_size = 25 * scale;
+        const ImVec2 name_extent = ImGui::GetFont()->CalcTextSizeA(name_size, 1000, 0, categories[category]);
+        sidebar.AddText(ImGui::GetFont(), name_size, ImVec2(button_min.x + (248 * scale - name_extent.x) * 0.5f, button_min.y + 8 * scale), ink, categories[category]);
+        std::array<char, 64> count_label{};
+        if (menu.snapshot.jewel_bitmap) std::snprintf(count_label.data(), count_label.size(), "개방 %u / %u", opened, total);
+        else std::snprintf(count_label.data(), count_label.size(), "개방 — / %u", total);
+        const float count_size = 22 * scale;
+        const ImVec2 count_extent = ImGui::GetFont()->CalcTextSizeA(count_size, 1000, 0, count_label.data());
+        sidebar.AddText(ImGui::GetFont(), count_size, ImVec2(button_min.x + (248 * scale - count_extent.x) * 0.5f, button_min.y + 38 * scale), ink, count_label.data());
+        const char* badge = category == 0 ? "공통" : category == 1 ? "신분" : category == 8 ? "보조" : nullptr;
+        if (badge) {
+            const ImVec2 badge_min(button_min.x - 10 * scale, button_min.y - 14 * scale);
+            const ImVec2 badge_max(badge_min.x + 84 * scale, badge_min.y + 28 * scale);
+            const bool auxiliary = category == 8;
+            sidebar.AddRectFilled(badge_min, badge_max, auxiliary ? IM_COL32(238, 235, 221, 255) : IM_COL32(103, 61, 56, 255), 14 * scale);
+            sidebar.AddRect(badge_min, badge_max, auxiliary ? IM_COL32(68, 58, 46, 255) : IM_COL32(178, 146, 130, 255), 14 * scale, 0, 1.5f * scale);
+            const float badge_size = 22 * scale;
+            const ImVec2 badge_extent = ImGui::GetFont()->CalcTextSizeA(badge_size, 1000, 0, badge);
+            sidebar.AddText(ImGui::GetFont(), badge_size, ImVec2(badge_min.x + (84 * scale - badge_extent.x) * 0.5f, badge_min.y + 3 * scale),
+                auxiliary ? IM_COL32(43, 36, 29, 255) : IM_COL32(255, 248, 225, 255), badge);
+        }
     }
+    ImGui::EndChild();
+    const float side = std::min(maximum.y - minimum.y - 70 * scale, maximum.x - minimum.x - 624 * scale);
+    const ImVec2 tree_min(minimum.x + 312 * scale, minimum.y + 28 * scale);
+    const ImVec2 tree_max(tree_min.x + side, tree_min.y + side);
+    menu_sprites::detail::image(draw, menu.ui_atlases[2], atlas_rect(domain::native_ui::JEWEL_BACKDROP), tree_min, tree_max, IM_COL32_WHITE);
+    const float tree_scale = side / 1080;
+    const unsigned category = static_cast<unsigned>(menu.jewel_category);
+    const float left = static_cast<float>(2048 + category % 4 * 512);
+    const float top = static_cast<float>(category / 4 * 512);
+    menu_sprites::detail::image(draw, menu.ui_atlases[2], {left, top, left + 512, top + 512}, tree_min, tree_max, IM_COL32_WHITE);
+    for (const domain::JewelLineLayout& line : domain::JEWEL_LINE_LAYOUTS) {
+        if (line.category != category) continue;
+        draw.AddLine(ImVec2(tree_min.x + line.x0 * tree_scale, tree_min.y + line.y0 * tree_scale),
+            ImVec2(tree_min.x + line.x1 * tree_scale, tree_min.y + line.y1 * tree_scale), IM_COL32(137, 160, 157, 230), 4 * scale);
+    }
+    domain::SecondaryJewelMask mask = menu.snapshot.secondary_jewels.value_or(domain::SecondaryJewelMask{});
+    for (const domain::JewelStartLayout& start : domain::JEWEL_START_LAYOUTS) {
+        if (start.category != category) continue;
+        const ImVec2 center(tree_min.x + start.x * tree_scale, tree_min.y + start.y * tree_scale);
+        const float half = 20 * tree_scale;
+        menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(domain::native_ui::JEWEL_START.atlas),
+            ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), IM_COL32_WHITE);
+    }
+    for (std::size_t i = 0; i < domain::SECONDARY_JEWEL_DEFINITIONS.size(); ++i) {
+        const domain::SecondaryJewelDefinition& definition = domain::SECONDARY_JEWEL_DEFINITIONS[i];
+        if (static_cast<unsigned>(definition.category) != category) continue;
+        const domain::JewelNodeLayout& node = domain::JEWEL_NODE_LAYOUTS[i];
+        const ImVec2 center(tree_min.x + node.x * tree_scale, tree_min.y + node.y * tree_scale);
+        const float radius = domain::JEWEL_ICON_DIAMETERS[node.icon] * tree_scale * 0.5f;
+        const bool open = menu.snapshot.jewel_bitmap &&
+            ((*menu.snapshot.jewel_bitmap)[definition.raw_id >> 3] & (1u << (definition.raw_id & 7))) != 0;
+        const bool forced = domain::secondary_jewel_selected(mask, definition.id);
+        // Frames 0..4 are closed; 5..9 are their native opened counterparts.
+        const unsigned frame = node.icon % 5 + (open ? 5 : 0);
+        const domain::native_ui::Rect ring = domain::native_ui::JEWEL_FRAMES[frame].atlas;
+        const float frame_half = static_cast<float>(ring.right - ring.left) * tree_scale * 0.5f;
+
+        menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(ring),
+            ImVec2(center.x - frame_half, center.y - frame_half),
+            ImVec2(center.x + frame_half, center.y + frame_half), IM_COL32_WHITE);
+        if (open) {
+            const unsigned size = node.icon % 5 == 0 ? 0 : node.icon % 5 <= 2 ? 1 : 2;
+            // Native gold jewels (0..2) and red jewels (15..17), without tinting.
+            const domain::native_ui::Rect gem = domain::native_ui::JEWEL_GEMS[(forced ? 15 : 0) + size].atlas;
+            const float half = static_cast<float>(gem.right - gem.left) * tree_scale * 0.5f;
+
+            menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(gem),
+                ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), IM_COL32_WHITE);
+        }
+        ImGui::PushID(static_cast<int>(definition.id));
+        ImGui::SetCursorScreenPos(ImVec2(center.x - radius - 4 * scale, center.y - radius - 4 * scale));
+        ImGui::BeginDisabled(!can_submit() || !menu.snapshot.jewel_bitmap);
+        std::array<char, 40> node_label{};
+        std::snprintf(node_label.data(), node_label.size(), "보주 %u##node", static_cast<unsigned>(definition.id));
+        if (ImGui::InvisibleButton(node_label.data(), ImVec2((radius + 4 * scale) * 2, (radius + 4 * scale) * 2))) {
+            menu.jewel_selected_id = definition.id;
+            const int next = !open ? 1 : forced ? 0 : 2;
+            const std::uint64_t bit = std::uint64_t{1} << (definition.id & 63);
+            if (next == 2) mask.words[definition.id >> 6] |= bit;
+            else mask.words[definition.id >> 6] &= ~bit;
+            submit(domain::SetSecondaryJewels{mask, definition.raw_id, next != 0});
+        }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            menu.jewel_selected_id = definition.id;
+            ImGui::SetTooltip("%s · %s", definition.name, open ? forced ? "보조계통 강제 적용" : "개방" : "미개방");
+        }
+        if (menu.jewel_selected_id == definition.id) draw.AddCircle(center, radius + 6 * scale, IM_COL32(255, 245, 202, 255), 0, 2 * scale);
+        ImGui::PopID();
+    }
+    const ImVec2 info_min(tree_max.x + 24 * scale, minimum.y + 28 * scale);
+    draw_native_card(menu, info_min, ImVec2(maximum.x - 24 * scale, maximum.y - 28 * scale), scale);
+    ImGui::SetCursorScreenPos(ImVec2(info_min.x + 18 * scale, info_min.y + 20 * scale));
+    ImGui::BeginChild("##jewel_description", ImVec2(maximum.x - info_min.x - 58 * scale, maximum.y - info_min.y - 70 * scale), false, ImGuiWindowFlags_NoBackground);
+    ImGui::Text("%s 계통", categories[category]);
+    ImGui::Separator();
+    for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
+        if (definition.id != menu.jewel_selected_id) continue;
+        ImGui::TextWrapped("%s", definition.name);
+        break;
+    }
+    ImGui::Spacing();
+    ImGui::TextWrapped("클릭 순서\n미개방 → 개방 → 보조계통 강제 적용 → 미개방");
+    ImGui::TextColored(ImVec4(0.65f, 0.44f, 0.02f, 1), "● 노랑: 개방");
+    ImGui::TextColored(ImVec4(0.72f, 0.12f, 0.10f, 1), "● 빨강: 보조계통 강제 적용");
+    ImGui::TextWrapped("강제 적용은 개방된 보주에만 적용됩니다.");
+    if (menu.snapshot.all_jewels_open) ImGui::TextWrapped("보주를 개별 편집하면 전체 개방 자동 유지가 꺼집니다.");
+    draw_menu_heading("적용 상태");
+    const domain::LegacyFeatureStatus& jewel_status = menu.snapshot.legacy_features[
+        static_cast<std::size_t>(domain::LegacyFeatureGroup::SecondaryJewels)];
+    if (jewel_status.phase == domain::LegacyFeaturePhase::Disabled) {
+        ImGui::TextDisabled("보조계통 강제 적용 선택 없음");
+    } else {
+        draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::SecondaryJewels, false);
+    }
+    ImGui::BeginDisabled(!can_submit());
+    const ImVec2 retry_size(ImGui::GetContentRegionAvail().x, 34 * menu.dpi_scale);
+    if (menu_sprites::sprite_button(menu.ui_atlases, "보조계통 적용 재시도", retry_size)) {
+        submit(domain::SetSecondaryJewels{mask});
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("현재 보조계통 선택으로 적용을 다시 요청합니다.");
+    }
+    if (menu.snapshot.all_jewels_open &&
+        menu_sprites::sprite_button(menu.ui_atlases, "전체 개방 다시 적용", retry_size)) {
+        submit(domain::SetAllJewelsOpen{true});
+    }
+    ImGui::EndDisabled();
+    draw_previous_request_error(menu);
+    ImGui::EndChild();
+    const float edge = 88 * scale;
+    ImGui::SetCursorScreenPos(ImVec2(origin.x + (viewport.WorkSize.x - edge) * 0.5f, origin.y + viewport.WorkSize.y * 0.93f - edge * 0.5f));
+    if (menu_sprites::back_button(menu.ui_atlases, "뒤로##jewels", edge, scale)) menu.secondary_jewel_window = false;
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 void FeatureMenuDraw::draw_domestic() {
-    draw_menu_heading("도시 · 군단 편집");
+    if (!ImGui::BeginTable("##domestic_columns", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) return;
+    ImGui::TableSetupColumn("도시 관리", ImGuiTableColumnFlags_WidthStretch, 0.60f);
+    ImGui::TableSetupColumn("내정 설정", ImGuiTableColumnFlags_WidthStretch, 0.40f);
+    ImGui::TableNextColumn();
+    draw_city_management(menu.city_management, bridge, menu.epoch, menu.next_request,
+        menu.officer_names ? &*menu.officer_names : nullptr);
+    ImGui::TableNextColumn();
     const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale);
-    if (menu_sprites::sprite_button(menu.ui_atlases, "명품 관리", tool_size)) {
-        menu.specialty_tools.open = true;
-    }
-
-    if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리 / 후방 지원", tool_size)) {
-        menu.city_management.open = true;
-    }
-
-    if (menu_sprites::sprite_button(menu.ui_atlases, "군단 배치 / 도시 무장 이동", tool_size)) {
-        menu.corps_deployment.open = true;
-    }
-    ImGui::Spacing();
+    if (menu.pk_editors_unlocked && menu_sprites::sprite_button(menu.ui_atlases, "명품 관리", tool_size)) menu.specialty_tools.open = true;
+    if (menu_sprites::sprite_button(menu.ui_atlases, "군단 배치 / 도시 무장 이동", tool_size)) menu.corps_deployment.open = true;
     draw_menu_heading("내정");
 
     constexpr std::array FEATURES{
@@ -1073,15 +1323,7 @@ void FeatureMenuDraw::draw_domestic() {
     }
     ImGui::EndDisabled();
 
-    if (ImGui::CollapsingHeader("도시 종류 · 편집 설정")) {
-        constexpr std::array FEATURES{
-            FeatureItem{"대도시", domain::FeatureId::BigCity},
-            FeatureItem{"방목 도시", domain::FeatureId::BangmokCity},
-            FeatureItem{"농경 도시", domain::FeatureId::NonggyeongCity},
-            FeatureItem{"상업 도시", domain::FeatureId::SangeopCity},
-        };
-
-        draw_features(FEATURES);
+    if (ImGui::CollapsingHeader("게임 도시 편집기 표시")) {
         bool city_editor = menu.snapshot.tech_city_visibility_enabled;
 
         if (command_checkbox("도시 편집기에 기술도시 표시", &city_editor)) {
@@ -1097,13 +1339,14 @@ void FeatureMenuDraw::draw_domestic() {
         }
         draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::TechCityVisibility, false);
     }
+    ImGui::EndTable();
 
 
 }
 
 void FeatureMenuDraw::draw_player_options() {
-    draw_menu_heading("주인공 자원 · 보주");
-    draw_resources();
+    draw_menu_heading("보주 · 추가 규칙");
+    if (menu.pk_editors_unlocked) draw_resources();
     draw_feature({"보주 교체 무제한", domain::FeatureId::FastJewel});
 
     bool all_jewels_open = menu.snapshot.all_jewels_open;
@@ -1113,13 +1356,15 @@ void FeatureMenuDraw::draw_player_options() {
             menu.pending_notice = all_jewels_open ? "보주 전체 개방 ON" : "보주 전체 개방 OFF";
         }
     }
-    if (ImGui::Button("보조 보주 설정")) {
+    if (ImGui::Button("보주 개방 · 보조계통")) {
         menu.secondary_jewel_window = true;
     }
     draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::SecondaryJewels, false);
 }
 
 void FeatureMenuDraw::draw_scenario() {
+    if (!ImGui::BeginTable("##scenario_columns", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) return;
+    ImGui::TableNextColumn();
     draw_menu_heading("시나리오");
 
     constexpr std::array FEATURES{
@@ -1133,10 +1378,11 @@ void FeatureMenuDraw::draw_scenario() {
 
     draw_feature_grid("ScenarioOptions", FEATURES);
 
-    if (menu_sprites::sprite_button(menu.ui_atlases, "가족 · 시나리오 도구",
-            ImVec2(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale))) {
-        menu.officer_tools.open = true;
-    }
+    draw_officer_section(OfficerToolsSection::Scenario);
+    ImGui::TableNextColumn();
+    draw_menu_heading("자녀 · 배우자");
+    draw_officer_section(OfficerToolsSection::Family);
+    ImGui::EndTable();
 }
 
 void FeatureMenuDraw::draw_information() {
@@ -1181,8 +1427,13 @@ void FeatureMenuDraw::draw_council() {
 }
 
 void FeatureMenuDraw::draw_officer_edit() {
-    draw_menu_heading("무장 편집");
-
+    draw_menu_heading("무장 · 보주");
+    if (!menu.pk_editors_unlocked) {
+        ImGui::TextWrapped("주인공 자원과 무장 능력·전법·특기·기재·관계·명성은 게임의 기능 → 편집에서 변경합니다.");
+        draw_player_options();
+        draw_information();
+        return;
+    }
     const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale);
     if (menu_sprites::sprite_button(menu.ui_atlases, "모든 무장 편집", tool_size)) {
         menu.officer_list_open = true;
@@ -1201,28 +1452,43 @@ void FeatureMenuDraw::draw_officer_edit() {
     draw_information();
 }
 
+void FeatureMenuDraw::draw_officer_section(OfficerToolsSection section) {
+    if (!menu.officer_tools_view || menu.officer_tools_view->epoch != menu.epoch) {
+        ImGui::TextUnformatted("현재 게임의 무장 정보를 기다리는 중입니다.");
+        return;
+    }
+    ImGui::PushID(static_cast<int>(section));
+    const std::optional<domain::OfficerToolsRequest> command = draw_officer_tools_panel(menu.officer_tools,
+        *menu.officer_tools_view, menu.officer_names ? &*menu.officer_names : nullptr, menu.dpi_scale,
+        section, menu.ui_atlases, can_submit() && menu.pending_officer_edits.empty());
+    ImGui::PopID();
+    if (menu.officer_tools.open_officer) {
+        open_officer_details(menu, *menu.officer_tools.open_officer);
+        menu.officer_tools.open_officer.reset();
+    }
+    if (command) submit(*command);
+}
+
 void FeatureMenuDraw::draw_traits() {
-    draw_menu_heading("기재 · 전법");
-
-    const ImVec2 tool_size(std::min(ImGui::GetContentRegionAvail().x, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale);
-    if (menu_sprites::sprite_button(menu.ui_atlases, "일괄 전법 · 특기 / 랜덤 기재", tool_size)) {
-        menu.officer_tools.open = true;
+    if (ImGui::BeginTabBar("##trait_growth_sections")) {
+        if (ImGui::BeginTabItem("기재 편집")) {
+            draw_trait_text_editor_content(menu, mailbox);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("기재 성장 · 랜덤 배정")) {
+            draw_feature({"기재 3칸 표시", domain::FeatureId::TraitViewer});
+            draw_feature({"능력치 한계 돌파", domain::FeatureId::AutoStatUp99});
+            draw_ai_growth();
+            ImGui::Separator();
+            draw_officer_section(OfficerToolsSection::RandomTraits);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("전법 · 특기 일괄 편집")) {
+            draw_officer_section(OfficerToolsSection::Training);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
     }
-
-    constexpr std::array FEATURES{
-        FeatureItem{"기재 3칸 표시", domain::FeatureId::TraitViewer},
-        FeatureItem{"능력치 한계 돌파", domain::FeatureId::AutoStatUp99},
-    };
-
-    draw_features(FEATURES);
-
-    if (menu_sprites::sprite_button(menu.ui_atlases, "기재 이름·설명 편집", tool_size)) {
-        menu.trait_text_editor.open = true;
-    }
-
-    ImGui::TextDisabled("확장 기재: %s", domain::trait_apply_status_text(menu.snapshot.traits.catalog));
-    ImGui::Spacing();
-    draw_ai_growth();
 }
 
 void FeatureMenuDraw::draw_social() {
@@ -1309,9 +1575,18 @@ void FeatureMenuDraw::draw_war() {
         ImGui::OpenPopup("전법 · 방어 건물##settings");
     }
 
-    prepare_popup(480.0f, 620.0f);
+    prepare_popup(980.0f, 780.0f);
 
     if (ImGui::BeginPopupModal("전법 · 방어 건물##settings", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+        if (begin_popup_edit()) {
+            menu.self_heal_draft = menu.snapshot.self_heal_settings;
+            menu.dongto_draft = menu.snapshot.dongto_settings;
+            menu.celestial_draft = menu.snapshot.celestial_settings;
+            menu.catapult_draft = menu.snapshot.catapult_settings;
+            menu.terrain_tactics_draft = menu.snapshot.terrain_tactics_settings;
+            menu.def_building_draft = menu.snapshot.def_building_settings;
+        }
+        ImGui::TextUnformatted("탭에서 연속 편집할 수 있습니다. 설정 적용 후에도 이 창은 유지됩니다.");
         draw_tactics();
 
         if (ImGui::Button("닫기")) {
@@ -1404,17 +1679,12 @@ void FeatureMenuDraw::draw_environment() {
 }
 
 void FeatureMenuDraw::draw_tactics() {
-    draw_feature({"치료", domain::FeatureId::SelfHeal});
-
-    if (ImGui::Button("치료 설정")) {
-        ImGui::OpenPopup("치료 설정##editor");
+    if (!ImGui::BeginTabBar("##tactics_building_tabs")) {
+        return;
     }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("치료 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.self_heal_draft = menu.snapshot.self_heal_settings;
-        }
+    if (ImGui::BeginTabItem("치료")) {
+        ImGui::PushID("치료");
+        draw_feature({"치료", domain::FeatureId::SelfHeal});
 
         domain::SelfHealSettings& draft = menu.self_heal_draft;
 
@@ -1433,29 +1703,20 @@ void FeatureMenuDraw::draw_tactics() {
             ImGui::PopID();
         }
         if (command_button("설정 적용")) {
-            if (submit(domain::SetSelfHealSettings{draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetSelfHealSettings{draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.self_heal_draft = menu.snapshot.self_heal_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
-    draw_feature({"동토", domain::FeatureId::Dongto});
-
-    if (ImGui::Button("동토 설정")) {
-        ImGui::OpenPopup("동토 설정##editor");
-    }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("동토 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.dongto_draft = menu.snapshot.dongto_settings;
-        }
+    if (ImGui::BeginTabItem("동토")) {
+        ImGui::PushID("동토");
+        draw_feature({"동토", domain::FeatureId::Dongto});
 
         domain::DongtoSettings& draft = menu.dongto_draft;
 
@@ -1469,29 +1730,20 @@ void FeatureMenuDraw::draw_tactics() {
             ImGui::PopID();
         }
         if (command_button("설정 적용")) {
-            if (submit(domain::SetDongtoSettings{draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetDongtoSettings{draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.dongto_draft = menu.snapshot.dongto_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
-    draw_feature({"천계", domain::FeatureId::Celestial});
-
-    if (ImGui::Button("천계 설정")) {
-        ImGui::OpenPopup("천계 설정##editor");
-    }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("천계 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.celestial_draft = menu.snapshot.celestial_settings;
-        }
+    if (ImGui::BeginTabItem("천계")) {
+        ImGui::PushID("천계");
+        draw_feature({"천계", domain::FeatureId::Celestial});
 
         domain::CelestialSettings& draft = menu.celestial_draft;
 
@@ -1508,29 +1760,20 @@ void FeatureMenuDraw::draw_tactics() {
             ImGui::PopID();
         }
         if (command_button("설정 적용")) {
-            if (submit(domain::SetCelestialSettings{draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetCelestialSettings{draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.celestial_draft = menu.snapshot.celestial_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
-    draw_feature({"투석", domain::FeatureId::Catapult});
-
-    if (ImGui::Button("투석 설정")) {
-        ImGui::OpenPopup("투석 설정##editor");
-    }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("투석 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.catapult_draft = menu.snapshot.catapult_settings;
-        }
+    if (ImGui::BeginTabItem("투석")) {
+        ImGui::PushID("투석");
+        draw_feature({"투석", domain::FeatureId::Catapult});
 
         domain::CatapultSettings& draft = menu.catapult_draft;
 
@@ -1546,29 +1789,20 @@ void FeatureMenuDraw::draw_tactics() {
         draw_range_choices(draft.range);
 
         if (command_button("설정 적용")) {
-            if (submit(domain::SetCatapultSettings{draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetCatapultSettings{draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.catapult_draft = menu.snapshot.catapult_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
-    draw_feature({"격류/낙석", domain::FeatureId::TerrainIgnore});
-
-    if (ImGui::Button("격류/낙석 설정")) {
-        ImGui::OpenPopup("격류/낙석 설정##editor");
-    }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("격류/낙석 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.terrain_tactics_draft = menu.snapshot.terrain_tactics_settings;
-        }
+    if (ImGui::BeginTabItem("격류/낙석")) {
+        ImGui::PushID("격류/낙석");
+        draw_feature({"격류/낙석", domain::FeatureId::TerrainIgnore});
 
         domain::TerrainTacticsSettings& draft = menu.terrain_tactics_draft;
 
@@ -1589,59 +1823,68 @@ void FeatureMenuDraw::draw_tactics() {
             ImGui::PopID();
         }
         if (command_button("설정 적용")) {
-            if (submit(domain::SetTerrainTacticsSettings{draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetTerrainTacticsSettings{draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.terrain_tactics_draft = menu.snapshot.terrain_tactics_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
-    draw_feature({"방어 건물 강화", domain::FeatureId::DefBuilding});
-
-    if (ImGui::Button("방어 건물 설정")) {
-        ImGui::OpenPopup("방어 건물 설정##editor");
-    }
-    prepare_popup(820.0f, 640.0f);
-
-    if (ImGui::BeginPopupModal("방어 건물 설정##editor", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-        if (begin_popup_edit()) {
-            menu.def_building_draft = menu.snapshot.def_building_settings;
-        }
+    if (ImGui::BeginTabItem("방어 건물")) {
+        ImGui::PushID("방어 건물");
+        draw_feature({"방어 건물 강화", domain::FeatureId::DefBuilding});
 
         constexpr std::array<const char*, 5> BUILDINGS{"도시", "관문", "망루", "성벽 투석대", "봉화대"};
-        constexpr std::array<const char*, 4> LABELS{"내구도", "사거리", "공격력", "시야"};
-        constexpr std::array<const char*, 3> SIGNAL_LABELS{"내구도", "전의", "시야"};
         std::array<int, 19>& values = menu.def_building_draft.values;
 
-        for (int building = 0; building < 5; ++building) {
-            ImGui::PushID(building);
-            ImGui::TextUnformatted(BUILDINGS[building]);
-            const int count = building == 4 ? 3 : 4;
-
-            for (int field = 0; field < count; ++field) {
-                ImGui::InputInt(building == 4 ? SIGNAL_LABELS[field] : LABELS[field],
-                                &values[building * 4 + field], 0);
+        if (ImGui::BeginTable("##def_building_values", 6, ImGuiTableFlags_BordersInner | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableSetupColumn("건물", ImGuiTableColumnFlags_WidthFixed, 140.0f * menu.dpi_scale);
+            for (const char* label : {"내구도", "사거리", "공격력", "시야", "전의"}) {
+                ImGui::TableSetupColumn(label);
             }
-            ImGui::PopID();
+            ImGui::TableHeadersRow();
+
+            for (int building = 0; building < 5; ++building) {
+                ImGui::PushID(building);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(BUILDINGS[building]);
+                for (int column = 1; column < 6; ++column) {
+                    ImGui::TableNextColumn();
+                    const int field = building == 4 ? (column == 1 ? 0 : column == 4 ? 2 : column == 5 ? 1 : -1)
+                        : column <= 4 ? column - 1 : -1;
+
+                    if (field < 0) {
+                        ImGui::TextDisabled("—");
+                        continue;
+                    }
+                    ImGui::PushID(field);
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::InputInt("##value", &values[building * 4 + field], 0);
+                    ImGui::PopID();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
         }
         if (command_button("설정 적용")) {
-            if (submit(domain::SetDefBuildingSettings{menu.def_building_draft})) {
-                ImGui::CloseCurrentPopup();
-            }
+            submit(domain::SetDefBuildingSettings{menu.def_building_draft});
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
 
-        if (ImGui::Button("취소")) {
-            ImGui::CloseCurrentPopup();
+        if (ImGui::Button("현재 설정 다시 읽기")) {
+            menu.def_building_draft = menu.snapshot.def_building_settings;
         }
-        ImGui::EndPopup();
+        ImGui::PopID();
+        ImGui::EndTabItem();
     }
+    ImGui::EndTabBar();
 }
 
 void FeatureMenuDraw::draw_effect(const char* title, int& effect, int& power, int& duration) {
@@ -1874,6 +2117,15 @@ void FeatureMenuDraw::draw_footer(float content_width) {
         ImGui::EndTable();
     }
 
+    draw_menu_heading("추가 편집기");
+    if (ImGui::Checkbox("PK 중복 편집기 잠금 해제", &menu.pk_editors_unlocked) && !menu.pk_editors_unlocked) {
+        menu.officer_list_open = false;
+        menu.protagonist_detail = false;
+        menu.specialty_tools.open = false;
+    }
+    menu.city_management.manual_editing = menu.pk_editors_unlocked;
+    menu.officer_tools.manual_editing = menu.pk_editors_unlocked;
+    ImGui::TextWrapped("기본값은 게임 내 편집을 사용합니다. 시나리오에서 편집을 제한한 경우 이 항목으로 자체 편집기를 표시할 수 있습니다.");
     draw_menu_heading("도구");
     if (menu_sprites::sprite_button(menu.ui_atlases, "메모장 / 메모리 도구",
             ImVec2(std::min(content_width, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale))) {
@@ -2051,6 +2303,12 @@ void FeatureMenuDraw::draw_connection_status() {
     }
 
     ImGui::TableSetColumnIndex(2);
+    if (!menu.pk_editors_unlocked) {
+        ImGui::TextDisabled("게임 기본 편집");
+        ImGui::TextWrapped("기능 → 편집에서 주인공·무장·도시·세력·명품을 변경합니다.");
+        ImGui::EndTable();
+        return;
+    }
     ImGui::TextDisabled("공용 무장 목록");
     const auto& roster = *menu.officer_roster;
     const bool current = roster.epoch == menu.epoch;
@@ -2070,22 +2328,24 @@ void FeatureMenuDraw::draw_overview() {
     using Tone = menu_sprites::StatusTone;
     draw_connection_status();
     draw_menu_heading("바로 열기");
-    const int columns = ImGui::GetContentRegionAvail().x >= 620.0f * menu.dpi_scale ? 3 : 2;
+    const int columns = menu.pk_editors_unlocked && ImGui::GetContentRegionAvail().x >= 620.0f * menu.dpi_scale ? 3 : 2;
     if (ImGui::BeginTable("##quick_editors", columns, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings)) {
-        ImGui::TableNextColumn();
-        if (menu_sprites::sprite_button(menu.ui_atlases, "모든 무장 편집##quick",
-                ImVec2(ImGui::GetContentRegionAvail().x, 30.0f * menu.dpi_scale), false, 1)) {
-            menu.officer_list_open = true;
+        if (menu.pk_editors_unlocked) {
+            ImGui::TableNextColumn();
+            if (menu_sprites::sprite_button(menu.ui_atlases, "모든 무장 편집##quick",
+                    ImVec2(ImGui::GetContentRegionAvail().x, 30.0f * menu.dpi_scale), false, 1)) menu.officer_list_open = true;
         }
         ImGui::TableNextColumn();
-        if (menu_sprites::sprite_button(menu.ui_atlases, "기재 이름·설명 편집##quick",
+        if (menu_sprites::sprite_button(menu.ui_atlases, "기재 효과·이름·설명 편집##quick",
                 ImVec2(ImGui::GetContentRegionAvail().x, 30.0f * menu.dpi_scale), false, 2)) {
-            menu.trait_text_editor.open = true;
+            menu.page = MenuPage::Traits;
+            menu.home_screen = false;
         }
         ImGui::TableNextColumn();
         if (menu_sprites::sprite_button(menu.ui_atlases, "도시 관리##quick",
                 ImVec2(ImGui::GetContentRegionAvail().x, 30.0f * menu.dpi_scale), false, 4)) {
-            menu.city_management.open = true;
+            menu.page = MenuPage::Domestic;
+            menu.home_screen = false;
         }
         ImGui::EndTable();
     }
@@ -2206,8 +2466,8 @@ void draw_home_menu(FeatureMenu& menu, bool popup_open, float scale) {
     }
 }
 
-void draw_category_tabs(FeatureMenu& menu, bool popup_open, float scale) {
-    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+void draw_category_tabs(FeatureMenu& menu, bool popup_open, float scale, float available_width) {
+    const float right = ImGui::GetCursorScreenPos().x + available_width;
     const float gap = 3.0f * scale;
     ImGui::BeginDisabled(popup_open);
     for (std::size_t index = 0; index < MENU_PAGES.size(); ++index) {
@@ -2227,9 +2487,7 @@ void draw_category_tabs(FeatureMenu& menu, bool popup_open, float scale) {
 
 void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
     const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-    // Measured against the 1920 x 1080 in-game HUD: the settings circle is
-    // centred 40px from the right. Its next row begins at client y=106.
-    // Neither the editor position, Windows DPI nor the user's text scale moves it.
+    // Store the dragged location relative to the viewport so resizing keeps it on screen.
     const float hud_scale = std::clamp(std::min(viewport.Size.x / 1920.0f,
         viewport.Size.y / 1080.0f), 0.1f, 3.0f);
     const float edge = std::min(std::max(48.0f, 56.0f * hud_scale),
@@ -2237,8 +2495,12 @@ void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
     const ImVec2 lower(viewport.Pos.x + 4.0f, viewport.Pos.y + 4.0f);
     const ImVec2 upper(std::max(lower.x, viewport.Pos.x + viewport.Size.x - edge - 4.0f),
                        std::max(lower.y, viewport.Pos.y + viewport.Size.y - edge - 4.0f));
-    const ImVec2 position(std::clamp(viewport.Pos.x + viewport.Size.x - 40.0f * hud_scale - edge * 0.5f, lower.x, upper.x),
-                          std::clamp(viewport.Pos.y + 106.0f * hud_scale, lower.y, upper.y));
+    if (menu.launcher_x < 0.0f) {
+        menu.launcher_x = (upper.x - lower.x) / viewport.Size.x;
+        menu.launcher_y = 150.0f * hud_scale / viewport.Size.y;
+    }
+    const ImVec2 position(std::clamp(lower.x + menu.launcher_x * viewport.Size.x, lower.x, upper.x),
+                          std::clamp(lower.y + menu.launcher_y * viewport.Size.y, lower.y, upper.y));
     ImGui::SetNextWindowPos(position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(edge, edge), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -2248,7 +2510,14 @@ void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
         ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
     if (ImGui::Begin("###S8RPK.Launcher", nullptr, flags)) {
         ImGui::BeginDisabled(popup_open);
-        if (menu_sprites::launcher_button(menu.ui_atlases, "편집 도구 열기##launcher", edge, hud_scale)) {
+        const bool pressed = menu_sprites::launcher_button(menu.ui_atlases, "편집 도구 열기##launcher", edge, hud_scale);
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            menu.launcher_dragging = true;
+            const ImVec2 delta = ImGui::GetIO().MouseDelta;
+            menu.launcher_x = (std::clamp(position.x + delta.x, lower.x, upper.x) - lower.x) / viewport.Size.x;
+            menu.launcher_y = (std::clamp(position.y + delta.y, lower.y, upper.y) - lower.y) / viewport.Size.y;
+        }
+        if (pressed && !menu.launcher_dragging) {
             if (menu.collapsed) {
                 menu.collapsed = false;
                 menu.toggle_collapse = false;
@@ -2257,9 +2526,22 @@ void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
                 minimize_workbench(menu);
             }
         }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) menu.launcher_dragging = false;
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-            ImGui::SetTooltip("편집 도구 %s\n우클릭: 바로가기 · `: 열기/최소화", menu.collapsed ? "열기" : "최소화");
+        if (ImGui::IsItemHovered() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            ImGui::SetNextWindowPos(ImVec2(position.x + edge * 0.5f,
+                position.y + edge + 6.0f * hud_scale), ImGuiCond_Always, ImVec2(0.5f, 0));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * hud_scale, 3 * hud_scale));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.23f, 0.21f, 0.22f, 1));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.58f, 0.54f, 0.49f, 1));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.94f, 0.90f, 1));
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("편집 도구");
+            ImGui::EndTooltip();
+            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar(3);
         }
         if (ImGui::BeginPopupContextItem("##launcher_shortcuts")) {
             if (ImGui::MenuItem("편집 도구 열기")) {
@@ -2271,11 +2553,11 @@ void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
                 ImGui::MenuItem("알림 내역")) {
                 menu.notifications.show_history = true;
             }
-            if (menu.snapshot.features.get(domain::FeatureId::ShowWidgetHero) &&
+            if (menu.pk_editors_unlocked && menu.snapshot.features.get(domain::FeatureId::ShowWidgetHero) &&
                 ImGui::MenuItem("주인공 무장 편집", nullptr, false, menu.snapshot.protagonist_id.has_value())) {
                 menu.protagonist_detail = true;
             }
-            if (menu.snapshot.features.get(domain::FeatureId::ShowWidgetAllOfficers) &&
+            if (menu.pk_editors_unlocked && menu.snapshot.features.get(domain::FeatureId::ShowWidgetAllOfficers) &&
                 ImGui::MenuItem("모든 무장 편집")) {
                 menu.officer_list_open = true;
             }
@@ -2298,12 +2580,24 @@ void request_feature_menu_toggle(FeatureMenu& menu) {
     menu.auto_load_collapse = false;
 }
 
-void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
-    FeatureMenuDraw draw{menu, mailbox};
+void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
+    services::CommandMailbox& mailbox = bridge.commands;
+    FeatureMenuDraw draw{menu, mailbox, bridge};
+    if (menu.collapsed || menu.home_screen || menu.page != MenuPage::Domestic) {
+        menu.city_management.was_open = false;
+        menu.city_management.technology_requested = false;
+    }
 
     // Independently opened editors continue rendering when the workbench closes.
     draw_special_assignment_results(menu);
-    draw_trait_text_editor(menu, mailbox);
+    if (!menu.pk_editors_unlocked) {
+        menu.officer_list_open = false;
+        menu.protagonist_detail = false;
+        menu.specialty_tools.open = false;
+        menu.officer_open_request.reset();
+    }
+    menu.city_management.manual_editing = menu.pk_editors_unlocked;
+    menu.officer_tools.manual_editing = menu.pk_editors_unlocked;
     draw.draw_secondary_jewels();
     if (!menu.open) {
         return;
@@ -2325,88 +2619,65 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
             menu.auto_load_collapse = false;
         }
     }
-    if (menu.collapsed) {
+    if (menu.collapsed || menu.officer_list_open || menu.protagonist_detail || menu.secondary_jewel_window) {
         draw_menu_launcher(menu, popup_open);
         return;
     }
 
     const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-    const ImGuiStyle& style = ImGui::GetStyle();
+    const ImVec2 origin = viewport.WorkPos;
+    const ImVec2 size = viewport.WorkSize;
+    const float hud_scale = std::min(size.x / 1920.0f, size.y / 1080.0f);
     const float scale = menu.dpi_scale;
     const bool drawn_home = menu.home_screen;
-    const float margin = 12.0f;
-    const ImVec2 maximum(std::max(1.0f, viewport.WorkSize.x - margin * 2),
-                        std::max(1.0f, viewport.WorkSize.y - margin * 2));
-    const ImVec2 size(std::min((drawn_home ? 740.0f : 920.0f) * scale, maximum.x),
-                      std::min((drawn_home ? 520.0f : 620.0f) * scale, maximum.y));
-    // Keep navigation and the home chooser usable on a small client even when
-    // content text is enlarged. Detail pages retain the requested user scale.
-    const float chrome_scale = std::min(scale, std::max(0.5f, std::min(size.x / 640.0f, size.y / 480.0f)));
-    const float chrome_font_scale = chrome_scale / scale;
     constexpr const char* window_name = "편집 도구###S8RPK.Workbench";
-    ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x + viewport.WorkSize.x * 0.5f,
-        viewport.WorkPos.y + viewport.WorkSize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+    ImGui::SetNextWindowPos(origin, ImGuiCond_Always);
     ImGui::SetNextWindowSize(size, ImGuiCond_Always);
     ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f * chrome_scale, 14.0f * chrome_scale));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoBringToFrontOnFocus;
     if (ImGui::Begin(window_name, nullptr, flags)) {
-        menu.window_x = ImGui::GetWindowPos().x;
-        menu.window_y = ImGui::GetWindowPos().y;
-        if (static_cast<std::size_t>(menu.page) >= MENU_PAGES.size()) menu.page = MenuPage::Overview;
-        const ImVec2 origin = ImGui::GetWindowPos();
-        const float footer_height = 76.0f * chrome_scale;
-        menu_sprites::draw_panel(menu.ui_atlases, origin,
-            ImVec2(origin.x + size.x, origin.y + size.y - footer_height), chrome_scale);
-        ImGui::SetWindowFontScale(chrome_font_scale);
+        ImDrawList& background = *ImGui::GetWindowDrawList();
 
-        // Native menu structure: title, raised tabs, paper content, a separate
-        // octagonal return control. No desktop title bar or persistent sidebar.
-        const ImVec2 heading = ImGui::GetCursorScreenPos();
-        const float heading_height = 30.0f * chrome_scale;
-        ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 24.0f * chrome_scale, heading,
-            ImGui::GetColorU32(ImGuiCol_Text), "편집 도구");
-        ImGui::SetCursorScreenPos(ImVec2(origin.x + size.x - 50.0f * chrome_scale, heading.y));
-        ImGui::BeginDisabled(popup_open);
-        if (menu_sprites::sprite_button(menu.ui_atlases, "-##workbench_minimize", ImVec2(30.0f * chrome_scale, 26.0f * chrome_scale))) {
-            minimize_workbench(menu);
-        }
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("최소화 · 우측 고정 아이콘으로 다시 열기");
-        ImGui::SetCursorScreenPos(ImVec2(heading.x, heading.y + heading_height));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", drawn_home ? "원하는 항목을 선택해 주십시오." :
-            MENU_PAGES[static_cast<std::size_t>(menu.page)].description);
-        ImGui::PopStyleColor();
-        ImGui::Spacing();
+        background.AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(15, 12, 10, 140));
+        draw_screen_heading(menu, menu.page == MenuPage::Settings && !drawn_home ? domain::native_ui::SETTINGS :
+            domain::native_ui::EDIT, "편집", drawn_home ? "편집할 항목을 선택해 주십시오" :
+            MENU_PAGES[static_cast<std::size_t>(menu.page)].description, hud_scale);
 
+        const ImVec2 paper_min(origin.x + size.x * (drawn_home ? 0.23f : 0.06f),
+            origin.y + size.y * (drawn_home ? 0.18f : 0.115f));
+        const ImVec2 paper_max(origin.x + size.x * (drawn_home ? 0.77f : 0.94f),
+            origin.y + size.y * (drawn_home ? 0.80f : 0.86f));
+
+        menu.window_x = paper_min.x;
+        menu.window_y = paper_min.y;
+        menu_sprites::draw_panel(menu.ui_atlases, paper_min, paper_max, hud_scale);
+        ImGui::SetCursorScreenPos(ImVec2(paper_min.x + 38 * hud_scale, paper_min.y + 26 * hud_scale));
         if (drawn_home) {
-            menu_sprites::navigation_row(menu.ui_atlases, "전체 메뉴##home_tab", ImVec2(110.0f * chrome_scale, 34.0f * chrome_scale), true);
+            menu_sprites::navigation_row(menu.ui_atlases, "전체 메뉴##home_tab", ImVec2(112 * scale, 34 * scale), true);
         } else {
-            draw_category_tabs(menu, popup_open, chrome_scale);
+            draw_category_tabs(menu, popup_open, scale, paper_max.x - paper_min.x - 76 * hud_scale);
         }
-        ImGui::SetWindowFontScale(1.0f);
-        const ImVec2 body_min = ImGui::GetCursorScreenPos();
-        const float body_bottom = origin.y + size.y - footer_height - 16.0f * chrome_scale;
-        const ImVec2 body_size(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, body_bottom - body_min.y));
-        ImGui::GetWindowDrawList()->AddRectFilled(body_min,
-            ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), ImGui::GetColorU32(ImVec4(0.94f, 0.93f, 0.87f, 0.72f)));
-        ImGui::GetWindowDrawList()->AddRect(body_min,
-            ImVec2(body_min.x + body_size.x, body_min.y + body_size.y), ImGui::GetColorU32(ImGuiCol_Border));
+
         const MenuPage drawn_page = menu.page;
-        ImGui::PushID(drawn_home ? -1 : static_cast<int>(drawn_page));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f * chrome_scale, 12.0f * chrome_scale));
+        const ImVec2 body_min(paper_min.x + 28 * hud_scale, ImGui::GetCursorScreenPos().y);
+        const ImVec2 body_max(paper_max.x - 28 * hud_scale, paper_max.y - 24 * hud_scale);
+        const ImVec2 body_size(body_max.x - body_min.x, std::max(1.0f, body_max.y - body_min.y));
+
+        draw_native_card(menu, body_min, body_max, hud_scale);
+        ImGui::SetCursorScreenPos(body_min);
+        ImGui::PushID(drawn_home ? -1 : static_cast<int>(menu.page));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24 * hud_scale, 20 * hud_scale));
         if (!drawn_home) {
             ImGui::SetNextWindowContentSize(ImVec2(std::max(440.0f * scale,
-                body_size.x - style.ScrollbarSize - 32.0f * chrome_scale), 0));
+                body_size.x - ImGui::GetStyle().ScrollbarSize - 48 * hud_scale), 0));
         }
         if (ImGui::BeginChild("##workbench_page", body_size, ImGuiChildFlags_AlwaysUseWindowPadding,
                 ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_HorizontalScrollbar)) {
-            ImGui::SetWindowFontScale(drawn_home ? chrome_font_scale : 1.0f);
             draw_previous_request_error(menu);
             if (menu.ready && menu.save_notice && menu.save_notice->status != services::ConfigSaveStatus::Completed) {
                 ImGui::TextColored(ImVec4(0.68f, 0.18f, 0.10f, 1.0f), "설정 저장 확인 필요 (%d, %u)",
@@ -2419,7 +2690,7 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
                 ImGui::TextWrapped("설정 파일을 확인해 주세요. 형식 또는 파일 접근 문제가 해결되면 자동으로 다시 읽습니다.");
             }
             if (drawn_home) {
-                draw_home_menu(menu, popup_open, chrome_scale);
+                draw_home_menu(menu, popup_open, scale);
             } else {
                 ImGui::PushItemWidth(std::min(280.0f * scale, ImGui::GetContentRegionAvail().x * 0.48f));
                 ImGui::PushTextWrapPos(0.0f);
@@ -2428,8 +2699,24 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
                 case MenuPage::Officers: draw.draw_officer_edit(); break;
                 case MenuPage::Traits: draw.draw_traits(); break;
                 case MenuPage::Domestic: draw.draw_domestic(); break;
-                case MenuPage::CouncilSocial: draw.draw_council(); draw.draw_social(); break;
-                case MenuPage::Battle: draw.draw_war(); draw.draw_stratagem(); break;
+                case MenuPage::CouncilSocial:
+                    if (ImGui::BeginTable("##council_cards", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+                        ImGui::TableNextColumn();
+                        draw.draw_council();
+                        ImGui::TableNextColumn();
+                        draw.draw_social();
+                        ImGui::EndTable();
+                    }
+                    break;
+                case MenuPage::Battle:
+                    if (ImGui::BeginTable("##battle_cards", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+                        ImGui::TableNextColumn();
+                        draw.draw_war();
+                        ImGui::TableNextColumn();
+                        draw.draw_stratagem();
+                        ImGui::EndTable();
+                    }
+                    break;
                 case MenuPage::Scenario: draw.draw_scenario(); break;
                 case MenuPage::Settings: draw.draw_footer(ImGui::GetContentRegionAvail().x); break;
                 case MenuPage::Count: break;
@@ -2442,23 +2729,25 @@ void draw_feature_menu(FeatureMenu& menu, services::CommandMailbox& mailbox) {
         ImGui::PopStyleVar();
         ImGui::PopID();
 
-        ImGui::SetWindowFontScale(chrome_font_scale);
-        const float return_edge = 56.0f * chrome_scale;
-        const float footer_y = origin.y + size.y - footer_height + 8.0f * chrome_scale;
-        ImGui::SetCursorScreenPos(ImVec2(origin.x + (size.x - return_edge) * 0.5f, footer_y));
+        const float edge = 88 * hud_scale;
+
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + (size.x - edge) * 0.5f, origin.y + size.y * 0.93f - edge * 0.5f));
         ImGui::BeginDisabled(popup_open);
-        if (menu_sprites::back_button(menu.ui_atlases, "뒤로##workbench_back", return_edge, chrome_scale)) {
-            if (drawn_home) minimize_workbench(menu);
-            else {
+        if (menu_sprites::back_button(menu.ui_atlases, "뒤로##workbench_back", edge, hud_scale)) {
+            if (drawn_home) {
+                minimize_workbench(menu);
+            } else {
                 menu.home_screen = true;
                 menu.ui_scale_draft.editing = false;
                 menu.notification_speed_draft.editing = false;
                 menu.mission_appointment_limit_editing = false;
             }
         }
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + size.x - 96 * hud_scale, origin.y + 20 * hud_scale));
+        if (menu_sprites::sprite_button(menu.ui_atlases, "최소화##workbench_minimize", ImVec2(80 * hud_scale, 30 * hud_scale))) {
+            minimize_workbench(menu);
+        }
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", drawn_home ? "편집 도구 최소화" : "전체 메뉴로 돌아가기");
-        ImGui::SetWindowFontScale(1.0f);
     }
     ImGui::End();
     ImGui::PopStyleVar(2);
@@ -2796,13 +3085,12 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
     if (!menu.officer_list_open) {
         return;
     }
-    ImGui::SetNextWindowSize(ImVec2(1000, 700), ImGuiCond_FirstUseEver);
     if (menu.officer_open_focus) {
         ImGui::SetNextWindowCollapsed(false);
         ImGui::SetNextWindowFocus();
         menu.officer_open_focus = false;
     }
-    if (ImGui::Begin("모든 무장 편집 리스트###OfficerListWin", &menu.officer_list_open)) {
+    if (begin_editor_screen(menu, "모든 무장 편집 리스트###OfficerListWin", menu.officer_list_open, "편집할 무장을 선택해 주십시오")) {
         const int scan_cursor = bridge.officer_roster_scan_cursor.load(std::memory_order_acquire);
         const bool roster_available = menu.officer_roster->available && menu.officer_roster->epoch == menu.epoch;
 
@@ -3456,8 +3744,22 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     ImGui::EndDisabled();
                 }
             }
-            if (ImGui::BeginChild("##officer_roster", ImVec2(0, 0), true)) {
-                const auto row_height = ImGui::GetFrameHeightWithSpacing();
+            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, IM_COL32(139, 112, 51, 255));
+            ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(244, 207, 87, 210));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(255, 226, 111, 230));
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10 * menu.dpi_scale, 5 * menu.dpi_scale));
+            if (ImGui::BeginTable("##officer_roster", 4,
+                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_NoSavedSettings)) {
+                ImGui::TableSetupColumn("선택", ImGuiTableColumnFlags_WidthFixed, 48 * menu.dpi_scale);
+                ImGui::TableSetupColumn("번호", ImGuiTableColumnFlags_WidthFixed, 70 * menu.dpi_scale);
+                ImGui::TableSetupColumn("무장", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("상태", ImGuiTableColumnFlags_WidthFixed, 110 * menu.dpi_scale);
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 245, 211, 255));
+                ImGui::TableHeadersRow();
+                ImGui::PopStyleColor();
+
+                const float row_height = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.y * 2;
                 if (run_search && menu.officer_search_result >= 0) {
                     ImGui::SetScrollY(menu.officer_search_result * row_height);
                 }
@@ -3466,24 +3768,27 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 while (clipper.Step()) {
                     for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
                         const auto& officer = menu.officer_roster->entries[menu.officer_filtered_indices[i]];
+                        ImGui::TableNextRow(ImGuiTableRowFlags_None, row_height);
+                        ImGui::TableSetColumnIndex(0);
                         ImGui::PushID(static_cast<int>(officer.id));
                         ImGui::Checkbox("##multi", &menu.selected_officer_ids[officer.id]);
-                        ImGui::SameLine();
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Text("%u", static_cast<unsigned>(officer.id));
+                        ImGui::TableSetColumnIndex(2);
                         const auto name = menu.officer_names ? menu.officer_names->find(officer.id)
                                                              : domain::OfficerNames::const_iterator{};
                         const char* display = menu.officer_names && name != menu.officer_names->end()
                             ? name->second.c_str() : "";
                         const bool protagonist = menu.snapshot.protagonist_id == officer.id;
-                        const auto label = (protagonist ? std::string("★ ") : std::string{}) +
-                            "#" + std::to_string(officer.id) + "  " + display +
-                            (protagonist ? " (주인공)" : "") + "  상태 " + std::to_string(officer.status);
+                        const std::string label = (protagonist ? std::string("★ ") : std::string{}) +
+                            display + (protagonist ? " (주인공)" : "");
                         const bool selected = menu.snapshot.selected_officer &&
                             menu.snapshot.selected_officer->id == officer.id;
                         ImGui::BeginDisabled(!menu.pending_officer_edits.empty() || !menu.ready);
                         if (menu.officer_name_edit_id == officer.id && menu.officer_name_edit_list) {
                             draw_officer_name_input(menu, bridge, officer.id);
                         } else {
-                            const bool clicked = ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick);
+                            const bool clicked = ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, ImGui::GetFrameHeight()));
                             if (clicked && ImGui::IsMouseDoubleClicked(0) && !menu.officer_name_save_pending) {
                                 menu.officer_name_edit_id = officer.id;
                                 menu.officer_name_edit_list = true;
@@ -3494,16 +3799,36 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                             }
                         }
                         ImGui::EndDisabled();
+                        if (selected) {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 218, 91, 180));
+                        }
+                        ImGui::TableSetColumnIndex(3);
+                        switch (officer.status) {
+                        case 0x18: ImGui::TextUnformatted("군사"); break;
+                        case 0x28: ImGui::TextUnformatted("일반"); break;
+                        case 0x38: ImGui::TextUnformatted("두령"); break;
+                        case 0x48: ImGui::TextUnformatted("동지"); break;
+                        case 0x58: ImGui::TextUnformatted("재야"); break;
+                        case 0x68: case 0x78: ImGui::TextUnformatted("미발견"); break;
+                        case 0x88: ImGui::TextUnformatted("사망"); break;
+                        case 0x98: ImGui::TextUnformatted("NPC"); break;
+                        case 0xc8: ImGui::TextUnformatted("군주"); break;
+                        case 0xd8: ImGui::TextUnformatted("도독"); break;
+                        case 0xe8: ImGui::TextUnformatted("태수"); break;
+                        default: ImGui::Text("0x%02X", static_cast<unsigned>(officer.status)); break;
+                        }
                         ImGui::PopID();
                     }
                 }
+                ImGui::EndTable();
             }
-            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(3);
         } else {
             ImGui::TextUnformatted("목록 갱신을 눌러 무장을 읽어오세요.");
         }
     }
-    ImGui::End();
+    end_editor_screen();
 }
 
 void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge) {
@@ -3511,8 +3836,7 @@ void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge) {
     if (!menu.protagonist_detail) {
         return;
     }
-    ImGui::SetNextWindowSize(ImVec2(800, 700), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("주인공 무장 상세 편집###OffDetailWin", &menu.protagonist_detail)) {
+    if (begin_editor_screen(menu, "주인공 무장 상세 편집###OffDetailWin", menu.protagonist_detail, "무장 데이터를 설정해 주십시오", true)) {
         if (menu.snapshot.protagonist_id) {
             bridge.protagonist_detail_visible.store(true);
             draw_officer_name(menu, bridge, *menu.snapshot.protagonist_id, true);
@@ -3784,41 +4108,7 @@ void draw_protagonist_abilities(FeatureMenu& menu, services::UiBridge& bridge) {
             ImGui::EndDisabled();
         }
     }
-    ImGui::End();
-}
-
-void draw_officer_tools(FeatureMenu& menu, services::UiBridge& bridge) {
-    if (!menu.officer_tools.open) {
-        return;
-    }
-    if (!menu.officer_tools_view || menu.officer_tools_view->epoch != menu.epoch) {
-        if (ImGui::Begin("무장·가족·시나리오 도구###OfficerTools", &menu.officer_tools.open)) {
-            ImGui::TextUnformatted("현재 게임의 무장 정보를 기다리는 중입니다.");
-        }
-        ImGui::End();
-        return;
-    }
-    const std::optional<domain::OfficerToolsRequest> command = draw_officer_tools_panel(menu.officer_tools,
-        *menu.officer_tools_view, menu.officer_names ? &*menu.officer_names : nullptr, menu.dpi_scale,
-        !menu.pending.has_value() && menu.pending_officer_edits.empty() && menu.ready);
-
-    if (menu.officer_tools.open_officer) {
-        open_officer_details(menu, *menu.officer_tools.open_officer);
-        menu.officer_tools.open_officer.reset();
-    }
-
-    if (!command) {
-        return;
-    }
-    const domain::RequestId request{++menu.next_request};
-    const domain::Result<void> accepted = bridge.commands.push({request, menu.epoch, *command});
-
-    if (accepted) {
-        menu.pending = request;
-        menu.error.reset();
-    } else {
-        menu.error = accepted.error();
-    }
+    end_editor_screen();
 }
 
 } // namespace s8::overlay
