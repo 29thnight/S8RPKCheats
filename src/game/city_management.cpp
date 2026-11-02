@@ -119,12 +119,25 @@ bool read_faction_technology(CityManagement& state, std::size_t index) {
     return exists == 0 || row.valid;
 }
 
-bool read_city_row(CityManagement& state, std::size_t index) {
-    std::array<std::byte, CITY_STRIDE> bytes{};
+struct CityRefreshLinks {
+    struct Corps {
+        std::uintptr_t address = 0;
+        std::array<std::byte, 2 * sizeof(std::uintptr_t)> bytes{};
+        bool readable = false;
+    };
+
+    std::array<Corps, domain::CITY_COUNT> corps{};
+    std::size_t count = 0;
+};
+
+bool read_city_row(CityManagement& state, std::size_t index,
+    const std::array<std::byte, CITY_STRIDE>* captured = nullptr, CityRefreshLinks* links = nullptr) {
+    std::array<std::byte, CITY_STRIDE> local_bytes{};
+    const std::array<std::byte, CITY_STRIDE>& bytes = captured ? *captured : local_bytes;
     domain::CityRow row;
     const std::uintptr_t city = state.city_table + index * CITY_STRIDE;
 
-    if (!read_value(city, bytes)) {
+    if (!captured && !read_value(city, local_bytes)) {
         state.snapshot.cities[index] = row;
         state.forces[index] = 0;
         return false;
@@ -134,16 +147,68 @@ bool read_city_row(CityManagement& state, std::size_t index) {
 
         std::memcpy(&row.values[field], bytes.data() + FIELD_OFFSETS[field], width);
     }
-    const std::uintptr_t force = read_city_force(city);
     const std::uintptr_t governor = from_record<std::uintptr_t>(bytes, 0x98);
     const std::uintptr_t corps = from_record<std::uintptr_t>(bytes, 0x90);
+    std::uintptr_t force = 0;
 
-    row.governor = officer_id(governor);
-    row.force_lord = force_lord(force);
-    row.occupied = force != 0;
-    if (corps > 0x10000) {
-        read_value(corps + 0x18, row.corps);
+    if (governor > 0x10000) {
+        // ID (+8) and force (+0x18) belong to the same officer record.
+        std::array<std::byte, 0x20 - 8> governor_bytes{};
+
+        if (read_value(governor + 8, governor_bytes)) {
+            std::uint16_t id = 0;
+
+            std::memcpy(&id, governor_bytes.data(), sizeof(id));
+            if (id >= 1 && id <= 5102) { row.governor = id; }
+            std::memcpy(&force, governor_bytes.data() + 0x18 - 8, sizeof(force));
+            if (force <= 0x10000) { force = 0; }
+        }
     }
+    if (corps > 0x10000) {
+        // Force (+0x10) and district number (+0x18) are adjacent.
+        std::array<std::byte, 2 * sizeof(std::uintptr_t)> corps_bytes{};
+
+        bool readable = false;
+
+        if (links) {
+            std::size_t slot = 0;
+
+            while (slot < links->count && links->corps[slot].address != corps) {
+                ++slot;
+            }
+            CityRefreshLinks::Corps& entry = links->corps[slot];
+
+            if (slot == links->count) {
+                entry.address = corps;
+                entry.readable = read_value(corps + 0x10, entry.bytes);
+                ++links->count;
+            }
+            corps_bytes = entry.bytes;
+            readable = entry.readable;
+        } else {
+            readable = read_value(corps + 0x10, corps_bytes);
+        }
+        if (readable) {
+            if (force == 0) {
+                std::memcpy(&force, corps_bytes.data(), sizeof(force));
+                if (force <= 0x10000) { force = 0; }
+            }
+            std::memcpy(&row.corps, corps_bytes.data() + 8, sizeof(row.corps));
+        }
+    }
+    bool lord_loaded = false;
+
+    if (state.work == CityWork::Refresh && force != 0) {
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (state.snapshot.cities[previous].valid && state.forces[previous] == force) {
+                row.force_lord = state.snapshot.cities[previous].force_lord;
+                lord_loaded = true;
+                break;
+            }
+        }
+    }
+    if (!lord_loaded) { row.force_lord = force_lord(force); }
+    row.occupied = force != 0;
     for (std::size_t slot = 0; slot < row.neighbors.size(); ++slot) {
         const std::uintptr_t neighbor = from_record<std::uintptr_t>(bytes, 0x20 + slot * sizeof(std::uintptr_t));
 
@@ -282,12 +347,16 @@ void start_work(CityManagement& state, CityWork work) {
 }
 
 bool bind_city_session(CityManagement& state, std::uintptr_t module_base, std::uintptr_t root,
-    std::uintptr_t player, domain::GameEpoch epoch) {
-    // The title-screen city table has its own static chain and does not require
-    // a protagonist. Scenario operations keep their separate live-player gate.
-    const std::uintptr_t table = resolve_city_data(module_base);
+    std::uintptr_t player, domain::GameEpoch epoch, bool refresh = true) {
+    // The city owner table does not require a protagonist. Scenario operations
+    // keep their separate live-player gate.
     const bool same_session = state.module_base == module_base && state.game_root == root && state.player == player &&
         state.epoch == epoch;
+
+    if (!refresh && same_session && state.snapshot.available) {
+        return true;
+    }
+    const std::uintptr_t table = resolve_city_data(module_base);
 
     if (same_session && state.city_table == table) {
         if (!state.snapshot.available && table != 0) {
@@ -588,17 +657,30 @@ void begin_pending(CityManagement& state) {
 } // namespace
 
 std::uintptr_t resolve_city_data(std::uintptr_t module_base) {
-    if (!module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - 0x34c8630) {
+    if (!module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - 0x2e98bc8) {
         return 0;
     }
-    std::uintptr_t address = module_base + 0x34c8630;
+    std::uintptr_t owner = 0;
+    std::array<std::uintptr_t, domain::CITY_COUNT + 1> cities{};
 
-    for (std::size_t depth = 0; depth < 3; ++depth) {
-        if (!read_value(address, address) || address <= 0x10000) {
+    if (!read_value(module_base + 0x2e98bc8, owner) || owner <= 0x10000 ||
+        owner > std::numeric_limits<std::uintptr_t>::max() - 0x5469a8 ||
+        !read_value(owner + 0x546808, cities)) {
+        return 0;
+    }
+    const std::uintptr_t table = cities[1];
+
+    if (table <= 0x10000 ||
+        table > std::numeric_limits<std::uintptr_t>::max() - domain::CITY_COUNT * CITY_STRIDE) {
+        return 0;
+    }
+    // Validate the external pointer array once, before using contiguous records.
+    for (std::size_t index = 0; index < domain::CITY_COUNT; ++index) {
+        if (cities[index + 1] != table + index * CITY_STRIDE) {
             return 0;
         }
     }
-    return platform::windows::is_committed_memory(address, domain::CITY_COUNT * CITY_STRIDE) ? address : 0;
+    return table;
 }
 
 std::uintptr_t read_city_force(std::uintptr_t raw_city) {
@@ -782,7 +864,7 @@ domain::CityWorkStatus request_city_management(CityManagement& state, std::uintp
 void tick_city_management(CityManagement& state, std::uintptr_t module_base, std::uintptr_t game_root,
     std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items,
     const domain::WorkBudget& work_budget) {
-    if (state.stopping || !bind_city_session(state, module_base, game_root, player, epoch)) {
+    if (state.stopping || !bind_city_session(state, module_base, game_root, player, epoch, false)) {
         return;
     }
     if (state.recovery_count != 0 && !restore_bound_data(state)) {
@@ -810,6 +892,37 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
     }
     if (state.work == CityWork::Idle) {
         begin_pending(state);
+    }
+    if (state.work == CityWork::Refresh && max_items != 0) {
+        // A refresh is one bounded snapshot, not 51 separately scheduled reads.
+        const std::uintptr_t table = resolve_city_data(module_base);
+        std::array<std::array<std::byte, CITY_STRIDE>, domain::CITY_COUNT> records{};
+
+        if (table == 0 || table != state.city_table) {
+            end_work(state, table == 0 ? domain::CityWorkStatus::ReadFailed : domain::CityWorkStatus::SessionChanged);
+            return;
+        }
+        if (!read_value(table, records)) {
+            end_work(state, domain::CityWorkStatus::ReadFailed);
+            return;
+        }
+        for (std::size_t index = 0; index < records.size(); ++index) {
+            if (from_record<std::uint8_t>(records[index], 8) != index + 1) {
+                end_work(state, domain::CityWorkStatus::ReadFailed);
+                return;
+            }
+        }
+        CityRefreshLinks links;
+
+        for (std::size_t index = 0; index < records.size(); ++index) {
+            read_city_row(state, index, &records[index], &links);
+        }
+        update_frontiers(state);
+        state.cursor = domain::CITY_COUNT;
+        state.snapshot.completed = domain::CITY_COUNT;
+        state.snapshot.succeeded = domain::CITY_COUNT;
+        end_work(state, domain::CityWorkStatus::Complete);
+        return;
     }
     if (state.work == CityWork::Technology && resolve_faction_table(module_base) != state.faction_table) {
         state.snapshot.technologies_loaded = false;
@@ -845,9 +958,6 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
             switch (state.work) {
             case CityWork::Technology:
                 result = read_faction_technology(state, city) ? domain::CityWorkStatus::Complete : domain::CityWorkStatus::ReadFailed;
-                break;
-            case CityWork::Refresh:
-                result = read_city_row(state, city) ? domain::CityWorkStatus::Complete : domain::CityWorkStatus::ReadFailed;
                 break;
             case CityWork::Maximize:
                 result = write_city_field(state, city, state.request.field, domain::city_field_maximum(state.request.field));
@@ -904,9 +1014,7 @@ void tick_city_management(CityManagement& state, std::uintptr_t module_base, std
             break;
         }
         if (state.cursor >= state.snapshot.total) {
-            if (state.work == CityWork::Refresh) {
-                update_frontiers(state);
-            } else if (state.work == CityWork::Technology) {
+            if (state.work == CityWork::Technology) {
                 state.snapshot.technologies_loaded = true;
             }
             if (state.work == CityWork::Revolt) {

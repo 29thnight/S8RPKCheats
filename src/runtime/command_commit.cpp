@@ -579,11 +579,7 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::RefreshOfficerRoster>) {
                     save_config = false;
-                    const std::uintptr_t previous_base = runtime.officer_roster.base;
                     game::request_officer_roster(runtime.officer_roster);
-                    // Preserve only the identity (not old rows/slots) until the
-                    // scan can detect a replacement master table before binding it.
-                    runtime.officer_roster.base = previous_base;
                     if (ui) {
                         ui->officer_roster_scan_cursor.store(0, std::memory_order_release);
                     }
@@ -1225,7 +1221,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
     std::chrono::steady_clock::duration time_budget, const domain::WorkBudget& work_budget) {
     enum class Job : std::size_t {
         Configuration, Commands, PendingTrait, Roster, Protagonist, Ai,
-        OfficerTools, OfficerNotices, City, Corps, FeatureGroups, Notices,
+        OfficerTools, OfficerNotices, FeatureGroups, Notices,
         SelectedOfficer, Publish, Count
     };
     constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
@@ -1241,7 +1237,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
         runtime.next_ui_job = (runtime.next_ui_job + 1) % JOB_COUNT;
 
         const bool independent_job = job == Job::Configuration || job == Job::Commands ||
-            job == Job::Roster || job == Job::Protagonist || job == Job::City ||
+            job == Job::Roster || job == Job::Protagonist ||
             job == Job::FeatureGroups || job == Job::SelectedOfficer ||
             job == Job::Notices || job == Job::Publish;
 
@@ -1265,16 +1261,7 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             service_pending_trait(runtime, ui, game_module, work_budget);
             break;
         case Job::Roster: {
-            // This scan uses the module's master roster, not the current hero.
-            // Keep it beside publication so title-screen requests can finish.
-            const std::uintptr_t previous_base = runtime.officer_roster.base;
-            game::update_officer_roster(runtime.officer_roster, game_module, work_budget);
-            if (previous_base && runtime.officer_roster.base && previous_base != runtime.officer_roster.base) {
-                // A master table may change before a root/P1 can be observed.
-                // Retire queued edits before publishing rows under its new identity.
-                change_game_session(runtime);
-                game::request_officer_roster(runtime.officer_roster);
-            }
+            // Scanning has its own dispatch job; UI work only publishes rows.
             publish_roster_progress(runtime, ui);
             break;
         }
@@ -1289,12 +1276,6 @@ std::size_t commit_ui_commands(Runtime& runtime, services::UiBridge& ui,
             break;
         case Job::OfficerNotices:
             service_officer_notices(runtime, ui, game_module, work_budget);
-            break;
-        case Job::City:
-            service_city_management(runtime, ui, game_module, work_budget);
-            break;
-        case Job::Corps:
-            service_corps_deployment(runtime, ui, game_module, work_budget);
             break;
         case Job::FeatureGroups:
             reconcile_feature_groups(runtime, ui, game_module);

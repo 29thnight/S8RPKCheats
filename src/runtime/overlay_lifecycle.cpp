@@ -5,6 +5,8 @@
 #include "../overlay/window_subclass.h"
 #include "../../third_party/minhook/include/MinHook.h"
 
+namespace s8::game { void start_trait_assignment_trace(std::uintptr_t module_base); }
+
 namespace s8::runtime {
 
 std::expected<void, int> start_overlay(OverlayLifecycle& state, HWND game_window) {
@@ -23,6 +25,8 @@ std::expected<void, int> start_overlay(OverlayLifecycle& state, HWND game_window
     if (initialized != MH_OK && initialized != MH_ERROR_ALREADY_INITIALIZED) {
         return std::unexpected(initialized);
     }
+
+    game::start_trait_assignment_trace(reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr)));
 
     state.overlay.target_window = game_window;
     const std::expected<void, int> captured = overlay::install_input_capture(

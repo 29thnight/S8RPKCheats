@@ -5,6 +5,8 @@
 #include <span>
 #include <utility>
 
+namespace s8::game { void sample_trait_assignment_trace(std::uintptr_t module_base); }
+
 namespace s8::runtime {
 namespace {
 
@@ -170,6 +172,9 @@ domain::Result<void> request_trait_text_apply(TraitControl& control, const domai
 bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uint64_t epoch, std::uint64_t now_ms, bool external_runtime) {
 
+    const std::lock_guard<std::recursive_mutex> lock(control.runtime.table_mutex);
+    game::sample_trait_assignment_trace(module_base);
+
     if (control.stopping) {
         return false;
     }
@@ -279,6 +284,8 @@ bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
 
 domain::Result<void> stop_trait_control(TraitControl& control, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uint64_t epoch) {
+
+    const std::lock_guard<std::recursive_mutex> lock(control.runtime.table_mutex);
 
     control.stopping = true;
     control.pending_catalog = {};

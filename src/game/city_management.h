@@ -52,8 +52,8 @@ bool set_city_support_routes(CityManagement& state, own::shared_owner<const doma
 domain::CityWorkStatus request_city_management(CityManagement& state, std::uintptr_t module_base,
     std::uintptr_t game_root, std::uintptr_t player, domain::GameEpoch epoch, const domain::CityRequest& request);
 
-// At most max_items city records or one route are processed per dispatch. This
-// function performs no heap allocation and retains no UI or game object owners.
+// Refresh reads all cities in one batch; other work processes at most max_items
+// records or one route per dispatch. No heap allocation or retained UI/game owners.
 void tick_city_management(CityManagement& state, std::uintptr_t module_base, std::uintptr_t game_root,
     std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_items = 4,
     const domain::WorkBudget& work_budget = {});

@@ -11,8 +11,3 @@
 111 RCDATA "../../resources/ranges/11.png"
 202 RCDATA "../../resources/effect_definitions.json"
 204 RCDATA "../../resources/speciality_definitions.json"
-301 RCDATA "../../resources/ui/menu_controls.png"
-302 RCDATA "../../resources/ui/status_badges.png"
-303 RCDATA "../../resources/ui/paper_panels.png"
-304 RCDATA "../../resources/ui/compact_controls.png"
-305 RCDATA "../../resources/ui/return_controls.png"

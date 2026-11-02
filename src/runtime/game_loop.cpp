@@ -8,6 +8,8 @@
 #include "specialty_tools.h"
 #include "battle_dispatch.h"
 #include "officer_names_control.h"
+#include "city_control.h"
+#include "corps_control.h"
 #include "../domain/ownership.h"
 #include "../game/stratagem5_metadata.h"
 #include "../overlay/window_subclass.h"
@@ -261,7 +263,7 @@ void adopt_prepared_game_image(RuntimeSession& session, std::uint64_t now_ms) {
 }
 
 void dispatch_game_jobs(RuntimeSession& session) {
-    enum class Job : std::size_t { Discovery, Recurring, Game, Battle, Ui, Debug, Specialty, OfficerNames, Count };
+    enum class Job : std::size_t { Discovery, Recurring, Game, Battle, Ui, Debug, Specialty, OfficerNames, City, Corps, Roster, Count };
     constexpr std::size_t JOB_COUNT = static_cast<std::size_t>(Job::Count);
     const std::uint64_t now_ms = GetTickCount64();
 
@@ -284,7 +286,7 @@ void dispatch_game_jobs(RuntimeSession& session) {
         // Failed game reads must not stop configuration delivery or strand a
         // queued UI request. Request services gate their game-dependent work.
         if (!session.runtime.loop_context_observed && job != Job::Discovery && job != Job::Ui &&
-            job != Job::Debug && job != Job::Specialty) {
+            job != Job::Debug && job != Job::Specialty && job != Job::City && job != Job::Roster) {
             session.next_job = (session.next_job + 1) % JOB_COUNT;
             continue;
         }
@@ -347,6 +349,35 @@ void dispatch_game_jobs(RuntimeSession& session) {
             update_officer_names(session.officer_names, session.runtime,
                 session.services.overlay.bridge, session.game_module, now_ms, slice);
             break;
+        case Job::Roster: {
+            const platform::windows::RealClockScope real_clock;
+            if (!session.runtime.officer_roster.has_scan) {
+                game::request_officer_roster(session.runtime.officer_roster);
+            }
+
+            const std::uintptr_t previous_base = session.runtime.officer_roster.base;
+
+            game::update_officer_roster(session.runtime.officer_roster, session.game_module, dispatch_budget);
+            if (previous_base && session.runtime.officer_roster.base &&
+                previous_base != session.runtime.officer_roster.base) {
+                change_game_session(session.runtime);
+                game::request_officer_roster(session.runtime.officer_roster);
+            }
+            break;
+        }
+        case Job::City:
+        case Job::Corps: {
+            const platform::windows::RealClockScope real_clock;
+
+            if (job == Job::City) {
+                service_city_management(session.runtime, session.services.overlay.bridge,
+                    session.game_module, dispatch_budget);
+            } else {
+                service_corps_deployment(session.runtime, session.services.overlay.bridge,
+                    session.game_module, dispatch_budget);
+            }
+            break;
+        }
         case Job::Count:
             break;
         }
@@ -497,11 +528,14 @@ BOOL CALLBACK consider_window(HWND window, LPARAM context) {
     WindowSearch& search = *reinterpret_cast<WindowSearch*>(context);
     DWORD process = 0;
     RECT rectangle{};
+    std::array<wchar_t, 64> window_class{};
 
     GetWindowThreadProcessId(window, &process);
     if (process != GetCurrentProcessId() || !IsWindowVisible(window) ||
         GetWindow(window, GW_OWNER) || (GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) ||
-        !GetClientRect(window, &rectangle)) {
+        !GetClientRect(window, &rectangle) ||
+        !GetClassNameW(window, window_class.data(), static_cast<int>(window_class.size())) ||
+        std::wcscmp(window_class.data(), L"KT_SANGOKUSHI8R_WINDOW") != 0) {
         return TRUE;
     }
 

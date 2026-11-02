@@ -3112,7 +3112,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         }
 
         if (scan_cursor >= 0) {
-            ImGui::Text("목록 로딩 중... (%d/5102)", scan_cursor);
+            ImGui::Text("목록 로딩 중... (%d/%zu)", scan_cursor, domain::OFFICER_ROSTER_RECORD_COUNT);
         } else if (menu.officer_roster->loading && menu.officer_roster->epoch == menu.epoch) {
             ImGui::Text("목록 반영 중... (%zu명)", menu.officer_roster->entry_count);
         }

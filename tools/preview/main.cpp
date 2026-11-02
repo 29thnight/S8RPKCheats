@@ -106,7 +106,7 @@ fs::path resource_directory(const Options& options) {
     char* base = SDL_GetBasePath();
     const fs::path beside_executable = fs::path(base ? base : ".") / "resources";
     SDL_free(base);
-    if (fs::exists(beside_executable / "ui")) return beside_executable;
+    if (fs::exists(beside_executable / "ranges")) return beside_executable;
     return S8_PREVIEW_RESOURCE_DIR;
 }
 
@@ -576,13 +576,6 @@ int main(int argc, char** argv) {
             menu->secondary_jewel_window = options.open == "jewels";
             menu->pk_editors_unlocked = options.unlock_pk;
             const auto resources = resource_directory(options);
-            constexpr std::array atlas_files{"menu_controls.png", "status_badges.png", "paper_panels.png",
-                "compact_controls.png", "return_controls.png"};
-            for (std::size_t i = 0; i < atlas_files.size(); ++i) {
-                int width = 0, height = 0;
-                auto* texture = textures.load(renderer, resources / "ui" / atlas_files[i], &width, &height);
-                menu->ui_atlases[i] = {texture, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
-            }
 #ifdef _WIN32
             if (!options.game_directory.empty()) {
                 if (!services::publish_game_ui_images(session->bridge)) throw std::runtime_error("Native UI assets did not load");

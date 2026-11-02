@@ -1,4 +1,5 @@
 #include "stratagem_gauge.h"
+#include "bytecode_buffer.h"
 #include "../platform/windows/code_memory.h"
 #include "../platform/windows/process_memory.h"
 
@@ -7,18 +8,11 @@
 namespace s8::game {
 namespace {
 
-// The side-specific processing point and emitted instructions are from
-// WOOSEOK99/S8RPKCheats@068ca1d, War/StratagemGaugeMax.cpp. RBX is side+0xf0;
-// side is [rbx-0xd8], and its gauge is [rbx+0x64]. The final original CMP
-// restores the flags after the conditional write of 10000.
+// Game ABI: RBX addresses side+0xf0. Side byte -0xd8 selects the toggle;
+// gauge +0x64 is compared with 10000 by the displaced game instruction.
 constexpr std::array ORIGINAL = native_hex("817B6410270000");
 constexpr std::array PATTERN = native_hex("817B64102700007400B000488B");
-constexpr std::array CAVE_TEMPLATE = native_hex(
-    "5080BB28FFFFFF00751848B800000000000000008038007428C7436410270000EB1F"
-    "80BB28FFFFFF01751648B800000000000000008038007407C743641027000058817B6410270000E900000000");
 constexpr std::size_t ATTACK_FLAG_OFFSET = 144;
-constexpr std::size_t DEFENSE_FLAG_OFFSET = 145;
-static_assert(CAVE_TEMPLATE.size() == 78);
 
 std::optional<std::size_t> find_gauge_hook(std::span<const std::byte> image) {
     std::optional<std::size_t> found{};
@@ -61,14 +55,27 @@ bool prepare_gauge(StratagemGauge& state, std::uintptr_t module_base,
         return false;
     }
 
-    std::array<std::byte, CAVE_TEMPLATE.size()> code = CAVE_TEMPLATE;
+    BytecodeBuffer<144> code;
+    code.emit({0x50, 0x51}); // preserve RAX and RCX
+    code.emit({0x0f, 0xb6, 0x83, 0x28, 0xff, 0xff, 0xff, 0x83, 0xf8, 0x01});
+    code.emit({0x0f, 0x87});
+    const std::size_t unknown_side = code.branch();
+    code.emit({0x48, 0xb9});
+    code.address(cave + ATTACK_FLAG_OFFSET);
+    code.emit({0x80, 0x3c, 0x01, 0, 0x0f, 0x84}); // toggle[side]
+    const std::size_t disabled = code.branch();
+    code.emit({0xc7, 0x43, 0x64, 0x10, 0x27, 0, 0});
+    code.patch(unknown_side);
+    code.patch(disabled);
+    code.emit({0x59, 0x58});
+    code.append(ORIGINAL);
+    code.emit({0xff, 0x25, 0, 0, 0, 0});
+    code.address(hook + ORIGINAL.size());
     NativePatchGroup patches{};
 
-    if (!put_native_pointer(code, 12, cave + ATTACK_FLAG_OFFSET) ||
-        !put_native_pointer(code, 45, cave + DEFENSE_FLAG_OFFSET) ||
-        !put_native_rel32(code, 74, cave + 74, hook + ORIGINAL.size()) ||
+    if (!code.valid() ||
         !append_native_branch(patches, hook, cave, ORIGINAL) ||
-        !platform::windows::write_code_memory(cave, code)) {
+        !platform::windows::write_code_memory(cave, code.bytes())) {
         platform::windows::free_code(cave);
         return false;
     }

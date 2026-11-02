@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 
 namespace s8::game {
 
@@ -35,13 +36,17 @@ struct TraitDescriptionPatch {
 };
 
 struct TraitRuntimeNative {
-    static constexpr std::size_t HOOK_COUNT = 8;
+    static constexpr std::size_t HOOK_COUNT = 10;
     static constexpr std::size_t RECORD_SIZE = 0x40;
     static constexpr std::size_t DESCRIPTION_COUNT = 260;
     using Records = std::array<std::array<std::byte, RECORD_SIZE>, domain::TRAIT_RUNTIME_COUNT>;
 
+    // Shared by control updates and native save/load callbacks.
+    std::recursive_mutex table_mutex;
     own::shared_owner<const domain::TraitRuntimeCatalog> catalog{};
     std::array<platform::windows::Hook, HOOK_COUNT> hooks{};
+    platform::windows::Hook saved_trait_filter{};
+    platform::windows::Hook scenario_trait_filter{};
     std::size_t created_hooks = 0;
     NativePatchGroup eligibility{};
     NativeTraitTexts* texts = nullptr;

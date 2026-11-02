@@ -554,13 +554,6 @@ void poll_game_portrait() {
 
 bool publish_game_ui_images(UiBridge& bridge) {
     using domain::native_ui::Rect;
-    std::array<wchar_t, 32768> executable{};
-    const DWORD length = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
-
-    if (!length || length == executable.size()) {
-        return false;
-    }
-
     const std::filesystem::path directory = game_directory;
     std::unordered_map<std::uint32_t, Bytes> containers;
     const auto load = [&](std::uint32_t id, unsigned image_index) -> std::optional<RangeImage> {

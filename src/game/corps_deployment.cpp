@@ -124,6 +124,8 @@ void begin_read(CorpsDeployment& state, bool build, bool apply) {
     state.snapshot.deferred = 0;
     state.snapshot.cities = {};
     state.id_to_row.fill(NO_CORPS_ROW);
+    state.rows.fill({});
+    state.roster_node = 0;
     state.count = 0;
     state.cursor = 0;
     state.stage = CorpsStage::Cities;
@@ -132,11 +134,15 @@ void begin_read(CorpsDeployment& state, bool build, bool apply) {
 }
 
 bool bind(CorpsDeployment& state, std::uintptr_t module, std::uintptr_t root,
-    std::uintptr_t player, domain::GameEpoch epoch) {
+    std::uintptr_t player, domain::GameEpoch epoch, bool refresh = true) {
+    const bool same = state.epoch == epoch && state.module_base == module && state.game_root == root && state.player == player;
+
+    if (!refresh && same && state.snapshot.available && current_player_force(player) == state.player_force) {
+        return true;
+    }
     const std::uintptr_t table = module && root > 0x10000 && player > 0x10000 ? resolve_city_data(module) : 0;
     const std::uintptr_t roster = table ? resolve_officer_roster_base(module) : 0;
     const std::uintptr_t force = table ? current_player_force(player) : 0;
-    const bool same = state.epoch == epoch && state.module_base == module && state.game_root == root && state.player == player;
 
     if (same && (table == 0 || roster == 0 || force == 0)) {
         if (state.snapshot.available) { state.snapshot.available = false; ++state.snapshot.revision; }
@@ -183,10 +189,12 @@ bool read_city(CorpsDeployment& state, std::size_t city) {
     const std::uintptr_t address = state.city_table + city * CITY_STRIDE;
     domain::CorpsCity row;
     std::uintptr_t general = 0;
-    std::uintptr_t corps = 0;
-    std::uintptr_t governor = 0;
+    std::array<std::uintptr_t, 2> leaders{};
 
-    if (!read_value(address + 0x90, corps) || !read_value(address + 0x98, governor)) { return false; }
+    if (!read_value(address + 0x90, leaders)) { return false; }
+    const std::uintptr_t corps = leaders[0];
+    const std::uintptr_t governor = leaders[1];
+
     state.city_forces[city] = read_city_force(address);
     state.city_corps[city] = corps;
     state.city_governors[city] = governor;
@@ -559,54 +567,66 @@ void step_read(CorpsDeployment& state) {
         state.cursor = 0;
         state.stage = CorpsStage::Frontiers;
     } else if (state.stage == CorpsStage::Frontiers) {
-        if (state.cursor == domain::CITY_COUNT) { state.cursor = 0; state.stage = CorpsStage::Roster; return; }
+        if (state.cursor == domain::CITY_COUNT) {
+            std::uintptr_t registry = 0;
+
+            if (!read_value(state.module_base + 0x034c8630, registry) ||
+                !read_value(registry + 3 * sizeof(std::uintptr_t), state.roster_node)) {
+                fail(state, domain::CorpsStatus::ReadFailed);
+                return;
+            }
+            state.cursor = 0;
+            state.stage = CorpsStage::Roster;
+            return;
+        }
         if (!read_frontier(state, state.cursor++)) { fail(state, domain::CorpsStatus::ReadFailed); }
     } else if (state.stage == CorpsStage::Roster) {
-        if (state.cursor == domain::CORPS_OFFICER_CAPACITY) {
+        if (state.roster_node == 0) {
             if (state.building && state.count == 0) { fail(state, domain::CorpsStatus::InvalidRequest); return; }
             state.sort_count = state.count;
             begin_corps_sort(state, CorpsSort::Roster, state.building ? CorpsStage::RelationCandidate : CorpsStage::Idle);
             return;
         }
-        // One admitted read unit collects up to 32 contiguous records. Decode
-        // their headers locally instead of one process-memory call per officer.
-        constexpr std::size_t BATCH_SIZE = 32;
-        std::array<std::byte, BATCH_SIZE * OFFICER_STRIDE> block{};
-        const std::size_t count = std::min(BATCH_SIZE, domain::CORPS_OFFICER_CAPACITY - state.cursor);
-        const std::size_t length = (count - 1) * OFFICER_STRIDE + 0xf0;
+        // Walk active PersonData nodes, retaining master-table slots for
+        // relationship lookup, live write validation, and rollback.
+        std::array<std::uintptr_t, 2> node{};
+        std::array<std::byte, 0xf0> block{};
 
-        if (!platform::windows::read_memory(state.roster + state.cursor * OFFICER_STRIDE,
-                std::span(block).first(length))) {
+        if (state.cursor == domain::CORPS_OFFICER_CAPACITY ||
+            !read_value(state.roster_node, node) || node[0] < state.roster ||
+            (node[0] - state.roster) % OFFICER_STRIDE != 0 ||
+            (node[0] - state.roster) / OFFICER_STRIDE >= state.rows.size() ||
+            !read_value(node[0], block)) {
             fail(state, domain::CorpsStatus::ReadFailed);
             return;
         }
-        for (std::size_t index = 0; index < count; ++index) {
-            const std::size_t slot = state.cursor++;
-            const std::span<const std::byte> bytes = std::span(block).subspan(index * OFFICER_STRIDE, 0xf0);
-            CorpsRosterEntry row;
+        state.roster_node = node[1];
+        ++state.cursor;
+        const std::size_t slot = (node[0] - state.roster) / OFFICER_STRIDE;
+        const std::span<const std::byte> bytes = block;
+        CorpsRosterEntry row;
 
-            row.address = state.roster + slot * OFFICER_STRIDE;
-            state.parents[slot] = static_cast<std::uint16_t>(slot);
-            row.id = field<std::uint16_t>(bytes, 8);
-            row.status_pair = field<std::uint16_t>(bytes, 0x10);
-            row.force = field<std::uintptr_t>(bytes, 0x18);
-            row.city_pointer = field<std::uintptr_t>(bytes, 0x20);
-            row.city = city_index_from_pointer(state.city_table, row.city_pointer);
-            row.loyalty = field<std::uint8_t>(bytes, 0xec);
-            std::memcpy(row.attributes.data(), bytes.data() + 0xaa, row.attributes.size());
-            if (row.id == 0 || row.id > domain::CORPS_OFFICER_CAPACITY) { state.rows[slot] = row; continue; }
-            if (row.city != domain::NO_CITY && row.force == state.player_force && employed(status(row)) &&
-                state.snapshot.cities[row.city].player_owned) {
-                ++state.snapshot.cities[row.city].current_count;
-                row.selected = state.snapshot.cities[row.city].selected;
-                if (row.selected) { state.work_order[state.count++] = static_cast<std::uint16_t>(slot); }
-            }
-            const std::uint16_t previous = state.id_to_row[row.id];
-
-            if (previous != NO_CORPS_ROW && state.rows[previous].selected && row.selected) { fail(state, domain::CorpsStatus::ReadFailed); return; }
-            if (previous == NO_CORPS_ROW || row.selected) { state.id_to_row[row.id] = static_cast<std::uint16_t>(slot); }
-            state.rows[slot] = row;
+        row.address = node[0];
+        state.parents[slot] = static_cast<std::uint16_t>(slot);
+        row.id = field<std::uint16_t>(bytes, 8);
+        row.status_pair = field<std::uint16_t>(bytes, 0x10);
+        row.force = field<std::uintptr_t>(bytes, 0x18);
+        row.city_pointer = field<std::uintptr_t>(bytes, 0x20);
+        row.city = city_index_from_pointer(state.city_table, row.city_pointer);
+        row.loyalty = field<std::uint8_t>(bytes, 0xec);
+        std::memcpy(row.attributes.data(), bytes.data() + 0xaa, row.attributes.size());
+        if (row.id == 0 || row.id > domain::CORPS_OFFICER_CAPACITY) { state.rows[slot] = row; return; }
+        if (row.city != domain::NO_CITY && row.force == state.player_force && employed(status(row)) &&
+            state.snapshot.cities[row.city].player_owned) {
+            ++state.snapshot.cities[row.city].current_count;
+            row.selected = state.snapshot.cities[row.city].selected;
+            if (row.selected) { state.work_order[state.count++] = static_cast<std::uint16_t>(slot); }
         }
+        const std::uint16_t previous = state.id_to_row[row.id];
+
+        if (previous != NO_CORPS_ROW && state.rows[previous].selected && row.selected) { fail(state, domain::CorpsStatus::ReadFailed); return; }
+        if (previous == NO_CORPS_ROW || row.selected) { state.id_to_row[row.id] = static_cast<std::uint16_t>(slot); }
+        state.rows[slot] = row;
     }
 }
 
@@ -709,8 +729,31 @@ domain::CorpsStatus request_corps_deployment(CorpsDeployment& state, std::uintpt
     state.snapshot.plan_valid = false;
     if (result == domain::CorpsStatus::Complete) {
         begin_corps_journal(state);
-        finish(state, result);
-        begin_read(state, false, false);
+        // Mutations update the affected rows and city counts in place. Rebuild
+        // membership and ordering without reading the entire game roster again.
+        state.count = 0;
+        state.building = false;
+        state.apply_all = false;
+        state.snapshot.relationships_complete = false;
+        for (std::size_t slot = 0; slot < state.rows.size(); ++slot) {
+            CorpsRosterEntry& row = state.rows[slot];
+
+            row.goal = domain::NO_CITY;
+            row.reason = domain::CorpsReason::Retained;
+            row.grouped = false;
+            row.governor = false;
+            row.selected = row.id != 0 && row.id <= domain::CORPS_OFFICER_CAPACITY &&
+                row.city != domain::NO_CITY && row.force == state.player_force && employed(status(row)) &&
+                state.snapshot.cities[row.city].selected;
+            if (row.selected) {
+                state.work_order[state.count++] = static_cast<std::uint16_t>(slot);
+            }
+        }
+        state.sort_count = state.count;
+        state.snapshot.busy = true;
+        state.snapshot.status = domain::CorpsStatus::Reading;
+        begin_corps_sort(state, CorpsSort::Roster, CorpsStage::Idle);
+        ++state.snapshot.revision;
     }
     else { fail(state, result); }
     return result;
@@ -719,7 +762,7 @@ domain::CorpsStatus request_corps_deployment(CorpsDeployment& state, std::uintpt
 void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, std::uintptr_t game_root,
     std::uintptr_t player, domain::GameEpoch epoch, std::uint64_t real_milliseconds, std::size_t max_units,
     const domain::WorkBudget& work_budget) {
-    if (state.stopping || !bind(state, module_base, game_root, player, epoch)) { return; }
+    if (state.stopping || !bind(state, module_base, game_root, player, epoch, false)) { return; }
     observe_calendar(state, real_milliseconds);
     if (state.stage == CorpsStage::Idle) { next_auto_target(state); }
     if (state.stage != CorpsStage::Idle && state.stage != CorpsStage::Rollback) {
@@ -733,7 +776,7 @@ void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, s
     }
     const bool restoring = state.stage == CorpsStage::Rollback;
     const std::uint64_t write_sequence = state.write_sequence;
-    const std::size_t budget = std::min<std::size_t>(max_units, restoring ? 32 : 256);
+    const std::size_t budget = restoring ? std::min<std::size_t>(max_units, 32) : max_units;
 
     // The runtime service admits this work before resolving its context. Include
     // one item in that admitted unit so binding cannot consume every slice.
@@ -777,9 +820,9 @@ void tick_corps_deployment(CorpsDeployment& state, std::uintptr_t module_base, s
     if (state.snapshot.busy) {
         if (state.stage == CorpsStage::Cities || state.stage == CorpsStage::Frontiers || state.stage == CorpsStage::Roster) {
             state.snapshot.work_stage = state.stage == CorpsStage::Cities ? "도시 조회" :
-                state.stage == CorpsStage::Frontiers ? "전선 확인" : "무장 조회";
+                state.stage == CorpsStage::Frontiers ? "전선 확인" : "활성 무장 조회";
             state.snapshot.completed = state.cursor;
-            state.snapshot.total = state.stage == CorpsStage::Roster ? domain::CORPS_OFFICER_CAPACITY : domain::CITY_COUNT;
+            state.snapshot.total = state.stage == CorpsStage::Roster ? 0 : domain::CITY_COUNT;
         } else if (state.stage == CorpsStage::Sort) {
             state.snapshot.work_stage = "목록 정렬";
             state.snapshot.completed = std::bit_width(state.sort_width) - 1;

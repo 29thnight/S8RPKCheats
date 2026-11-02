@@ -73,7 +73,7 @@ if(NOT WIN32)
 endif()
 
 install(TARGETS s8_ui_preview RUNTIME DESTINATION .)
-install(DIRECTORY ${S8_ROOT}/resources/ui ${S8_ROOT}/resources/ranges DESTINATION resources)
+install(DIRECTORY ${S8_ROOT}/resources/ranges DESTINATION resources)
 
 include(CTest)
 if(BUILD_TESTING)

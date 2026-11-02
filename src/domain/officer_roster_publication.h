@@ -9,7 +9,8 @@
 
 namespace s8::domain {
 
-inline constexpr std::size_t OFFICER_ROSTER_LIMIT = 5102;
+inline constexpr std::size_t OFFICER_ROSTER_LIMIT = 5200;
+inline constexpr std::size_t OFFICER_ROSTER_RECORD_COUNT = 1800;
 inline constexpr std::size_t OFFICER_ROSTER_ID_SLOTS = OFFICER_ROSTER_LIMIT + 1;
 inline constexpr std::size_t OFFICER_ROSTER_BATCH_CAPACITY = 128;
 

@@ -10,10 +10,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace s8::game {
 
 struct OfficerRosterScan {
+    static constexpr std::size_t RECORD_SIZE = 0x3d0;
+
+    const domain::OfficerRosterEntry* find(std::uint16_t id) const;
+    std::uintptr_t address(std::uint16_t id) const;
+    void refresh(std::uintptr_t module_base, const domain::WorkBudget& budget);
+
     std::uintptr_t base = 0;
     std::size_t cursor = 0;
     std::array<std::uint16_t, domain::OFFICER_ROSTER_ID_SLOTS> slots{};
@@ -30,6 +37,10 @@ struct OfficerRosterScan {
     bool has_scan = false;
     bool requested = false;
     bool completed = false;
+
+private:
+    // Reused heap storage; never copy this snapshot back over live game records.
+    std::vector<std::byte> snapshot;
 };
 
 struct TraitObjectSearch {

@@ -49,10 +49,10 @@ void service_city_management(Runtime& runtime, services::UiBridge& ui, std::uint
             ++runtime.city_management.snapshot.revision;
         }
     } else {
-        const std::uintptr_t root = game::read_game_base(runtime.game_base_pointer);
+        const std::uintptr_t root = runtime.loop_game_base;
 
-        game::tick_city_management(runtime.city_management, module, root, game::read_player(root),
-            runtime.epoch, GetTickCount64(), 4, work_budget);
+        game::tick_city_management(runtime.city_management, module, root, runtime.loop_player,
+            runtime.epoch, GetTickCount64(), domain::CITY_COUNT, work_budget);
     }
     if (runtime.city_published_revision != runtime.city_management.snapshot.revision) {
         ui.city_management.publish(runtime.city_management.snapshot);

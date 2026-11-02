@@ -109,6 +109,7 @@ struct CorpsDeployment {
     std::uintptr_t player_force = 0;
     std::uintptr_t city_table = 0;
     std::uintptr_t roster = 0;
+    std::uintptr_t roster_node = 0;
     std::uintptr_t corps = 0;
     std::uintptr_t baseline_corps = 0;
     std::uintptr_t relation_table = 0;

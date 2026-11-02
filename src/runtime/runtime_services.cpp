@@ -99,12 +99,7 @@ void publish_image_resources(services::UiBridge& bridge, HMODULE module, bool co
         bridge.publish_range_images(std::move(ranges));
 
         if (!services::publish_game_ui_images(bridge)) {
-            services::UiAtlasImages atlases;
-
-            for (std::size_t i = 0; i < atlases.size() && !stop.stop_requested(); ++i) {
-                atlases[i] = decode_image_resource(factory.get(), module, static_cast<WORD>(301 + i));
-            }
-            bridge.publish_ui_atlas_images(std::move(atlases));
+            OutputDebugStringW(L"S8RPKCheats: installed game UI resources unavailable.\n");
         }
     } catch (...) {
         OutputDebugStringW(L"S8RPKCheats: optional UI images unavailable; using standard controls.\n");

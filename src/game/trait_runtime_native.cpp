@@ -13,9 +13,12 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <cstdio>
+#include <cstdarg>
 #include <cwchar>
 #include <limits>
 #include <new>
+#include <mutex>
 #include <span>
 #include <string>
 #include <utility>
@@ -48,7 +51,7 @@ constexpr std::size_t TRAIT_ID_OFFSET = 8;
 constexpr std::size_t EFFECT_OFFSET = 10;
 constexpr std::size_t METADATA_OFFSET = 0x2e;
 constexpr std::size_t METADATA_SIZE = 0x12;
-constexpr std::uintptr_t MAX_MODULE_OFFSET = 0x2c34ec8;
+constexpr std::uintptr_t MAX_MODULE_OFFSET = 0x2e98bd0;
 constexpr std::uint32_t NORMAL_DESCRIPTION_INDEX = 0x2e73;
 constexpr std::uint32_t FORMAT_DESCRIPTION_INDEX = 0x3005;
 constexpr std::size_t FIRST_CUSTOM_DESCRIPTION = 70;
@@ -63,9 +66,15 @@ using OfficerQuery = int (__fastcall*)(void*, std::uint32_t);
 using MessageSetter = void (__fastcall*)(void*, std::uint32_t);
 using DataGetter = void* (__fastcall*)(void*, std::uint32_t);
 using MonthlyUpdate = int (__fastcall*)(void*);
+using OfficerSerializer = bool (__fastcall*)(void*, void*);
+using RegisteredTraitGetter = void* (__fastcall*)(void*, int);
+using SavedTraitAvailability = int (__fastcall*)(int);
+using ScenarioTraitAvailability = int (__fastcall*)(int, int);
 using TransferEvent = int (__fastcall*)(void*, void*, void*, void*, void*);
 
-enum class HookIndex : std::size_t { Name, Description, Effect, Officer, Message, Data, Monthly, Transfer };
+enum class HookIndex : std::size_t { Name, Description, Effect, Officer, Message, Data, Monthly, Transfer, OfficerSerialization, RegisteredTrait };
+
+bool prepare_assignment_table(TraitRuntimeNative& state);
 
 std::atomic<std::uint64_t> callback_gate{CALLBACK_CLOSED};
 std::atomic<TraitRuntimeNative*> control_owner{nullptr};
@@ -74,6 +83,63 @@ std::atomic<std::uintptr_t> published_root{0};
 std::atomic<std::uintptr_t> published_module{0};
 std::atomic<std::uint32_t> published_pointer_offset{0x57a4d0};
 std::array<std::atomic<void*>, TraitRuntimeNative::HOOK_COUNT> originals{};
+std::atomic<void*> saved_trait_original{nullptr};
+std::atomic<void*> scenario_trait_original{nullptr};
+std::atomic<const NativeTraitTexts*> saved_trait_texts{nullptr};
+std::atomic<std::uintptr_t> saved_trait_module{0};
+
+// Temporary read-only trace for the added-officer 2008 reproduction.
+HANDLE assignment_trace_file = INVALID_HANDLE_VALUE;
+std::mutex assignment_trace_mutex;
+using RegisteredSerializer = void (__fastcall*)(void*, void*);
+RegisteredSerializer registered_serializer_original = nullptr;
+thread_local bool tracing_registered_officer = false;
+
+void assignment_trace(const char* format, ...) {
+    if (assignment_trace_file == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    char line[768]{};
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    int prefix = sprintf_s(line, "qpc=%lld tid=%lu ", counter.QuadPart, GetCurrentThreadId());
+    va_list args;
+    va_start(args, format);
+    vsnprintf_s(line + prefix, sizeof(line) - prefix, _TRUNCATE, format, args);
+    va_end(args);
+
+    const std::lock_guard<std::mutex> lock(assignment_trace_mutex);
+    DWORD written = 0;
+    WriteFile(assignment_trace_file, line, static_cast<DWORD>(strlen(line)), &written, nullptr);
+}
+
+void __fastcall trace_registered_serializer(void* record, void* stream) {
+    const std::byte* bytes = static_cast<const std::byte*>(record);
+    const std::uint16_t before_id = *reinterpret_cast<const std::uint16_t*>(bytes + 8);
+    const bool previous = tracing_registered_officer;
+    tracing_registered_officer = before_id == 2008;
+    std::array<std::uint16_t, 3> before{};
+    memcpy(before.data(), bytes + 0x12e, sizeof(before));
+
+    if (before_id == 2008) {
+        assignment_trace("registered_enter record=%p slots=%u/%u/%u catalog=%d\n",
+            record, before[0], before[1], before[2], saved_trait_texts.load() != nullptr);
+    }
+
+    registered_serializer_original(record, stream);
+
+    const std::uint16_t after_id = *reinterpret_cast<const std::uint16_t*>(bytes + 8);
+    if (before_id == 2008 || after_id == 2008) {
+        std::array<std::uint16_t, 3> after{};
+        memcpy(after.data(), bytes + 0x12e, sizeof(after));
+        assignment_trace("registered record=%p id=%u->%u slots=%u/%u/%u->%u/%u/%u catalog=%d\n",
+            record, before_id, after_id, before[0], before[1], before[2],
+            after[0], after[1], after[2], saved_trait_texts.load() != nullptr);
+    }
+    tracing_registered_officer = previous;
+}
+
 
 class CallbackAdmission {
 public:
@@ -482,17 +548,171 @@ __declspec(noinline) int __fastcall transfer_event(void* first, void* second, vo
     return result;
 }
 
+// Native serialization stores three uint16 IDs and resolves them against the
+// current table on load. Prepare definitions before either operation; never skip
+// native stream consumption when the definition table is still being initialized.
+__declspec(noinline) bool __fastcall officer_serialization(void* officer, void* stream) {
+    const OfficerSerializer native = original<OfficerSerializer>(HookIndex::OfficerSerialization);
+    CallbackAdmission admission;
+    TraitRuntimeNative* state = admission ? control_owner.load(std::memory_order_acquire) : nullptr;
+
+    if (state) {
+        const std::lock_guard<std::recursive_mutex> lock(state->table_mutex);
+
+        if (state->catalog) {
+            prepare_assignment_table(*state);
+        }
+
+        return native(officer, stream);
+    }
+
+    return native(officer, stream);
+}
+
+__declspec(noinline) void* __fastcall registered_trait_getter(void* officer, int slot) {
+    const RegisteredTraitGetter native = original<RegisteredTraitGetter>(HookIndex::RegisteredTrait);
+    CallbackAdmission admission;
+    TraitRuntimeNative* state = admission ? control_owner.load(std::memory_order_acquire) : nullptr;
+
+    if (state) {
+        const std::lock_guard<std::recursive_mutex> lock(state->table_mutex);
+
+        if (state->catalog) {
+            prepare_assignment_table(*state);
+        }
+
+        return native(officer, slot);
+    }
+
+    return native(officer, slot);
+}
+
 struct HookSpec {
     std::uintptr_t offset;
     std::span<const std::byte> prologue;
     void* detour;
 };
 
+// Registered-person deserialization validates IDs 201..300 after reading the
+// three uint16 slots. Custom definitions have no native unlock-state bits.
+// This publication also remains active when VERSION.dll owns the definitions.
+__declspec(noinline) int __fastcall saved_trait_available(int id) noexcept {
+    const SavedTraitAvailability native = reinterpret_cast<SavedTraitAvailability>(
+        saved_trait_original.load(std::memory_order_acquire));
+    const std::uintptr_t caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const NativeTraitTexts* texts = saved_trait_texts.load(std::memory_order_acquire);
+
+    if (caller == saved_trait_module.load(std::memory_order_relaxed) + 0x1f05178 &&
+        texts && id >= 201 && id <= static_cast<int>(domain::TRAIT_RUNTIME_COUNT)) {
+        const NativeTraitTexts::Entry& entry = texts->entries[static_cast<std::size_t>(id - 1)];
+
+        if (entry.present && entry.name && entry.name[0] != L'\0') {
+            assignment_trace("validation id=%d result=1 custom=1 officer2008=%d\n", id, tracing_registered_officer);
+            return 1;
+        }
+    }
+
+    const int result = native(id);
+    if (caller == saved_trait_module.load() + 0x1f05178) {
+        assignment_trace("validation id=%d result=%d custom=0 catalog=%d officer2008=%d\n",
+            id, result, texts != nullptr, tracing_registered_officer);
+    }
+    return result;
+}
+
+// Scenario initialization independently checks categories 8 and 9 for IDs 201..300.
+// Only these two call sites admit named custom definitions. Native state bits and
+// the subsequent officer-status exclusion remain owned by the game.
+__declspec(noinline) int __fastcall scenario_trait_available(int category, int id) noexcept {
+    const std::uintptr_t caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uintptr_t module = saved_trait_module.load(std::memory_order_relaxed);
+    const NativeTraitTexts* texts = saved_trait_texts.load(std::memory_order_acquire);
+    const bool scenario_check = (category == 8 && caller == module + 0x1c405b3) ||
+        (category == 9 && caller == module + 0x1c405c3);
+
+    if (scenario_check && texts && id >= 201 && id <= static_cast<int>(domain::TRAIT_RUNTIME_COUNT)) {
+        const NativeTraitTexts::Entry& entry = texts->entries[static_cast<std::size_t>(id - 1)];
+
+        if (entry.present && entry.name && entry.name[0] != L'\0') {
+            assignment_trace("scenario_validation category=%d id=%d result=1 custom=1\n", category, id);
+            return 1;
+        }
+    }
+
+    const ScenarioTraitAvailability native = reinterpret_cast<ScenarioTraitAvailability>(
+        scenario_trait_original.load(std::memory_order_acquire));
+    return native(category, id);
+}
+
+bool install_saved_trait_filter(TraitRuntimeNative& state, std::uintptr_t module_base) {
+    if (!state.saved_trait_filter.target) {
+        constexpr std::array<std::byte, 6> prologue = native_hex("40534883EC20");
+        const std::uintptr_t target = module_base + 0x685c60;
+
+        if (!native_bytes_match(target, prologue)) {
+            state.status = TraitRuntimeStatus::UnsupportedVersion;
+            return false;
+        }
+        if (!platform::windows::retain_callback_module(reinterpret_cast<std::uintptr_t>(&saved_trait_available))) {
+            state.status = TraitRuntimeStatus::HookFailed;
+            return false;
+        }
+
+        const std::expected<platform::windows::Hook, int> hook =
+            platform::windows::create_hook(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&saved_trait_available));
+
+        if (!hook) {
+            state.status = TraitRuntimeStatus::HookFailed;
+            return false;
+        }
+        state.saved_trait_filter = *hook;
+        saved_trait_original.store(hook->original, std::memory_order_release);
+        saved_trait_module.store(module_base, std::memory_order_release);
+    }
+
+    if (!state.scenario_trait_filter.target) {
+        constexpr std::array<std::byte, 6> prologue = native_hex("48895C241057");
+        constexpr std::array<std::byte, 5> category8_call = native_hex("e89d8849fe");
+        constexpr std::array<std::byte, 5> category9_call = native_hex("e88d8849fe");
+        const std::uintptr_t target = module_base + 0xd8e50;
+
+        if (!native_bytes_match(target, prologue) ||
+            !native_bytes_match(module_base + 0x1c405ae, category8_call) ||
+            !native_bytes_match(module_base + 0x1c405be, category9_call)) {
+            state.status = TraitRuntimeStatus::UnsupportedVersion;
+            return false;
+        }
+
+        const std::expected<platform::windows::Hook, int> hook = platform::windows::create_hook(
+            reinterpret_cast<void*>(target), reinterpret_cast<void*>(&scenario_trait_available));
+
+        if (!hook) {
+            state.status = TraitRuntimeStatus::HookFailed;
+            return false;
+        }
+        state.scenario_trait_filter = *hook;
+        scenario_trait_original.store(hook->original, std::memory_order_release);
+    }
+
+    assignment_trace("filter_enable catalog=%d\n", saved_trait_texts.load() != nullptr);
+    for (void* target : {state.saved_trait_filter.target, state.scenario_trait_filter.target}) {
+        const MH_STATUS result = MH_EnableHook(target);
+
+        if (result != MH_OK && result != MH_ERROR_ENABLED) {
+            state.status = TraitRuntimeStatus::HookFailed;
+            return false;
+        }
+    }
+    return true;
+}
+
 constexpr std::array<std::byte, 5> COMMON_PROLOGUE = native_hex("48895C2408");
 constexpr std::array<std::byte, 6> MESSAGE_PROLOGUE = native_hex("40534883EC20");
 constexpr std::array<std::byte, 7> DATA_PROLOGUE = native_hex("4883EC288D42FF");
 constexpr std::array<std::byte, 8> MONTHLY_PROLOGUE = native_hex("4C8BDC5341544157");
 constexpr std::array<std::byte, 7> TRANSFER_PROLOGUE = native_hex("40535556574156");
+constexpr std::array<std::byte, 7> SERIALIZER_PROLOGUE = native_hex("40555356574157");
+constexpr std::array<std::byte, 7> REGISTERED_TRAIT_PROLOGUE = native_hex("4883EC284863C2");
 constexpr std::array<std::byte, 6> ELIGIBILITY_ORIGINAL = native_hex("81FE95000000");
 constexpr std::array<std::byte, 6> ELIGIBILITY_ENABLED = native_hex("81FE01000000");
 
@@ -505,7 +725,9 @@ const std::array<HookSpec, TraitRuntimeNative::HOOK_COUNT> HOOK_SPECS{{
     {0x13f91e0, MESSAGE_PROLOGUE, reinterpret_cast<void*>(&message_setter)},
     {0x16e63f0, DATA_PROLOGUE, reinterpret_cast<void*>(&data_getter)},
     {0x1c79c90, MONTHLY_PROLOGUE, reinterpret_cast<void*>(&monthly_update)},
-    {0x18a5e30, TRANSFER_PROLOGUE, reinterpret_cast<void*>(&transfer_event)}
+    {0x18a5e30, TRANSFER_PROLOGUE, reinterpret_cast<void*>(&transfer_event)},
+    {0x16f6970, SERIALIZER_PROLOGUE, reinterpret_cast<void*>(&officer_serialization)},
+    {0x1f032e0, REGISTERED_TRAIT_PROLOGUE, reinterpret_cast<void*>(&registered_trait_getter)}
 }};
 
 bool disable_hooks(TraitRuntimeNative& state) {
@@ -774,6 +996,90 @@ bool apply_records(TraitRuntimeNative& state, const TraitRuntimeNative::Records&
     return true;
 }
 
+bool prepare_records(TraitRuntimeNative& state, std::uintptr_t game_root,
+    std::uint64_t epoch, std::uint64_t real_milliseconds, bool immediate) {
+    if (state.game_root != game_root || state.epoch != epoch) {
+        published_root.store(0, std::memory_order_release);
+        state.game_root = game_root;
+        state.epoch = epoch;
+        state.table = 0;
+        state.table_applied = false;
+        state.pending = true;
+        state.last_tick_ms = 0;
+    }
+    if (!immediate && state.last_tick_ms != 0 && real_milliseconds - state.last_tick_ms < 500) {
+        return state.table_applied;
+    }
+    if (!immediate) {
+        state.last_tick_ms = real_milliseconds;
+    }
+
+    std::uintptr_t table = 0;
+
+    if (game_root < 0x10000 || !read_value(game_root + state.trait_pointer_offset, table) || table < 0x10000) {
+        published_root.store(0, std::memory_order_release);
+        state.status = TraitRuntimeStatus::WaitingForTable;
+        return false;
+    }
+    if (table != state.table) {
+        state.table = table;
+        state.table_applied = false;
+        state.pending = true;
+    }
+    if (state.table_applied && !state.pending && state.sentinel_index >= 0) {
+        TraitRecord sentinel{};
+        const std::size_t index = static_cast<std::size_t>(state.sentinel_index);
+        const domain::Trait& desired = state.catalog->traits[index].trait;
+
+        if (!read_value(table + (index + 1) * TraitRuntimeNative::RECORD_SIZE, sentinel)) {
+            published_root.store(0, std::memory_order_release);
+            state.status = TraitRuntimeStatus::WaitingForTable;
+            return false;
+        }
+        if (sentinel.id() == desired.id && std::memcmp(sentinel.bytes.data() + EFFECT_OFFSET,
+                desired.effects.data(), sizeof(desired.effects)) == 0) {
+            published_root.store(game_root, std::memory_order_release);
+            return true;
+        }
+        state.table_applied = false;
+        state.pending = true;
+    }
+
+    TraitRuntimeNative::Records current{};
+
+    if (!read_value(table + TraitRuntimeNative::RECORD_SIZE, current) ||
+        (!state.table_applied && !records_ready(current))) {
+        published_root.store(0, std::memory_order_release);
+        state.status = TraitRuntimeStatus::WaitingForTable;
+        return false;
+    }
+    if (state.table_applied && current != state.replacement) {
+        // Configuration replacement must not overwrite an unrecognized edit.
+        state.status = TraitRuntimeStatus::Conflict;
+        return false;
+    }
+    if (state.pending && !apply_records(state, current)) {
+        return false;
+    }
+    return state.table_applied;
+}
+
+bool prepare_assignment_table(TraitRuntimeNative& state) {
+    if (state.stopping || state.table_uncertain) {
+        return false;
+    }
+
+    std::uintptr_t root = 0;
+
+    // Native save/load and registered-person lookup use this same owner.
+    if (!read_value(state.module_base + 0x2e98bc8, root) || root == 0) {
+        state.status = TraitRuntimeStatus::WaitingForTable;
+        return false;
+    }
+
+    return prepare_records(state, root, state.epoch, GetTickCount64(), true);
+}
+
 bool restore_descriptions(TraitRuntimeNative& state) {
     if (state.description_count != 0) {
         std::uintptr_t resource = 0;
@@ -1038,8 +1344,78 @@ bool prepare_eligibility(TraitRuntimeNative& state) {
 
 } // namespace
 
+
+void start_trait_assignment_trace(std::uintptr_t module_base) {
+    wchar_t path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    wchar_t* separator = wcsrchr(path, L'\\');
+    if (!separator) {
+        return;
+    }
+    swprintf_s(separator + 1, MAX_PATH - (separator + 1 - path),
+        L"S8_trait_assignment_%lu.log", GetCurrentProcessId());
+    assignment_trace_file = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ,
+        nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    assignment_trace("start module=%p frequency=%lld\n", reinterpret_cast<void*>(module_base), frequency.QuadPart);
+
+    constexpr std::array<std::byte, 8> prologue = native_hex("4053555657415448");
+    if (!native_bytes_match(module_base + 0x1f04b30, prologue)) {
+        assignment_trace("registered_hook unsupported_prologue\n");
+        return;
+    }
+    if (!platform::windows::retain_callback_module(reinterpret_cast<std::uintptr_t>(&trace_registered_serializer))) {
+        assignment_trace("registered_hook retain_failed\n");
+        return;
+    }
+    const std::expected<platform::windows::Hook, int> hook = platform::windows::create_hook(
+        reinterpret_cast<void*>(module_base + 0x1f04b30), reinterpret_cast<void*>(&trace_registered_serializer));
+    if (!hook) {
+        assignment_trace("registered_hook create_failed=%d\n", hook.error());
+        return;
+    }
+    registered_serializer_original = reinterpret_cast<RegisteredSerializer>(hook->original);
+    assignment_trace("registered_hook enable=%d\n", platform::windows::enable_hook(*hook));
+}
+
+void sample_trait_assignment_trace(std::uintptr_t module_base) {
+    if (assignment_trace_file == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    std::uintptr_t owner = 0;
+    std::uintptr_t person = 0;
+    std::array<std::uintptr_t, 3> pointers{};
+    std::array<std::uint16_t, 3> ids{};
+    if (!platform::windows::read_memory(module_base + 0x2e98bc8, std::as_writable_bytes(std::span(&owner, 1))) || !owner ||
+        !platform::windows::read_memory(owner + 0x21bdf0 + 2008 * 8, std::as_writable_bytes(std::span(&person, 1))) || !person ||
+        !platform::windows::read_memory(person + 0x88, std::as_writable_bytes(std::span(pointers)))) {
+        return;
+    }
+    for (std::size_t index = 0; index < pointers.size(); ++index) {
+        if (pointers[index] && !platform::windows::read_memory(pointers[index] + 8,
+            std::as_writable_bytes(std::span(&ids[index], 1)))) {
+            return;
+        }
+    }
+    static std::uintptr_t previous_person = 0;
+    static std::array<std::uint16_t, 3> previous_ids{};
+    if (previous_person != person || previous_ids != ids) {
+        assignment_trace("scenario_sample person=%p slots=%u/%u/%u catalog=%d\n",
+            reinterpret_cast<void*>(person), ids[0], ids[1], ids[2], saved_trait_texts.load() != nullptr);
+        previous_person = person;
+        previous_ids = ids;
+    }
+}
+
 bool set_trait_runtime_catalog(TraitRuntimeNative& state, std::uintptr_t module_base,
     own::shared_owner<const domain::TraitRuntimeCatalog> catalog, bool external_runtime) {
+    const std::lock_guard<std::recursive_mutex> lock(state.table_mutex);
+
+    if (!catalog || !module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - MAX_MODULE_OFFSET) {
+        state.status = TraitRuntimeStatus::UnsupportedVersion;
+        return false;
+    }
     if (external_runtime) {
         if (!stop_trait_runtime_native(state, state.game_root, state.epoch)) {
             return false;
@@ -1047,11 +1423,21 @@ bool set_trait_runtime_catalog(TraitRuntimeNative& state, std::uintptr_t module_
         state.catalog = {};
         state.pending = false;
         state.stopping = false;
+
+        NativeTraitTexts* next = prepare_texts(*catalog, state.status);
+
+        if (!next) {
+            return false;
+        }
+        if (!install_saved_trait_filter(state, module_base)) {
+            VirtualFree(next, 0, MEM_RELEASE);
+            return false;
+        }
+        next->previous = state.texts;
+        state.texts = next;
+        saved_trait_texts.store(next, std::memory_order_release);
+        assignment_trace("catalog_published entry204=%d\n", next->entries[203].present);
         state.status = TraitRuntimeStatus::ExternalRuntime;
-        return false;
-    }
-    if (!catalog || !module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - MAX_MODULE_OFFSET) {
-        state.status = TraitRuntimeStatus::UnsupportedVersion;
         return false;
     }
     if (state.stopping) {
@@ -1088,7 +1474,8 @@ bool set_trait_runtime_catalog(TraitRuntimeNative& state, std::uintptr_t module_
     if (!next) {
         return false;
     }
-    if (!install_hooks(state, module_base) || !prepare_eligibility(state)) {
+    if (!install_hooks(state, module_base) || !prepare_eligibility(state) ||
+        !install_saved_trait_filter(state, module_base)) {
         VirtualFree(next, 0, MEM_RELEASE);
         return false;
     }
@@ -1116,11 +1503,15 @@ bool set_trait_runtime_catalog(TraitRuntimeNative& state, std::uintptr_t module_
         }
     }
     published_texts.store(next, std::memory_order_release);
+    saved_trait_texts.store(next, std::memory_order_release);
+    assignment_trace("catalog_published entry204=%d\n", next->entries[203].present);
     state.status = TraitRuntimeStatus::WaitingForTable;
     return true;
 }
 
 bool ensure_trait_runtime_name_hook(TraitRuntimeNative& state, std::uintptr_t module_base) {
+    const std::lock_guard<std::recursive_mutex> lock(state.table_mutex);
+
     TraitRuntimeNative* owner = control_owner.load(std::memory_order_acquire);
 
     if (!module_base || module_base > std::numeric_limits<std::uintptr_t>::max() - MAX_MODULE_OFFSET ||
@@ -1175,69 +1566,12 @@ bool ensure_trait_runtime_name_hook(TraitRuntimeNative& state, std::uintptr_t mo
 
 bool tick_trait_runtime_native(TraitRuntimeNative& state, std::uintptr_t game_root,
     std::uint64_t epoch, std::uint64_t real_milliseconds) {
+    const std::lock_guard<std::recursive_mutex> lock(state.table_mutex);
+
     if (!state.catalog || !state.hooks_enabled || state.stopping || state.table_uncertain) {
         return false;
     }
-    if (state.game_root != game_root || state.epoch != epoch) {
-        published_root.store(0, std::memory_order_release);
-        state.game_root = game_root;
-        state.epoch = epoch;
-        state.table = 0;
-        state.table_applied = false;
-        state.pending = true;
-        state.last_tick_ms = 0;
-    }
-    if (state.last_tick_ms != 0 && real_milliseconds - state.last_tick_ms < 500) {
-        return state.table_applied;
-    }
-    state.last_tick_ms = real_milliseconds;
-
-    std::uintptr_t table = 0;
-
-    if (game_root < 0x10000 || !read_value(game_root + state.trait_pointer_offset, table) || table < 0x10000) {
-        published_root.store(0, std::memory_order_release);
-        state.status = TraitRuntimeStatus::WaitingForTable;
-        return false;
-    }
-    if (table != state.table) {
-        state.table = table;
-        state.table_applied = false;
-        state.pending = true;
-    }
-    if (state.table_applied && !state.pending && state.sentinel_index >= 0) {
-        TraitRecord sentinel{};
-        const std::size_t index = static_cast<std::size_t>(state.sentinel_index);
-        const domain::Trait& desired = state.catalog->traits[index].trait;
-
-        if (!read_value(table + (index + 1) * TraitRuntimeNative::RECORD_SIZE, sentinel)) {
-            published_root.store(0, std::memory_order_release);
-            state.status = TraitRuntimeStatus::WaitingForTable;
-            return false;
-        }
-        if (sentinel.id() == desired.id && std::memcmp(sentinel.bytes.data() + EFFECT_OFFSET,
-                desired.effects.data(), sizeof(desired.effects)) == 0) {
-            published_root.store(game_root, std::memory_order_release);
-            sync_descriptions(state);
-            return true;
-        }
-        state.table_applied = false;
-        state.pending = true;
-    }
-
-    TraitRuntimeNative::Records current{};
-
-    if (!read_value(table + TraitRuntimeNative::RECORD_SIZE, current) ||
-        (!state.table_applied && !records_ready(current))) {
-        published_root.store(0, std::memory_order_release);
-        state.status = TraitRuntimeStatus::WaitingForTable;
-        return false;
-    }
-    if (state.table_applied && current != state.replacement) {
-        // Configuration replacement must not overwrite an unrecognized edit.
-        state.status = TraitRuntimeStatus::Conflict;
-        return false;
-    }
-    if (state.pending && !apply_records(state, current)) {
+    if (!prepare_records(state, game_root, epoch, real_milliseconds, false)) {
         return false;
     }
     if (!state.eligibility.applied && !set_native_patch_group(state.eligibility, true)) {
@@ -1256,6 +1590,20 @@ bool trait_runtime_callbacks_idle() {
 }
 
 bool stop_trait_runtime_native(TraitRuntimeNative& state, std::uintptr_t game_root, std::uint64_t epoch) {
+    const std::lock_guard<std::recursive_mutex> lock(state.table_mutex);
+
+    saved_trait_texts.store(nullptr, std::memory_order_release);
+    for (void* target : {state.saved_trait_filter.target, state.scenario_trait_filter.target}) {
+        if (!target) {
+            continue;
+        }
+        const MH_STATUS result = MH_DisableHook(target);
+
+        if (result != MH_OK && result != MH_ERROR_DISABLED) {
+            state.status = TraitRuntimeStatus::HookFailed;
+            return false;
+        }
+    }
     state.stopping = true;
     published_root.store(0, std::memory_order_release);
     callback_gate.fetch_or(CALLBACK_CLOSED, std::memory_order_acq_rel);

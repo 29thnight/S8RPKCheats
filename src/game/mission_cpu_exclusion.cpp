@@ -1,19 +1,15 @@
 #include "mission_cpu_exclusion.h"
+#include "bytecode_buffer.h"
 #include "../platform/windows/code_memory.h"
 #include "../platform/windows/process_memory.h"
 
 namespace s8::game {
 namespace {
 
-// WOOSEOK99/S8RPKCheats@068ca1d, Civilian/MissionCpuHeroExclusion.cpp.
-// Preserve RFLAGS/RAX; skip forced CPU registration only for the protagonist,
-// status kind 4..9, with the volunteer marker at +0x350 equal to zero.
+// Game ABI: RBX is the officer, R15 supplies the displaced LEA operand.
+// Only a volunteer protagonist in status 4..9 bypasses CPU registration.
 constexpr std::array ORIGINAL = native_hex("498D7F20BE05000000");
 constexpr std::array GUARD = native_hex("483B98E0000000");
-constexpr std::array CAVE_TEMPLATE = native_hex(
-    "9C5048B80000000000000000488B004885C07439483B98E00000007530488B43104885C074270FB6400883F804721E"
-    "83F809771980BB50030000007510589DFF25000000000000000000000000589D498D7F20BE05000000FF25000000000000000000000000");
-static_assert(CAVE_TEMPLATE.size() == 102);
 
 bool prepare_mission_cpu_exclusion(MissionCpuExclusion& state, std::uintptr_t base) {
     state.patches.last_result = platform::windows::CodePatchResult::ExpectedBytesMismatch;
@@ -30,14 +26,37 @@ bool prepare_mission_cpu_exclusion(MissionCpuExclusion& state, std::uintptr_t ba
         return false;
     }
 
-    std::array<std::byte, CAVE_TEMPLATE.size()> code = CAVE_TEMPLATE;
+    BytecodeBuffer<256> code;
+    code.emit({0x9c, 0x50}); // save flags and RAX
+    code.emit({0x80, 0xbb, 0x50, 0x03, 0, 0, 0}); // volunteer marker
+    code.emit({0x0f, 0x85});
+    const std::size_t not_volunteer = code.branch();
+    code.emit({0x48, 0x8b, 0x43, 0x10, 0x48, 0x85, 0xc0}); // status object
+    code.emit({0x0f, 0x84});
+    const std::size_t no_status = code.branch();
+    code.emit({0x0f, 0xb6, 0x40, 0x08, 0x83, 0xe8, 0x04, 0x83, 0xf8, 0x05});
+    code.emit({0x0f, 0x87}); // unsigned (kind - 4) > 5
+    const std::size_t other_status = code.branch();
+    code.emit({0x48, 0xa1});
+    code.address(base + 0x02e98bc8);
+    code.emit({0x48, 0x85, 0xc0, 0x0f, 0x84});
+    const std::size_t no_root = code.branch();
+    code.emit({0x48, 0x3b, 0x98, 0xe0, 0, 0, 0, 0x0f, 0x85});
+    const std::size_t other_officer = code.branch();
+    code.emit({0x58, 0x9d, 0xff, 0x25, 0, 0, 0, 0});
+    code.address(base + 0x01453870);
+
+    for (const std::size_t branch : {not_volunteer, no_status, other_status, no_root, other_officer})
+        code.patch(branch);
+    code.emit({0x58, 0x9d});
+    code.append(ORIGINAL);
+    code.emit({0xff, 0x25, 0, 0, 0, 0});
+    code.address(base + 0x0145380a);
     NativePatchGroup patches{};
 
-    if (!put_native_pointer(code, 4, base + 0x02e98bc8) ||
-        !put_native_pointer(code, 69, base + 0x01453870) ||
-        !put_native_pointer(code, 94, base + 0x0145380a) ||
+    if (!code.valid() ||
         !append_native_branch(patches, base + 0x01453801, cave, ORIGINAL) ||
-        !platform::windows::write_code_memory(cave, code)) {
+        !platform::windows::write_code_memory(cave, code.bytes())) {
         platform::windows::free_code(cave);
         return false;
     }

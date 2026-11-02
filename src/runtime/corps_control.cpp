@@ -33,9 +33,8 @@ domain::Result<void> submit_corps_request(Runtime& runtime, std::uintptr_t modul
 void service_corps_deployment(Runtime& runtime, services::UiBridge& ui, std::uintptr_t module,
     const domain::WorkBudget& work_budget) {
     if (runtime.stopping || work_budget.exhausted()) { return; }
-    const std::uintptr_t root = game::read_game_base(runtime.game_base_pointer);
-
-    game::tick_corps_deployment(*runtime.corps_deployment, module, root, game::read_player(root), runtime.epoch, GetTickCount64(), 64, work_budget);
+    game::tick_corps_deployment(*runtime.corps_deployment, module, runtime.loop_game_base,
+        runtime.loop_player, runtime.epoch, GetTickCount64(), domain::CORPS_OFFICER_CAPACITY, work_budget);
     if (runtime.corps_published_revision != runtime.corps_deployment->snapshot.revision) {
         ui.corps_deployment.publish(runtime.corps_deployment->snapshot);
         runtime.corps_published_revision = runtime.corps_deployment->snapshot.revision;

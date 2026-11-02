@@ -53,14 +53,16 @@ std::uintptr_t roster_base(std::uintptr_t module_base) {
 }
 
 std::uintptr_t roster_officer(const OfficerRosterScan& scan, std::uintptr_t module_base, std::uint16_t id) {
-    if (!id || id >= scan.slots.size() || !scan.slots[id]) {
+    const std::uintptr_t officer = scan.address(id);
+
+    if (!officer) {
         return 0;
     }
-    const auto roster = roster_base(module_base);
+    const std::uintptr_t roster = roster_base(module_base);
+
     if (!roster || roster != scan.base) {
         return 0;
     }
-    const auto officer = roster + (scan.slots[id] - 1) * 0x3d0;
     std::uint16_t current_id = 0;
     if (!platform::windows::read_memory(officer + 8, std::as_writable_bytes(std::span(&current_id, 1))) ||
         current_id != id) {
@@ -186,9 +188,13 @@ void reset_officer_roster(OfficerRosterScan& scan) {
 }
 
 void request_officer_roster(OfficerRosterScan& scan) {
-    reset_officer_roster(scan);
+    if (!scan.has_scan) {
+        reset_officer_roster(scan);
+    }
+    scan.cursor = 0;
     scan.has_scan = true;
     scan.requested = true;
+    scan.completed = false;
 }
 
 namespace {
@@ -205,50 +211,81 @@ void mark_roster_dirty(OfficerRosterScan& scan, std::uint16_t id) {
 
 } // namespace
 
-void update_officer_roster(OfficerRosterScan& scan, std::uintptr_t module_base, const domain::WorkBudget& budget) {
-    if (!scan.requested || budget.exhausted()) {
+const domain::OfficerRosterEntry* OfficerRosterScan::find(std::uint16_t id) const {
+    return id < entries.size() && slots[id] != 0 ? &entries[id] : nullptr;
+}
+
+std::uintptr_t OfficerRosterScan::address(std::uint16_t id) const {
+    return find(id) ? base + (slots[id] - 1) * RECORD_SIZE : 0;
+}
+
+void OfficerRosterScan::refresh(std::uintptr_t module_base, const domain::WorkBudget& budget) {
+    if (!requested || budget.exhausted()) {
         return;
     }
+
     const std::uintptr_t roster = roster_base(module_base);
 
     if (!roster) {
         return;
     }
-    if (scan.base != roster) {
-        if (scan.base != 0) {
-            request_officer_roster(scan);
-        }
-        scan.base = roster;
-    }
-    const std::size_t end = std::min(scan.cursor + domain::OFFICER_ROSTER_BATCH_CAPACITY, domain::OFFICER_ROSTER_LIMIT);
 
-    for (; scan.cursor < end; ++scan.cursor) {
-        if (budget.exhausted()) {
+    // The existing chain points to array index 1 (ID 1). Index 0 is ID 0;
+    // the allocation cookie precedes it. Admit this layout at the read boundary.
+    std::uint64_t allocation_count = 0;
+
+    if (!platform::windows::read_memory(roster - RECORD_SIZE - sizeof(allocation_count),
+            std::as_writable_bytes(std::span(&allocation_count, 1))) ||
+        allocation_count != domain::OFFICER_ROSTER_RECORD_COUNT + 1) {
+        return;
+    }
+
+    snapshot.resize(domain::OFFICER_ROSTER_RECORD_COUNT * RECORD_SIZE);
+
+    if (!platform::windows::read_memory(roster, std::span(snapshot))) {
+        return;
+    }
+
+    std::array<std::uint16_t, domain::OFFICER_ROSTER_ID_SLOTS> observed_slots{};
+    std::array<domain::OfficerRosterEntry, domain::OFFICER_ROSTER_RECORD_COUNT> observed{};
+
+    // Validate the incoming snapshot before changing the published cache.
+    for (std::size_t slot = 0; slot < observed.size(); ++slot) {
+        std::uint16_t id = 0;
+        const std::byte* record = snapshot.data() + slot * RECORD_SIZE;
+
+        std::memcpy(&id, record + 8, sizeof(id));
+        if (id == 0 || id >= observed_slots.size() || observed_slots[id] != 0) {
             return;
         }
-        const std::uintptr_t officer = roster + scan.cursor * 0x3d0;
-        std::uint16_t id = 0, face = 0, merit = 0, reputation = 0;
-        std::uint32_t gold = 0;
-        std::uint8_t strategy = 0, status = 0;
 
-        if (!platform::windows::read_memory(officer + 8, std::as_writable_bytes(std::span(&id, 1))) ||
-            !platform::windows::read_memory(officer + 0x2e, std::as_writable_bytes(std::span(&face, 1))) ||
-            !platform::windows::read_memory(officer + 0xe8, std::as_writable_bytes(std::span(&gold, 1))) ||
-            !platform::windows::read_memory(officer + 0x100, std::as_writable_bytes(std::span(&merit, 1))) ||
-            !platform::windows::read_memory(officer + 0x108, std::as_writable_bytes(std::span(&reputation, 1))) ||
-            !platform::windows::read_memory(officer + 0xed, std::as_writable_bytes(std::span(&strategy, 1))) ||
-            !platform::windows::read_memory(officer + 0x10, std::as_writable_bytes(std::span(&status, 1))) ||
-            id == 0 || id > domain::OFFICER_ROSTER_LIMIT || scan.entries[id].id != 0) {
-            continue;
+        observed_slots[id] = static_cast<std::uint16_t>(slot + 1);
+        observed[slot] = {id, std::to_integer<std::uint8_t>(record[0x10])};
+    }
+
+    if (base != roster || slots != observed_slots) {
+        reset_officer_roster(*this);
+        base = roster;
+        slots = observed_slots;
+        has_scan = true;
+    }
+
+    for (const domain::OfficerRosterEntry& row : observed) {
+        domain::OfficerRosterEntry& cached = entries[row.id];
+
+        if (cached.id != row.id || cached.status != row.status) {
+            cached = row;
+            mark_roster_dirty(*this, row.id);
         }
-        scan.slots[id] = static_cast<std::uint16_t>(scan.cursor + 1);
-        scan.entries[id] = {id, status};
-        mark_roster_dirty(scan, id);
     }
-    if (scan.cursor == domain::OFFICER_ROSTER_LIMIT) {
-        scan.requested = false;
-        scan.completed = true;
-    }
+
+    cursor = observed.size();
+    requested = false;
+    completed = true;
+}
+
+void update_officer_roster(OfficerRosterScan& scan, std::uintptr_t module_base, const domain::WorkBudget& budget) {
+    scan.refresh(module_base, budget);
 }
 
 bool update_roster_officer_status(OfficerRosterScan& scan, std::uint16_t id, std::uint8_t status) {
