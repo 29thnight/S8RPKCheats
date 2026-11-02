@@ -10,7 +10,7 @@ namespace s8::game { void sample_trait_assignment_trace(std::uintptr_t module_ba
 namespace s8::runtime {
 namespace {
 
-constexpr std::uint64_t RETRY_INTERVAL_MS = 100;
+constexpr std::uint64_t RETRY_INTERVAL_MS = 1000;
 
 domain::TraitApplyStatus runtime_status(game::TraitRuntimeStatus status) {
 
@@ -44,9 +44,29 @@ domain::TraitApplyStatus viewer_status(game::TraitViewerStatus status) {
     }
 }
 
-bool viewer_busy(const game::TraitViewerNative& viewer) {
+bool retryable_patch(const game::NativePatchGroup& patches) {
+    using Result = platform::windows::CodePatchResult;
 
-    if (viewer.status == game::TraitViewerStatus::LiveObjects) {
+    if (patches.uncertain) {
+        return false;
+    }
+    switch (patches.last_result) {
+    case Result::Busy:
+    case Result::ThreadEnumerationFailed:
+    case Result::ThreadAccessFailed:
+    case Result::ThreadSuspendFailed:
+    case Result::ThreadContextFailed:
+    case Result::WriteFailed:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool viewer_retryable(const game::TraitViewerNative& viewer) {
+
+    if (viewer.status == game::TraitViewerStatus::LiveObjects ||
+        viewer.status == game::TraitViewerStatus::AllocationFailed) {
         return true;
     }
 
@@ -54,7 +74,7 @@ bool viewer_busy(const game::TraitViewerNative& viewer) {
 
         const game::NativePatchGroup& patches = viewer.groups[viewer.failed_group].patches;
 
-        return !patches.uncertain && patches.last_result == platform::windows::CodePatchResult::Busy;
+        return retryable_patch(patches);
     }
 
     return false;
@@ -192,10 +212,10 @@ bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
     if (control.viewer_pending && now_ms >= control.viewer_retry_ms) {
 
         const bool applied = game::set_trait_viewer_native(control.viewer, module_base, control.viewer_requested);
-        const bool retry = !applied && viewer_busy(control.viewer);
+        const bool retry = !applied && viewer_retryable(control.viewer);
 
         control.view.viewer_applied = game::trait_viewer_native_applied(control.viewer);
-        control.view.viewer = retry ? domain::TraitApplyStatus::CallbackBusy : viewer_status(control.viewer.status);
+        control.view.viewer = viewer_status(control.viewer.status);
         control.viewer_pending = retry;
         control.viewer_retry_ms = now_ms + RETRY_INTERVAL_MS;
 
@@ -210,7 +230,10 @@ bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
 
         const bool applied = game::set_trait_runtime_catalog(control.runtime, module_base,
             control.pending_catalog, external_runtime);
-        const bool retry = !applied && control.runtime.status == game::TraitRuntimeStatus::CallbackBusy;
+        const bool retry = !applied && !control.runtime.table_uncertain && !control.runtime.description_uncertain &&
+            (control.runtime.status == game::TraitRuntimeStatus::CallbackBusy ||
+             control.runtime.status == game::TraitRuntimeStatus::AllocationFailed ||
+             control.runtime.status == game::TraitRuntimeStatus::MemoryFailed);
 
         control.view.catalog = runtime_status(control.runtime.status);
         control.catalog_retry_ms = now_ms + RETRY_INTERVAL_MS;
@@ -243,18 +266,23 @@ bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
                 std::span<const domain::TraitTextEdit>(*control.pending_legacy));
         } else {
             control.view.legacy_text = runtime_status(control.runtime.status);
-            control.pending_legacy = {};
-            publish_status(control, "기본 기재 텍스트", control.view.legacy_text);
+            control.legacy_retry_ms = now_ms + RETRY_INTERVAL_MS;
+            if (control.runtime.status != game::TraitRuntimeStatus::CallbackBusy &&
+                control.runtime.status != game::TraitRuntimeStatus::AllocationFailed) {
+                control.pending_legacy = {};
+                publish_status(control, "기본 기재 텍스트", control.view.legacy_text);
+            }
             return true;
         }
 
         const bool retry = !applied &&
-            (control.legacy_text.patches.last_result == platform::windows::CodePatchResult::Busy ||
-             control.legacy_text.recovery.last_result == platform::windows::CodePatchResult::Busy);
+            retryable_patch(control.legacy_text.recovery_pending
+                ? control.legacy_text.recovery : control.legacy_text.patches);
 
         control.legacy_retry_ms = now_ms + RETRY_INTERVAL_MS;
         control.view.legacy_text = applied ? (overrides ? domain::TraitApplyStatus::Applied : domain::TraitApplyStatus::Disabled) :
-            retry ? domain::TraitApplyStatus::CallbackBusy : domain::TraitApplyStatus::MemoryFailed;
+            (control.legacy_text.recovery_pending ? control.legacy_text.recovery : control.legacy_text.patches).last_result ==
+                platform::windows::CodePatchResult::Busy ? domain::TraitApplyStatus::CallbackBusy : domain::TraitApplyStatus::MemoryFailed;
 
         if (!retry) {
             control.pending_legacy = {};
@@ -306,7 +334,7 @@ domain::Result<void> stop_trait_control(TraitControl& control, std::uintptr_t mo
     }
 
     if (!game::set_trait_viewer_native(control.viewer, module_base, false)) {
-        return failure(viewer_busy(control.viewer), 0x2200u + static_cast<std::uint32_t>(control.viewer.status));
+        return failure(viewer_retryable(control.viewer), 0x2200u + static_cast<std::uint32_t>(control.viewer.status));
     }
 
     control.view.legacy_text = domain::TraitApplyStatus::Disabled;

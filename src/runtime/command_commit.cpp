@@ -29,7 +29,10 @@ constexpr bool context_independent_command(const domain::CommandPayload& payload
     if (std::holds_alternative<domain::SetRosterOfficerBasic>(payload) ||
         std::holds_alternative<domain::SetRosterOfficerGender>(payload) ||
         std::holds_alternative<domain::SetRosterOfficerVoice>(payload) ||
-        std::holds_alternative<domain::SetRosterOfficerTraining>(payload)) {
+        std::holds_alternative<domain::SetRosterOfficerPriority>(payload) ||
+        std::holds_alternative<domain::SetRosterOfficerTraining>(payload) ||
+        std::holds_alternative<domain::RefreshOfficerRelations>(payload) ||
+        std::holds_alternative<domain::ReplaceOfficerRelation>(payload)) {
         // Title-screen edits use the independently validated master array.
         // Once a root slot is known, wait for observation/epoch retirement
         // before writing: an unreadable or newly found root can be a load.
@@ -219,33 +222,75 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         break;
                     case domain::FeatureId::SelfHeal:
                         if (!game::set_self_heal(game_module, command.enabled, runtime.self_heal_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 0);
+                            runtime.battle_refresh_done &= ~(1u << 0);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[0] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 0);
                         break;
                     case domain::FeatureId::Dongto:
                         if (!game::set_dongto(game_module, command.enabled, runtime.dongto_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 1);
+                            runtime.battle_refresh_done &= ~(1u << 1);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[1] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 1);
                         break;
                     case domain::FeatureId::Celestial:
                         if (!game::set_celestial(game_module, command.enabled, runtime.celestial_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 2);
+                            runtime.battle_refresh_done &= ~(1u << 2);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[2] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 2);
                         break;
                     case domain::FeatureId::Catapult:
                         if (!game::set_catapult(game_module, command.enabled, runtime.catapult_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 3);
+                            runtime.battle_refresh_done &= ~(1u << 3);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[3] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 3);
                         break;
                     case domain::FeatureId::TerrainIgnore:
                         if (!game::set_terrain_tactics(game_module, command.enabled, runtime.terrain_tactics_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 4);
+                            runtime.battle_refresh_done &= ~(1u << 4);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[4] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 4);
                         break;
                     case domain::FeatureId::DefBuilding:
                         if (!game::set_def_building(game_module, command.enabled, runtime.def_building_settings)) {
+                            runtime.features.set(command.feature, command.enabled);
+                            runtime.battle_settings_pending |= (1u << 5);
+                            runtime.battle_refresh_done &= ~(1u << 5);
+                            runtime.battle_mods_refreshed = false;
+                            runtime.battle_retry_after_ms[5] = GetTickCount64() + 1000;
+                            settings_changed_on_failure = true;
                             return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                         }
+                        runtime.battle_settings_pending &= ~(1u << 5);
                         break;
                     default:
                         return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
@@ -369,49 +414,79 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     if (!game::set_self_heal(game_module, runtime.features.get(domain::FeatureId::SelfHeal),
                                              runtime.self_heal_settings)) {
+                        runtime.battle_settings_pending |= (1u << 0);
+                        runtime.battle_refresh_done &= ~(1u << 0);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[0] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 0);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetDongtoSettings>) {
                     runtime.dongto_settings = command.settings;
                     if (!game::set_dongto(game_module, runtime.features.get(domain::FeatureId::Dongto),
                                           runtime.dongto_settings)) {
+                        runtime.battle_settings_pending |= (1u << 1);
+                        runtime.battle_refresh_done &= ~(1u << 1);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[1] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 1);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetCelestialSettings>) {
                     runtime.celestial_settings = command.settings;
                     if (!game::set_celestial(game_module, runtime.features.get(domain::FeatureId::Celestial),
                                              runtime.celestial_settings)) {
+                        runtime.battle_settings_pending |= (1u << 2);
+                        runtime.battle_refresh_done &= ~(1u << 2);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[2] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 2);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetCatapultSettings>) {
                     runtime.catapult_settings = command.settings;
                     if (!game::set_catapult(game_module, runtime.features.get(domain::FeatureId::Catapult),
                                             runtime.catapult_settings)) {
+                        runtime.battle_settings_pending |= (1u << 3);
+                        runtime.battle_refresh_done &= ~(1u << 3);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[3] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 3);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetTerrainTacticsSettings>) {
                     runtime.terrain_tactics_settings = command.settings;
                     if (!game::set_terrain_tactics(game_module, runtime.features.get(domain::FeatureId::TerrainIgnore),
                                                    runtime.terrain_tactics_settings)) {
+                        runtime.battle_settings_pending |= (1u << 4);
+                        runtime.battle_refresh_done &= ~(1u << 4);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[4] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 4);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetDefBuildingSettings>) {
                     runtime.def_building_settings = command.settings;
                     if (!game::set_def_building(game_module, runtime.features.get(domain::FeatureId::DefBuilding),
                                                  runtime.def_building_settings)) {
+                        runtime.battle_settings_pending |= (1u << 5);
+                        runtime.battle_refresh_done &= ~(1u << 5);
+                        runtime.battle_mods_refreshed = false;
+                        runtime.battle_retry_after_ms[5] = GetTickCount64() + 1000;
                         settings_changed_on_failure = true;
                         return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
                     }
+                    runtime.battle_settings_pending &= ~(1u << 5);
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::SetSkipDays>) {
                     runtime.skip_days = command.days;
@@ -608,6 +683,15 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                         officer_inspection_context(runtime, game_module), command.officer_id,
                         command.protagonist, work_budget);
                     return {};
+                } else if constexpr (std::is_same_v<T, domain::ReplaceOfficerRelation>) {
+                    save_config = false;
+                    const domain::Result<void> result = game::replace_officer_relation(runtime.selected_officer_inspection,
+                        runtime.officer_roster, officer_inspection_context(runtime, game_module),
+                        command.officer_id, command.kind, command.previous_id, command.replacement_id);
+                    // Both panels can contain either endpoint; never leave the other panel's index stale.
+                    game::request_officer_relations_refresh(runtime.selected_officer_inspection);
+                    game::request_officer_relations_refresh(runtime.protagonist_inspection);
+                    return result;
                 } else if constexpr (std::is_same_v<T, domain::SetOfficerFactionColor>) {
                     save_config = false;
                     if (runtime.selected_officer_inspection.faction_color.recovery_pending ||
@@ -642,6 +726,16 @@ std::size_t commit_commands(Runtime& runtime, services::CommandMailbox& mailbox,
                     }
                     if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
                         runtime.selected_officer->voice = command.voice;
+                    }
+                    return {};
+                } else if constexpr (std::is_same_v<T, domain::SetRosterOfficerPriority>) {
+                    save_config = false;
+                    if (!game::write_roster_officer_priority(runtime.officer_roster, game_module,
+                            command.officer_id, command.priority)) {
+                        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+                    }
+                    if (runtime.selected_officer && runtime.selected_officer->id == command.officer_id) {
+                        runtime.selected_officer->priority = command.priority;
                     }
                     return {};
                 } else if constexpr (std::is_same_v<T, domain::ApplyTraitTextEdits>) {

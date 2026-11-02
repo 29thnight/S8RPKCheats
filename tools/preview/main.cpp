@@ -27,7 +27,19 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+#include "../../src/platform/windows/hook.h"
+
 using namespace s8;
+
+// The standalone preview has sample data, not a game address space.
+namespace s8::platform::windows {
+bool read_memory(std::uintptr_t, std::span<std::byte>) {
+    return false;
+}
+std::expected<Hook, int> create_hook(void*, void*) { return std::unexpected(-1); }
+int enable_hook(const Hook&) { return -1; }
+int disable_hook(const Hook&) { return -1; }
+}
 
 namespace {
 constexpr std::array page_names{"overview", "officers", "traits", "domestic", "council", "battle", "scenario", "settings"};
@@ -308,12 +320,16 @@ struct Script {
         }
         if (wait_frames > 0) { --wait_frames; return; }
         if (cursor == lines.size()) return;
-        const auto& line = lines[cursor++];
+        const std::string line = lines[cursor++];
         std::istringstream input(line);
         std::string verb, value;
         input >> verb >> std::quoted(value);
         if (verb == "wait") wait_frames = std::stoi(value);
-        else if (verb == "click" || verb == "ctrl-click") {
+        else if (verb == "click" || verb == "ctrl-click" || verb == "double-click") {
+            if (verb == "double-click") {
+                ImGui::GetIO().MouseDoubleClickTime = 2.0f;
+                lines.insert(lines.begin() + cursor, "click \"" + value + "\"");
+            }
             std::string window_filter;
             input >> std::quoted(window_filter);
             const auto item = preview::find_item(value, window_filter);
@@ -609,6 +625,31 @@ int main(int argc, char** argv) {
                         overlay::request_feature_menu_toggle(*menu);
                 }
                 session->pump();
+#ifdef _WIN32
+                const domain::OfficerBasicValues* portrait_basic = menu->protagonist_detail && session->config.protagonist_basic
+                    ? &*session->config.protagonist_basic
+                    : menu->officer_list_open && session->config.selected_officer
+                        ? &session->config.selected_officer->basic : nullptr;
+                if (!options.game_directory.empty() && portrait_basic && menu->portrait_face != (*portrait_basic)[13]) {
+                    const unsigned face = (*portrait_basic)[13];
+                    services::request_game_portrait(face);
+                    services::poll_game_portrait();
+                    const own::shared_owner<const services::GamePortrait> portrait = services::game_portrait_view();
+                    menu->portrait_face = face;
+                    menu->portrait_texture = {};
+                    if (portrait && portrait->image) {
+                        const services::RangeImage& image = *portrait->image;
+                        SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                            SDL_TEXTUREACCESS_STATIC, image.width, image.height);
+                        if (!texture || SDL_UpdateTexture(texture, nullptr, image.pixels.data(), image.width * 4) != 0)
+                            throw std::runtime_error(SDL_GetError());
+                        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+                        SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+                        textures.values.push_back(texture);
+                        menu->portrait_texture = {texture, image.width, image.height};
+                    }
+                }
+#endif
                 ImGui_ImplSDLRenderer2_NewFrame();
                 ImGui_ImplSDL2_NewFrame();
                 preview::begin_probe_frame();

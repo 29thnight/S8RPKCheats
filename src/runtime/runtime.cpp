@@ -14,6 +14,10 @@
 #include <algorithm>
 #include <cmath>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
 namespace s8::runtime {
 
 domain::ConfigSnapshot config_snapshot(const Runtime& runtime) {
@@ -179,8 +183,10 @@ void change_game_session(Runtime& runtime) {
     runtime.faction_lord_bonus = {};
     runtime.undiscovered_ronin = {};
     runtime.last_relevant_phase = 0;
+    runtime.battle_settings_pending = 0;
     runtime.battle_mods_refreshed = false;
     runtime.battle_refresh_done = 0;
+    runtime.battle_retry_after_ms.fill(0);
     runtime.next_battle_refresh = 0;
     runtime.battle_readiness = {};
     runtime.battle_state = {};
@@ -277,6 +283,7 @@ void on_battle_end(Runtime& runtime) {
     }
     runtime.battle_mods_refreshed = false;
     runtime.battle_refresh_done = 0;
+    runtime.battle_retry_after_ms.fill(0);
     runtime.next_battle_refresh = 0;
     runtime.battle_readiness = {};
     reset_stratagem5_battle(runtime.stratagem5_lifecycle);
@@ -306,6 +313,7 @@ void on_active_battle_observed(Runtime& runtime, std::uintptr_t module_base, std
     if (!records_ready || identity_changed) {
         runtime.battle_mods_refreshed = false;
         runtime.battle_refresh_done = 0;
+        runtime.battle_retry_after_ms.fill(0);
         runtime.next_battle_refresh = 0;
     }
     if (!game::update_battle_readiness(runtime.battle_readiness, observation, records_ready, now_ms)) {
@@ -405,6 +413,7 @@ void monitor_battle(Runtime& runtime, std::uintptr_t module_base, std::uintptr_t
             runtime.battle_readiness = {};
             runtime.battle_mods_refreshed = false;
             runtime.battle_refresh_done = 0;
+            runtime.battle_retry_after_ms.fill(0);
             runtime.next_battle_refresh = 0;
         }
     } else if (mode == game::BattleMode::NonBattle) {
@@ -430,44 +439,50 @@ void on_battle_ready(Runtime& runtime, std::uintptr_t module_base, int day, int 
     if (runtime.battle_mods_refreshed || unit_count <= 0 || day < 1 || day > 30) {
         return;
     }
+    const std::uint64_t now_ms = GetTickCount64();
+
     for (std::size_t attempted = 0; attempted < TACTIC_COUNT && !work_budget.exhausted(); ++attempted) {
         const std::size_t index = runtime.next_battle_refresh;
         const std::uint8_t bit = static_cast<std::uint8_t>(1u << index);
         bool applied = false;
 
         runtime.next_battle_refresh = (index + 1) % TACTIC_COUNT;
-        if ((runtime.battle_refresh_done & bit) != 0) {
+        if ((runtime.battle_refresh_done & bit) != 0 || now_ms < runtime.battle_retry_after_ms[index]) {
             continue;
         }
         switch (index) {
         case 0:
-            applied = !runtime.features.get(domain::FeatureId::SelfHeal) ||
-                game::set_self_heal(module_base, true, runtime.self_heal_settings);
+            applied = (!runtime.features.get(domain::FeatureId::SelfHeal) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_self_heal(module_base, runtime.features.get(domain::FeatureId::SelfHeal), runtime.self_heal_settings);
             break;
         case 1:
-            applied = !runtime.features.get(domain::FeatureId::Dongto) ||
-                game::set_dongto(module_base, true, runtime.dongto_settings);
+            applied = (!runtime.features.get(domain::FeatureId::Dongto) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_dongto(module_base, runtime.features.get(domain::FeatureId::Dongto), runtime.dongto_settings);
             break;
         case 2:
-            applied = !runtime.features.get(domain::FeatureId::Celestial) ||
-                game::set_celestial(module_base, true, runtime.celestial_settings);
+            applied = (!runtime.features.get(domain::FeatureId::Celestial) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_celestial(module_base, runtime.features.get(domain::FeatureId::Celestial), runtime.celestial_settings);
             break;
         case 3:
-            applied = !runtime.features.get(domain::FeatureId::Catapult) ||
-                game::set_catapult(module_base, true, runtime.catapult_settings);
+            applied = (!runtime.features.get(domain::FeatureId::Catapult) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_catapult(module_base, runtime.features.get(domain::FeatureId::Catapult), runtime.catapult_settings);
             break;
         case 4:
-            applied = !runtime.features.get(domain::FeatureId::TerrainIgnore) ||
-                game::set_terrain_tactics(module_base, true, runtime.terrain_tactics_settings);
+            applied = (!runtime.features.get(domain::FeatureId::TerrainIgnore) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_terrain_tactics(module_base, runtime.features.get(domain::FeatureId::TerrainIgnore), runtime.terrain_tactics_settings);
             break;
         case 5:
-            applied = !runtime.features.get(domain::FeatureId::DefBuilding) ||
-                game::set_def_building(module_base, true, runtime.def_building_settings);
+            applied = (!runtime.features.get(domain::FeatureId::DefBuilding) && (runtime.battle_settings_pending & bit) == 0) ||
+                game::set_def_building(module_base, runtime.features.get(domain::FeatureId::DefBuilding), runtime.def_building_settings);
             break;
         }
         if (applied) {
             runtime.battle_refresh_done |= bit;
+            runtime.battle_settings_pending &= ~bit;
+        } else {
+            runtime.battle_retry_after_ms[index] = now_ms + 1000;
         }
+        break;
     }
     runtime.battle_mods_refreshed = runtime.battle_refresh_done == ALL_TACTICS;
 }

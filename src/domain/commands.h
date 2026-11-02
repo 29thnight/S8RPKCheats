@@ -109,6 +109,12 @@ struct SetProtagonistGender { std::uint16_t officer_id; std::uint8_t gender; };
 struct RefreshOfficerRoster {};
 struct SelectRosterOfficer { std::uint16_t officer_id; };
 struct RefreshOfficerRelations { std::uint16_t officer_id; bool protagonist = false; };
+struct ReplaceOfficerRelation {
+    std::uint16_t officer_id;
+    OfficerRelationKind kind;
+    std::uint16_t previous_id;
+    std::uint16_t replacement_id;
+};
 struct SetOfficerFactionColor {
     std::uint16_t officer_id;
     std::uint64_t token;
@@ -119,6 +125,7 @@ struct SetOfficerFactionColor {
 struct SetRosterOfficerBasic { std::uint16_t officer_id; std::uint8_t index; std::uint32_t value; };
 struct SetRosterOfficerGender { std::uint16_t officer_id; std::uint8_t gender; };
 struct SetRosterOfficerVoice { std::uint16_t officer_id; std::uint8_t voice; };
+struct SetRosterOfficerPriority { std::uint16_t officer_id; std::uint8_t priority; };
 struct SetRosterOfficerRonin { std::uint16_t officer_id; bool undiscovered_only = true; };
 struct MoveRosterOfficer { std::uint16_t officer_id; std::uint8_t city; };
 struct ReviveRosterOfficer { std::uint16_t officer_id; std::optional<std::uint8_t> city; };
@@ -146,8 +153,8 @@ using CommandPayload = std::variant<SetFeature, SetSpeedMultiplier, SetTengiSett
                                     RestoreMissionAppointmentLimit, SetNotificationSpeed, SetDomesticRewardMode,
                                     SetSkillCount, SetProtagonistTacticLevel, SetProtagonistTraining,
                                     SetProtagonistBasic, SetProtagonistGender, RefreshOfficerRoster, SelectRosterOfficer,
-                                    RefreshOfficerRelations, SetOfficerFactionColor,
-                                    SetRosterOfficerBasic, SetRosterOfficerGender, SetRosterOfficerVoice,
+                                    RefreshOfficerRelations, ReplaceOfficerRelation, SetOfficerFactionColor,
+                                    SetRosterOfficerBasic, SetRosterOfficerGender, SetRosterOfficerVoice, SetRosterOfficerPriority,
                                     SetRosterOfficerRonin, MoveRosterOfficer, ReviveRosterOfficer,
                                     SetRosterOfficerTrait, SetRosterOfficerTraining, ApplyTraitTextEdits,
                                     OfficerToolsRequest, CityRequest, SetCitySettings, SetCitySupportRoutes, CorpsRequest,

@@ -195,10 +195,15 @@ TraitTextEdits make_embedded_trait_text_rows(const TraitRuntimeCatalog& catalog)
         const TraitRuntimeEntry& entry = catalog.traits[index];
 
         if (entry.present || metadata.present) {
+            // The final two default rows belong to DLC IDs 201/202, not 71/72.
+            const std::size_t default_index = index < 70 ? index :
+                (index == 200 || index == 201) ? index - 130 : DEFAULT_TRAIT_TEXTS.size();
             const std::string name = !metadata.name.empty() ? metadata.name :
-                index < DEFAULT_TRAIT_TEXTS.size() ? std::string(DEFAULT_TRAIT_TEXTS[index].name) :
+                default_index < DEFAULT_TRAIT_TEXTS.size() ? std::string(DEFAULT_TRAIT_TEXTS[default_index].name) :
                 "기재 " + std::to_string(index + 1);
-            TraitTextEdit row{static_cast<std::uint16_t>(index + 1), true, name, metadata.description, {}, {}};
+            const std::string description = !metadata.description.empty() ? metadata.description :
+                default_index < DEFAULT_TRAIT_TEXTS.size() ? std::string(DEFAULT_TRAIT_TEXTS[default_index].description) : "";
+            TraitTextEdit row{static_cast<std::uint16_t>(index + 1), true, name, description, {}, {}};
 
             if (entry.present) {
                 row.effects = entry.trait.effects;

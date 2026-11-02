@@ -4,7 +4,7 @@
 namespace s8::runtime {
 namespace {
 
-constexpr std::uint64_t RETRY_INTERVAL_MS = 100;
+constexpr std::uint64_t RETRY_INTERVAL_MS = 1000;
 using PatchResult = platform::windows::CodePatchResult;
 
 game::NativePatchGroup& patch_group(NativeFeatureControl& control, domain::NativeFeatureGroup group) {
@@ -137,7 +137,13 @@ void record_result(NativeFeatureControl& control, domain::NativeFeatureGroup gro
     if (succeeded) {
         status.phase = patches.applied ? domain::NativeFeaturePhase::Applied : domain::NativeFeaturePhase::Disabled;
         control.pending[index] = false;
-    } else if (patches.last_result == PatchResult::Busy && !patches.uncertain) {
+    } else if (!patches.uncertain &&
+        (patches.last_result == PatchResult::Busy ||
+         patches.last_result == PatchResult::ThreadEnumerationFailed ||
+         patches.last_result == PatchResult::ThreadAccessFailed ||
+         patches.last_result == PatchResult::ThreadSuspendFailed ||
+         patches.last_result == PatchResult::ThreadContextFailed ||
+         patches.last_result == PatchResult::WriteFailed)) {
         status.phase = domain::NativeFeaturePhase::Pending;
         control.retry_after_ms[index] = now_ms + RETRY_INTERVAL_MS;
         return;

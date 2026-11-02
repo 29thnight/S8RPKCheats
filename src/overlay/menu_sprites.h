@@ -367,7 +367,7 @@ inline bool launcher_button(const UiAtlasTextures& atlases, const char* label, f
     const bool disabled = (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled) != 0;
     const bool hovered = ImGui::IsItemHovered();
     const ImVec2 minimum = ImGui::GetItemRectMin(), maximum = ImGui::GetItemRectMax();
-    const auto& icons = detail::ICONS[Overview];
+    const auto& icons = detail::ICONS[Overview]; // 000_btn_sys_info_0 and its state variants.
     const auto rect = disabled ? icons.disabled : hovered || ImGui::IsItemActive() ? icons.active : icons.normal;
     ImDrawList& draw = *ImGui::GetWindowDrawList();
     if (detail::available(atlases[0], rect)) {
@@ -378,24 +378,6 @@ inline bool launcher_button(const UiAtlasTextures& atlases, const char* label, f
         const ImU32 ink = ImGui::GetColorU32(ImVec4(0.86f, 0.78f, 0.45f, 1.0f));
         draw.AddCircleFilled(center, edge * 0.47f, IM_COL32(35, 34, 27, 245));
         draw.AddCircle(center, edge * 0.47f, ink, 32, std::max(1.0f, scale * 1.6f));
-    }
-    const ImVec2 center((minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f);
-    const bool lit = !disabled && (hovered || ImGui::IsItemActive());
-    // Retain the native outer ring and glow; replace only its information glyph.
-    draw.AddCircleFilled(center, edge * 0.34f, ImGui::GetColorU32(lit
-        ? ImVec4(1.0f, 0.78f, 0.18f, 1) : ImVec4(0.14f, 0.13f, 0.11f, 1)), 48);
-    const ImU32 brush_ink = ImGui::GetColorU32(disabled ? ImVec4(0.42f, 0.40f, 0.32f, 1)
-        : lit ? ImVec4(0.40f, 0.23f, 0.05f, 1) : ImVec4(0.86f, 0.78f, 0.45f, 1));
-    for (const std::span<const editor_symbol::Point> shape : {
-            std::span<const editor_symbol::Point>(editor_symbol::HANDLE),
-            std::span<const editor_symbol::Point>(editor_symbol::FERRULE),
-            std::span<const editor_symbol::Point>(editor_symbol::TIP)}) {
-        std::array<ImVec2, 5> points{};
-        for (std::size_t index = 0; index < shape.size(); ++index) {
-            points[index] = ImVec2(minimum.x + shape[index].x * edge / 56.0f,
-                minimum.y + shape[index].y * edge / 56.0f);
-        }
-        draw.AddConvexPolyFilled(points.data(), static_cast<int>(shape.size()), brush_ink);
     }
     if (!disabled) ImGui::RenderNavHighlight(ImRect(minimum, maximum), ImGui::GetItemID(), ImGuiNavHighlightFlags_Compact);
     return pressed;

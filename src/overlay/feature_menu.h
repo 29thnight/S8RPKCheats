@@ -120,6 +120,10 @@ struct FeatureMenu {
     bool pk_editors_unlocked = false;
     bool protagonist_detail = false;
     bool officer_list_open = false;
+    bool officer_detail_open = false;
+    int officer_detail_tab = 0;
+    bool officer_sort_dirty = true;
+    std::optional<domain::ReplaceOfficerRelation> officer_relation_selection;
     std::optional<std::uint16_t> officer_open_request;
     bool officer_open_refresh_requested = false;
     bool officer_open_focus = false;

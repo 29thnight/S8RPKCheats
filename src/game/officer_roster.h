@@ -82,6 +82,10 @@ bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRoste
     const OfficerInspectionContext& context, std::uint16_t officer_id, bool protagonist,
     const domain::WorkBudget& budget = {});
 void request_officer_relations_refresh(OfficerInspectionCache& cache);
+domain::Result<void> replace_officer_relation(OfficerInspectionCache& cache,
+    const OfficerRosterScan& scan, const OfficerInspectionContext& context,
+    std::uint16_t officer_id, domain::OfficerRelationKind kind,
+    std::uint16_t previous_id, std::uint16_t replacement_id);
 // Retains the color rollback journal and monotonically increasing token counter.
 void reset_officer_inspection(OfficerInspectionCache& cache, domain::GameEpoch epoch);
 domain::Result<void> write_officer_faction_color(OfficerInspectionCache& cache,
@@ -121,6 +125,8 @@ bool write_roster_officer_gender(const OfficerRosterScan& scan, std::uintptr_t m
                                 std::uint16_t id, std::uint8_t gender);
 bool write_roster_officer_voice(const OfficerRosterScan& scan, std::uintptr_t module_base,
                                std::uint16_t id, std::uint8_t voice);
+bool write_roster_officer_priority(const OfficerRosterScan& scan, std::uintptr_t module_base,
+                                  std::uint16_t id, std::uint8_t priority);
 bool set_roster_officer_ronin(const OfficerRosterScan& scan, std::uintptr_t module_base,
                                std::uint16_t id, bool undiscovered_only);
 bool move_roster_officer(const OfficerRosterScan& scan, std::uintptr_t module_base,

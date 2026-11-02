@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <cstring>
 
 namespace s8::platform::windows {
 
@@ -37,15 +38,25 @@ bool is_committed_memory(std::uintptr_t address, std::size_t size) {
 }
 
 bool read_memory(std::uintptr_t address, std::span<std::byte> bytes) {
-    SIZE_T count = 0;
-    return ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void*>(address),
-                             bytes.data(), bytes.size(), &count) && count == bytes.size();
+    __try {
+        std::memcpy(bytes.data(), reinterpret_cast<const void*>(address), bytes.size());
+        return true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ||
+                GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+                    ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
+    }
 }
 
 bool write_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
-    SIZE_T count = 0;
-    return WriteProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(address),
-                              bytes.data(), bytes.size(), &count) && count == bytes.size();
+    __try {
+        std::memcpy(reinterpret_cast<void*>(address), bytes.data(), bytes.size());
+        return true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ||
+                GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+                    ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
+    }
 }
 
 bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes) {
@@ -54,9 +65,7 @@ bool write_data_memory(std::uintptr_t address, std::span<const std::byte> bytes)
     if (!VirtualProtect(target, bytes.size(), PAGE_READWRITE, &old_protection))
         return false;
 
-    SIZE_T count = 0;
-    const bool written = WriteProcessMemory(GetCurrentProcess(), target, bytes.data(), bytes.size(), &count) &&
-                         count == bytes.size();
+    const bool written = write_memory(address, bytes);
     DWORD ignored = 0;
     const bool protection_restored = VirtualProtect(target, bytes.size(), old_protection, &ignored) != FALSE;
 

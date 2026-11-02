@@ -1,16 +1,26 @@
 #include "feature_menu.h"
 #include "menu_sprites.h"
+#include "native_trait_editor.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
 #include "../domain/secondary_jewel_definitions.h"
 #include "../domain/native_ui_layout.h"
 #include "../domain/jewel_layout.h"
+#include "../platform/windows/process_memory.h"
+#include "../platform/windows/hook.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include <array>
+#include <atomic>
 #include <span>
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <cstdio>
 
@@ -93,11 +103,12 @@ bool begin_editor_screen(FeatureMenu& menu, const char* id, bool& open, const ch
     const ImVec2 paper_max(origin.x + size.x * 0.94f, origin.y + size.y * 0.86f);
 
     menu_sprites::draw_panel(menu.ui_atlases, paper_min, paper_max, scale);
-    const ImVec2 body_min(paper_min.x + 38 * scale, paper_min.y + 28 * scale);
+    ImVec2 body_min(paper_min.x + 38 * scale, paper_min.y + 28 * scale);
     ImVec2 body_max(paper_max.x - 38 * scale, paper_max.y - 28 * scale);
-    const ImVec2 subject_min(paper_min.x + (paper_max.x - paper_min.x) * 0.72f, body_min.y);
-    const ImVec2 subject_max = body_max;
-    body_max.x = subject_min.x - 20 * scale;
+    if (protagonist || menu.officer_detail_open) {
+    const ImVec2 subject_min = body_min;
+    const ImVec2 subject_max(paper_min.x + (paper_max.x - paper_min.x) * 0.32f, body_max.y);
+    body_min.x = subject_max.x + 20 * scale;
     draw_native_card(menu, subject_min, subject_max, scale);
 
     ImDrawList& subject = *ImGui::GetWindowDrawList();
@@ -140,12 +151,20 @@ bool begin_editor_screen(FeatureMenu& menu, const char* id, bool& open, const ch
     menu_sprites::detail::image(subject, menu.ui_atlases[0], atlas_rect(domain::native_ui::MAP), map_min,
         ImVec2(map_min.x + map_width, map_min.y + map_width * 225 / 340), IM_COL32_WHITE);
 
+    }
     draw_native_card(menu, body_min, body_max, scale);
     const float edge = 88 * scale;
 
     ImGui::SetCursorScreenPos(ImVec2(origin.x + (size.x - edge) * 0.5f, origin.y + size.y * 0.93f - edge * 0.5f));
     if (menu_sprites::back_button(menu.ui_atlases, "뒤로##editor_back", edge, scale)) {
-        open = false;
+        if (!protagonist && menu.officer_relation_selection) {
+            menu.officer_relation_selection.reset();
+            menu.officer_detail_open = true;
+        } else if (!protagonist && menu.officer_detail_open) {
+            menu.officer_detail_open = false;
+        } else {
+            open = false;
+        }
     }
 
     ImGui::SetCursorScreenPos(body_min);
@@ -457,6 +476,10 @@ void update_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.officer_open_request.reset();
             menu.officer_open_refresh_requested = false;
             menu.officer_open_focus = false;
+            menu.officer_detail_open = false;
+            menu.officer_detail_tab = 0;
+            menu.officer_relation_selection.reset();
+            menu.officer_sort_dirty = true;
             menu.selected_color_draft = {};
             menu.protagonist_color_draft = {};
         }
@@ -2485,39 +2508,355 @@ void draw_category_tabs(FeatureMenu& menu, bool popup_open, float scale, float a
     ImGui::EndDisabled();
 }
 
-void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
-    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-    // Store the dragged location relative to the viewport so resizing keeps it on screen.
-    const float hud_scale = std::clamp(std::min(viewport.Size.x / 1920.0f,
-        viewport.Size.y / 1080.0f), 0.1f, 3.0f);
-    const float edge = std::min(std::max(48.0f, 56.0f * hud_scale),
-        std::max(1.0f, std::min(viewport.Size.x, viewport.Size.y) - 8.0f));
-    const ImVec2 lower(viewport.Pos.x + 4.0f, viewport.Pos.y + 4.0f);
-    const ImVec2 upper(std::max(lower.x, viewport.Pos.x + viewport.Size.x - edge - 4.0f),
-                       std::max(lower.y, viewport.Pos.y + viewport.Size.y - edge - 4.0f));
-    if (menu.launcher_x < 0.0f) {
-        menu.launcher_x = (upper.x - lower.x) / viewport.Size.x;
-        menu.launcher_y = 150.0f * hud_scale / viewport.Size.y;
+template<class T>
+bool read_native_ui(std::uintptr_t address, T& value) {
+    return platform::windows::read_memory(address, std::as_writable_bytes(std::span(&value, 1)));
+}
+
+std::uintptr_t native_ui_pointer(std::uintptr_t address) {
+    std::uintptr_t value = 0;
+    read_native_ui(address, value);
+    return value;
+}
+
+struct NativeUiRect {
+    float x = 0, y = 0, width = 0, height = 0;
+};
+
+bool native_ui_rect(std::uintptr_t object, NativeUiRect& rect) {
+    // CCmnLayout::GetAbsolutePosition (RVA 0x1EDECA0) adds up to 30 parents.
+    // Read only: calling the visibility method would mutate its parent cache.
+    struct Layout {
+        std::uintptr_t vtable, parent;
+        std::uint64_t parent_cache, interfaces;
+        float x, y;
+        std::int32_t width, height;
+        std::uint64_t opacity, interface38;
+        std::uint32_t flags;
+    } node{};
+    for (int depth = 0; object && depth < 30; ++depth) {
+        if (!read_native_ui(object, node) || (node.flags & 3) != 3 || !(node.opacity & 0xff) ||
+            !std::isfinite(node.x) || !std::isfinite(node.y)) return false;
+        if (depth == 0) {
+            if (node.width <= 0 || node.height <= 0) return false;
+            rect.width = static_cast<float>(node.width);
+            rect.height = static_cast<float>(node.height);
+        }
+        rect.x += node.x;
+        rect.y += node.y;
+        object = node.parent;
     }
-    const ImVec2 position(std::clamp(lower.x + menu.launcher_x * viewport.Size.x, lower.x, upper.x),
-                          std::clamp(lower.y + menu.launcher_y * viewport.Size.y, lower.y, upper.y));
+    return !object && rect.width > 0;
+}
+
+struct NativeLauncher {
+    enum class Kind { Hidden, Toolbar, Function, TitleEdit } kind = Kind::Hidden;
+    bool editor_allowed = false;
+    NativeUiRect button, panel;
+    ImVec2 scale, origin;
+};
+
+// Append native controls to the edit/function menu's own
+// descriptor group. The game creates, registers and destroys it with that group.
+struct NativeEditControl {
+    std::int32_t type, x, y, width, height, padding;
+    std::uint64_t text_id;
+    const wchar_t* text;
+    std::array<std::byte, 0x38> properties;
+};
+static_assert(sizeof(NativeEditControl) == 0x60);
+
+platform::windows::Hook native_edit_factory_hook{};
+platform::windows::Hook native_edit_click_hook{};
+platform::windows::Hook native_config_click_hook{};
+platform::windows::Hook native_config_navigation_hook{};
+platform::windows::Hook native_trait_menu_click_hook{};
+bool native_config_installed = false;
+bool native_trait_menu_installed = false;
+std::uintptr_t native_edit_base = 0;
+std::atomic<bool> native_edit_open_requested{false};
+using NativeEditFactory = void(*)(void*, const NativeEditControl*, int, void*);
+using NativeEditClick = void(*)(void*, void**);
+
+void native_edit_controls(void* group, const NativeEditControl* controls, int count, void* parent) {
+    const auto original = reinterpret_cast<NativeEditFactory>(native_edit_factory_hook.original);
+    if (native_trait_menu_installed && count == 6 && parent &&
+        *static_cast<std::uintptr_t*>(parent) == native_edit_base + 0x271EDC0) {
+        std::array<NativeEditControl, 7> extended;
+        std::copy_n(controls, 6, extended.begin());
+        const int spacing = controls[5].y - controls[4].y;
+        extended[0].height += spacing;
+        extended[6] = controls[5];
+        extended[6].y += spacing;
+        extended[6].text = L"기재";
+        original(group, extended.data(), static_cast<int>(extended.size()), parent);
+        return;
+    }
+    if (native_config_installed && count == 13 && parent &&
+        *static_cast<std::uintptr_t*>(parent) == native_edit_base + 0x2701888) {
+        std::array<NativeEditControl, 14> extended;
+        std::copy_n(controls, 13, extended.begin());
+        const int row_spacing = controls[6].y - controls[5].y;
+        extended[0].height += row_spacing;
+        for (int index = 5; index < 13; ++index) extended[index].y += row_spacing;
+        // Preserve all original IDs, including the two separators. Only the
+        // visual position is inserted after Edit (ID 4); the new ID is 13.
+        extended[13] = controls[4];
+        extended[13].y += row_spacing;
+        extended[13].text = L"치트 편집";
+        original(group, extended.data(), static_cast<int>(extended.size()), parent);
+        return;
+    }
+    if (count != 6 || !parent || *static_cast<std::uintptr_t*>(parent) != native_edit_base + 0x271EB28) {
+        original(group, controls, count, parent);
+        return;
+    }
+    std::array<NativeEditControl, 8> extended;
+    std::copy_n(controls, 6, extended.begin());
+    const int row_spacing = controls[5].y - controls[4].y;
+    extended[0].height += row_spacing * 2;
+    extended[6] = controls[5];
+    extended[6].x = controls[1].x;
+    extended[6].y = controls[5].y + row_spacing;
+    extended[6].text = L"기재 편집";
+    extended[7] = extended[6];
+    extended[7].y += row_spacing;
+    extended[7].text = L"치트 편집";
+    original(group, extended.data(), static_cast<int>(extended.size()), parent);
+}
+
+void native_edit_clicked(void* callback, void** argument) {
+    // This is EditUIMainLayout's existing click callback. Its indices 1..5
+    // retain the original behavior; 6 opens native traits and 7 opens ImGui.
+    const auto button = reinterpret_cast<std::uintptr_t>(*argument);
+    if (button && *reinterpret_cast<const std::int32_t*>(button + 0x88) == 6) {
+        open_native_trait_editor();
+        return;
+    }
+    if (button && *reinterpret_cast<const std::int32_t*>(button + 0x88) == 7) {
+        native_edit_open_requested.store(true, std::memory_order_release);
+        return;
+    }
+    reinterpret_cast<NativeEditClick>(native_edit_click_hook.original)(callback, argument);
+}
+
+void native_config_clicked(void* callback, void** argument) {
+    const auto button = reinterpret_cast<std::uintptr_t>(*argument);
+    if (button && *reinterpret_cast<const std::int32_t*>(button + 0x88) == 13) {
+        native_edit_open_requested.store(true, std::memory_order_release);
+        return;
+    }
+    reinterpret_cast<NativeEditClick>(native_config_click_hook.original)(callback, argument);
+}
+
+void native_trait_menu_clicked(void* callback, void** argument) {
+    const auto button = reinterpret_cast<std::uintptr_t>(*argument);
+    if (button && *reinterpret_cast<const std::int32_t*>(button + 0x88) == 6) {
+        open_native_trait_editor();
+        return;
+    }
+    reinterpret_cast<NativeEditClick>(native_trait_menu_click_hook.original)(callback, argument);
+}
+
+void native_config_navigation(void* layout, void* output) {
+    reinterpret_cast<void(*)(void*, void*)>(native_config_navigation_hook.original)(layout, output);
+    const auto address = reinterpret_cast<std::uintptr_t>(layout);
+    if (*reinterpret_cast<const std::int32_t*>(address + 0x150) != 14) return;
+    const auto lookup = reinterpret_cast<void*(*)(std::uintptr_t, int)>(native_edit_base + 0x1D15440);
+    void* button = lookup(address + 0x140, 13);
+    void* edit = lookup(address + 0x140, 4);
+    // The game's output is a vector of control pointers. Use its own growth
+    // routine so allocation and destruction remain owned by the game.
+    struct Controls { void** begin; void** end; void** capacity; };
+    auto& items = *static_cast<Controls*>(output);
+    const auto insertion = std::find(items.begin, items.end, edit);
+    if (!button || insertion == items.end) return;
+    const auto index = insertion - items.begin + 1;
+    if (items.end == items.capacity) {
+        reinterpret_cast<void(*)(void*, void**, void**)>(native_edit_base + 0x33F50)(output, items.end, &button);
+    } else {
+        *items.end++ = button;
+    }
+    std::rotate(items.begin + index, items.end - 1, items.end);
+}
+
+NativeLauncher native_launcher() {
+    NativeLauncher result;
+    // Layout RVAs belong to this executable revision. Validate at the memory boundary.
+    static const std::uintptr_t base = [] {
+        const auto image = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+        IMAGE_DOS_HEADER dos{};
+        IMAGE_NT_HEADERS64 nt{};
+        if (!read_native_ui(image, dos) || dos.e_magic != IMAGE_DOS_SIGNATURE ||
+            !read_native_ui(image + dos.e_lfanew, nt) || nt.Signature != IMAGE_NT_SIGNATURE ||
+            nt.FileHeader.TimeDateStamp != 0x69A67ED1 || nt.OptionalHeader.SizeOfImage != 0x440F000)
+            return std::uintptr_t{0};
+        return image;
+    }();
+    if (!base) return result;
+
+    // Present starts after MinHook initialization. Both detours run on the
+    // game's original UI thread; the click crosses to ImGui only via the flag.
+    // The runtime pins this DLL for the process lifetime (game_loop.cpp).
+    static const bool native_edit_installed = [=] {
+        native_edit_base = base;
+        const auto click = platform::windows::create_hook(reinterpret_cast<void*>(base + 0x76EC40),
+            reinterpret_cast<void*>(&native_edit_clicked));
+        if (!click) return false;
+        native_edit_click_hook = *click;
+        const auto factory = platform::windows::create_hook(reinterpret_cast<void*>(base + 0x1D13E60),
+            reinterpret_cast<void*>(&native_edit_controls));
+        if (!factory) return false;
+        native_edit_factory_hook = *factory;
+        const auto trait_click = platform::windows::create_hook(reinterpret_cast<void*>(base + 0x76E930),
+            reinterpret_cast<void*>(&native_trait_menu_clicked));
+        if (trait_click && install_native_trait_editor(base)) {
+            native_trait_menu_click_hook = *trait_click;
+            native_trait_menu_installed = platform::windows::enable_hook(native_trait_menu_click_hook) == 0;
+        }
+        const auto config_click = platform::windows::create_hook(reinterpret_cast<void*>(base + 0x744990),
+            reinterpret_cast<void*>(&native_config_clicked));
+        const auto config_navigation = platform::windows::create_hook(reinterpret_cast<void*>(base + 0x1D04F90),
+            reinterpret_cast<void*>(&native_config_navigation));
+        if (config_click && config_navigation) {
+            native_config_click_hook = *config_click;
+            native_config_navigation_hook = *config_navigation;
+            if (platform::windows::enable_hook(native_config_click_hook) == 0) {
+                if (platform::windows::enable_hook(native_config_navigation_hook) == 0) {
+                    native_config_installed = true;
+                } else {
+                    platform::windows::disable_hook(native_config_click_hook);
+                }
+            }
+        }
+        if (platform::windows::enable_hook(native_edit_click_hook) != 0) return false;
+        if (platform::windows::enable_hook(native_edit_factory_hook) != 0) {
+            platform::windows::disable_hook(native_edit_click_hook);
+            return false;
+        }
+        return true;
+    }();
+
+    struct StateStack { std::uint64_t unused[2], count, capacity; std::uintptr_t entries; } stack{};
+    std::array<std::uintptr_t, 32> states{};
+    if (!read_native_ui(base + 0x2E99210, stack) || !stack.count || stack.count > states.size() ||
+        !platform::windows::read_memory(stack.entries,
+            std::as_writable_bytes(std::span(states.data(), static_cast<std::size_t>(stack.count))))) return result;
+    bool in_game = false, config_open = false;
+    std::string_view top;
+    std::array<char, 32> name{};
+    for (std::size_t index = 0; index < stack.count; ++index) {
+        if (!read_native_ui(states[index] + 0x71, name)) return result;
+        top = std::string_view(name.data(), std::find(name.begin(), name.end(), '\0') - name.begin());
+        in_game |= top == "InGameState";
+        config_open |= top == "ConfigDlgState";
+        if (top == "MainGameState") {
+            NativeUiRect loading;
+            if (native_ui_rect(native_ui_pointer(states[index] + 0x478), loading)) return result;
+        }
+    }
+    result.editor_allowed = in_game || top == "EditGameState";
+    if (!result.editor_allowed) return result;
+    const auto active = states[stack.count - 1];
+    if (top == "EditGameState" && !in_game) {
+        const auto owner = native_ui_pointer(native_ui_pointer(active + 0x478) + 8);
+        const auto root = native_ui_pointer(native_ui_pointer(owner + 0x58) + 0x10);
+        const auto layout = native_ui_pointer(root + 0x1D0);
+        std::int32_t control_count = 0;
+        if (native_edit_installed && read_native_ui(layout + 0x150, control_count) && control_count == 8)
+            return result; // The native button supplies this screen's launcher.
+        const auto buttons = native_ui_pointer(layout + 0x1A8);
+        NativeUiRect first, last, parent;
+        if (!native_ui_rect(native_ui_pointer(buttons + 8), first) ||
+            !native_ui_rect(native_ui_pointer(buttons + 0x90), last) ||
+            !native_ui_rect(layout, parent)) return result;
+        result.panel = {first.x - (parent.width - first.width) * 0.5f,
+            last.y + last.height + 40, parent.width, 140};
+        result.button = {first.x,
+            result.panel.y + (result.panel.height - first.height) * 0.5f, first.width, first.height};
+        result.kind = NativeLauncher::Kind::TitleEdit;
+    } else if (top == "ConfigDlgState" && in_game) {
+        const auto layout = native_ui_pointer(active + 0x488);
+        std::int32_t control_count = 0;
+        if (native_config_installed && read_native_ui(layout + 0x150, control_count) && control_count == 14)
+            return result;
+        const auto buttons = native_ui_pointer(layout + 0x1A8);
+        if (!native_ui_rect(native_ui_pointer(buttons + 0x30), result.button)) return result;
+        result.button.x += result.button.width + 20;
+        result.kind = NativeLauncher::Kind::Function;
+    } else if (in_game && !config_open) {
+        const auto toolbar = native_ui_pointer(native_ui_pointer(base + 0x2E99460) + 0x28);
+        if (!native_ui_rect(native_ui_pointer(toolbar + 0x1D0 + 5 * 8), result.button)) return result;
+        result.button.x -= result.button.width + 14;
+        result.kind = NativeLauncher::Kind::Toolbar;
+    }
+
+    // Inverse of the game's mouse conversion at RVA 0x17EC57A:
+    // fit 1920x1080 into the render target, then map that target to the client.
+    // Render and client sizes differ in fullscreen and with Windows display scaling.
+    std::array<std::int32_t, 2> render_size{};
+    if (!read_native_ui(native_ui_pointer(base + 0x2EA67D8) + 0x10, render_size) ||
+        render_size[0] <= 0 || render_size[1] <= 0) {
+        result.kind = NativeLauncher::Kind::Hidden;
+        return result;
+    }
+    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
+    const float fit = std::min(render_size[0] / 1920.0f, render_size[1] / 1080.0f);
+    result.scale = ImVec2(fit * viewport.Size.x / render_size[0], fit * viewport.Size.y / render_size[1]);
+    result.origin = ImVec2(viewport.Pos.x + (viewport.Size.x - 1920 * result.scale.x) * 0.5f,
+        viewport.Pos.y + (viewport.Size.y - 1080 * result.scale.y) * 0.5f);
+    return result;
+}
+
+void draw_menu_launcher(FeatureMenu& menu, bool popup_open, const NativeLauncher& anchor) {
+    if (anchor.kind == NativeLauncher::Kind::Hidden) return;
+    const float hud_scale = std::min(anchor.scale.x, anchor.scale.y);
+    const bool title_edit = anchor.kind == NativeLauncher::Kind::TitleEdit;
+    const bool toolbar = anchor.kind == NativeLauncher::Kind::Toolbar;
+    const NativeUiRect& window = title_edit ? anchor.panel : anchor.button;
+    const ImVec2 position(anchor.origin.x + window.x * anchor.scale.x,
+        anchor.origin.y + window.y * anchor.scale.y);
+    const ImVec2 size(window.width * anchor.scale.x, window.height * anchor.scale.y);
+    const ImVec2 button_position(anchor.origin.x + anchor.button.x * anchor.scale.x,
+        anchor.origin.y + anchor.button.y * anchor.scale.y);
+    const ImVec2 button_size(anchor.button.width * anchor.scale.x, anchor.button.height * anchor.scale.y);
     ImGui::SetNextWindowPos(position, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(edge, edge), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(edge, edge));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1, 1));
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
     if (ImGui::Begin("###S8RPK.Launcher", nullptr, flags)) {
-        ImGui::BeginDisabled(popup_open);
-        const bool pressed = menu_sprites::launcher_button(menu.ui_atlases, "편집 도구 열기##launcher", edge, hud_scale);
-        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-            menu.launcher_dragging = true;
-            const ImVec2 delta = ImGui::GetIO().MouseDelta;
-            menu.launcher_x = (std::clamp(position.x + delta.x, lower.x, upper.x) - lower.x) / viewport.Size.x;
-            menu.launcher_y = (std::clamp(position.y + delta.y, lower.y, upper.y) - lower.y) / viewport.Size.y;
+        if (title_edit) {
+            menu_sprites::draw_panel(menu.ui_atlases, position,
+                ImVec2(position.x + size.x, position.y + size.y), hud_scale);
         }
-        if (pressed && !menu.launcher_dragging) {
+        ImGui::SetCursorScreenPos(button_position);
+        ImGui::BeginDisabled(popup_open);
+        bool pressed;
+        if (toolbar) {
+            pressed = menu_sprites::launcher_button(menu.ui_atlases, "치트 편집##launcher", button_size.x, hud_scale);
+        } else {
+            pressed = menu_sprites::detail::button_item("치트 편집##launcher", button_size);
+            ImDrawList& draw = *ImGui::GetWindowDrawList();
+            const ImVec2 maximum(button_position.x + button_size.x, button_position.y + button_size.y);
+            const bool hovered = ImGui::IsItemHovered();
+            const bool held = ImGui::IsItemActive();
+            // Tint the native ornamental button; text remains white in every state.
+            draw.AddRectFilled(button_position, maximum, IM_COL32(112, 15, 29, 255), 5 * hud_scale);
+            menu_sprites::detail::nine_slice(draw, menu.ui_atlases[0],
+                menu_sprites::detail::BUTTONS[held ? 3 : hovered ? 1 : 0], button_position, maximum,
+                12, 10, hud_scale, ImGui::GetColorU32(ImVec4(1, hovered ? 0.38f : 0.22f, 0.25f, 1)));
+            const float font_size = 28 * hud_scale;
+            const ImVec2 text_size = ImGui::GetFont()->CalcTextSizeA(font_size, FLT_MAX, 0, "치트 편집");
+            draw.AddText(ImGui::GetFont(), font_size,
+                ImVec2(button_position.x + (button_size.x - text_size.x) * 0.5f,
+                    button_position.y + (button_size.y - text_size.y) * 0.5f),
+                ImGui::GetColorU32(ImVec4(1, 1, 1, 1)), "치트 편집");
+            ImGui::RenderNavHighlight(ImRect(button_position, maximum), ImGui::GetItemID());
+        }
+        if (pressed) {
             if (menu.collapsed) {
                 menu.collapsed = false;
                 menu.toggle_collapse = false;
@@ -2526,11 +2865,10 @@ void draw_menu_launcher(FeatureMenu& menu, bool popup_open) {
                 minimize_workbench(menu);
             }
         }
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) menu.launcher_dragging = false;
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            ImGui::SetNextWindowPos(ImVec2(position.x + edge * 0.5f,
-                position.y + edge + 6.0f * hud_scale), ImGuiCond_Always, ImVec2(0.5f, 0));
+            ImGui::SetNextWindowPos(ImVec2(button_position.x + button_size.x * 0.5f,
+                button_position.y + button_size.y + 6.0f * hud_scale), ImGuiCond_Always, ImVec2(0.5f, 0));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * hud_scale, 3 * hud_scale));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -2581,6 +2919,20 @@ void request_feature_menu_toggle(FeatureMenu& menu) {
 }
 
 void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
+    const NativeLauncher launcher = native_launcher();
+    update_native_trait_editor(menu, bridge);
+    if (!launcher.editor_allowed) {
+        menu.collapsed = true;
+        menu.toggle_collapse = false;
+        return;
+    }
+    if (native_edit_open_requested.exchange(false, std::memory_order_acq_rel)) {
+        menu.open = true;
+        menu.collapsed = false;
+        menu.toggle_collapse = false;
+        menu.auto_load_collapse = false;
+        menu.home_screen = true;
+    }
     services::CommandMailbox& mailbox = bridge.commands;
     FeatureMenuDraw draw{menu, mailbox, bridge};
     if (menu.collapsed || menu.home_screen || menu.page != MenuPage::Domestic) {
@@ -2620,7 +2972,7 @@ void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
         }
     }
     if (menu.collapsed || menu.officer_list_open || menu.protagonist_detail || menu.secondary_jewel_window) {
-        draw_menu_launcher(menu, popup_open);
+        draw_menu_launcher(menu, popup_open, launcher);
         return;
     }
 
@@ -2752,7 +3104,7 @@ void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
     ImGui::End();
     ImGui::PopStyleVar(2);
     // Keep the HUD control at its calibrated position even while a page is open.
-    draw_menu_launcher(menu, popup_open);
+    draw_menu_launcher(menu, popup_open, launcher);
 }
 
 void draw_officer_name_input(FeatureMenu& menu, services::UiBridge& bridge, std::uint16_t id) {
@@ -2980,7 +3332,7 @@ void draw_officer_inspection(FeatureMenu& menu, services::UiBridge& bridge,
         ImGui::TextDisabled("소속 세력 전체에 적용됩니다. 현재 번호: %u", color.color);
     }
 
-    if (ImGui::CollapsingHeader("관계 정보")) {
+    if (!protagonist || ImGui::CollapsingHeader("관계 정보")) {
         const auto& relations = protagonist ? menu.snapshot.protagonist_relations
             : menu.snapshot.selected_officer_relations;
         ImGui::BeginDisabled(busy || (relations && relations->officer_id == id &&
@@ -3016,19 +3368,78 @@ void draw_officer_inspection(FeatureMenu& menu, services::UiBridge& bridge,
             default: break;
             }
             constexpr std::array names{"의형제", "배우자", "상생", "상극", "원수", "호적수"};
+            const float relation_card_height = std::max(ImGui::GetContentRegionAvail().y * 0.44f,
+                ImGui::GetFrameHeight() * 6.0f);
+            if (!protagonist && ImGui::BeginTable("##relationship_cards", 2, ImGuiTableFlags_SizingStretchSame)) {
+                constexpr std::array<std::size_t, 4> order{1, 0, 2, 3};
+                for (const std::size_t group_index : order) {
+                    ImGui::TableNextColumn();
+                    ImGui::PushID(static_cast<int>(group_index));
+                    const domain::OfficerRelationGroup& group = relations->groups[group_index];
+                    if (ImGui::BeginChild("##relation_card", ImVec2(0, relation_card_height), true)) {
+                        ImGui::BeginDisabled(busy || !group.available);
+                        if (menu_sprites::sprite_button(menu.ui_atlases, names[group_index],
+                                ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight() * 1.4f))) {
+                            menu.officer_relation_selection = domain::ReplaceOfficerRelation{
+                                id, static_cast<domain::OfficerRelationKind>(group_index), 0, 0};
+                            menu.officer_detail_open = false;
+                            menu.officer_filter = -1;
+                        }
+                        ImGui::EndDisabled();
+                        if (!group.available) {
+                            ImGui::TextDisabled("조회 불가");
+                        } else if (group.count == 0) {
+                            ImGui::TextUnformatted("없음");
+                        }
+                        for (std::size_t index = 0; index < group.count; ++index) {
+                            const domain::OfficerRelationMember& member = group.members[index];
+                            const auto found = menu.officer_names ? menu.officer_names->find(member.id)
+                                : domain::OfficerNames::const_iterator{};
+                            const std::string label = menu.officer_names && found != menu.officer_names->end()
+                                ? found->second : "무장 #" + std::to_string(member.id);
+                            ImGui::PushID(static_cast<int>(member.id));
+                            ImGui::BeginDisabled(busy);
+                            if (ImGui::Selectable(label.c_str(), false, 0, ImVec2(0, ImGui::GetFrameHeight() * 1.3f))) {
+                                menu.officer_relation_selection = domain::ReplaceOfficerRelation{
+                                    id, static_cast<domain::OfficerRelationKind>(group_index), member.id, 0};
+                                menu.officer_detail_open = false;
+                                menu.officer_filter = -1;
+                            }
+                            ImGui::EndDisabled();
+                            ImGui::PopID();
+                        }
+                    }
+                    ImGui::EndChild();
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
             for (std::size_t group_index = 0; group_index < names.size(); ++group_index) {
+                if (!protagonist && group_index < 4) continue;
                 const auto& group = relations->groups[group_index];
                 if (!group.available) {
                     ImGui::TextDisabled("%s: 조회 불가", names[group_index]);
                     continue;
                 }
-                if (group.count == 0) {
-                    ImGui::Text("%s: 없음", names[group_index]);
-                    continue;
-                }
                 ImGui::PushID(static_cast<int>(group_index));
                 const std::string title = std::string(names[group_index]) + " (" +
                     std::to_string(group.count) + ")";
+                if (!protagonist && group_index < 4) {
+                    ImGui::BeginDisabled(busy);
+                    if (menu_sprites::sprite_button(menu.ui_atlases, names[group_index],
+                            ImVec2(ImGui::GetFontSize() * 6.0f, ImGui::GetFrameHeight()))) {
+                        menu.officer_relation_selection = domain::ReplaceOfficerRelation{
+                            id, static_cast<domain::OfficerRelationKind>(group_index), 0, 0};
+                        menu.officer_detail_open = false;
+                        menu.officer_filter = -1;
+                    }
+                    ImGui::EndDisabled();
+                }
+                if (group.count == 0) {
+                    ImGui::TextUnformatted("없음");
+                    ImGui::PopID();
+                    continue;
+                }
                 if (ImGui::TreeNodeEx(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                     const float height = std::min(static_cast<float>(group.count + 1), 7.0f) *
                         ImGui::GetTextLineHeightWithSpacing() + 12 * menu.dpi_scale;
@@ -3053,7 +3464,14 @@ void draw_officer_inspection(FeatureMenu& menu, services::UiBridge& bridge,
                                 ImGui::TableNextColumn();
                                 ImGui::BeginDisabled(busy);
                                 if (ImGui::Selectable(label.c_str())) {
-                                    open_officer_details(menu, member.id);
+                                    if (!protagonist && group_index < 4) {
+                                        menu.officer_relation_selection = domain::ReplaceOfficerRelation{
+                                            id, static_cast<domain::OfficerRelationKind>(group_index), member.id, 0};
+                                        menu.officer_detail_open = false;
+                                        menu.officer_filter = -1;
+                                    } else {
+                                        open_officer_details(menu, member.id);
+                                    }
                                 }
                                 ImGui::EndDisabled();
                                 ImGui::TableNextColumn();
@@ -3124,8 +3542,24 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                         menu.pending_officer_edits.size());
         }
         draw_previous_request_error(menu);
+        if (menu.officer_relation_selection) {
+            ImGui::TextUnformatted("관계 대상으로 지정할 무장을 더블클릭하세요. 뒤로 버튼은 선택을 취소합니다.");
+            ImGui::BeginDisabled(menu.pending.has_value() || !menu.ready || menu.officer_relation_selection->previous_id == 0);
+            if (ImGui::Button("관계 해제")) {
+                const domain::RequestId request{++menu.next_request};
+                const domain::Result<void> result = mailbox.push({request, menu.epoch, *menu.officer_relation_selection});
+                if (result) {
+                    menu.pending = request;
+                    menu.officer_relation_selection.reset();
+                    menu.officer_detail_open = true;
+                } else {
+                    menu.error = result.error();
+                }
+            }
+            ImGui::EndDisabled();
+        }
         const auto select_officer = [&](std::uint16_t id) -> bool {
-            if (menu.pending || !menu.pending_officer_edits.empty() || !menu.ready) {
+            if (menu.officer_relation_selection || menu.pending || !menu.pending_officer_edits.empty() || !menu.ready) {
                 return false;
             }
             const domain::RequestId request{++menu.next_request};
@@ -3152,6 +3586,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.next_officer_edit = 0;
             menu.officer_edit_epoch = menu.epoch;
         };
+        if (!menu.officer_detail_open) {
         ImGui::SetNextItemWidth(160);
         bool search = ImGui::InputTextWithHint("##officer_search", "이름 or ID", menu.officer_search.data(),
                                                menu.officer_search.size(), ImGuiInputTextFlags_EnterReturnsTrue);
@@ -3176,6 +3611,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
         if (!roster_available && scan_cursor < 0) {
             ImGui::TextDisabled("게임 준비 후 '목록 갱신'을 눌러 목록을 불러오세요.");
         }
+        }
         if (menu.officer_roster->available && menu.officer_roster->epoch == menu.epoch) {
             struct Filter { const char* label; int status; };
             constexpr std::array filters{
@@ -3184,7 +3620,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 Filter{"미발견", 0x68}, Filter{"사망", 0x88}, Filter{"NPC", 0x98}, Filter{"전부", -1},
             };
             ImGui::BeginDisabled(menu.pending.has_value() || !menu.pending_officer_edits.empty());
-            for (std::size_t i = 0; i < filters.size(); ++i) {
+            for (std::size_t i = 0; !menu.officer_detail_open && i < filters.size(); ++i) {
                 if (ImGui::Button(filters[i].label)) {
                     menu.officer_filter = filters[i].status;
                 }
@@ -3194,6 +3630,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             }
             ImGui::EndDisabled();
             const auto rebuild_filter = [&]() {
+                menu.officer_sort_dirty = true;
                 menu.officer_filtered_indices.clear();
                 for (std::size_t i = 1; i < menu.officer_roster->entries.size(); ++i) {
                     const domain::OfficerRosterEntry& entry = menu.officer_roster->entries[i];
@@ -3295,6 +3732,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 ImGui::EndDisabled();
             }
             const auto selected_count = std::count(menu.selected_officer_ids.begin(), menu.selected_officer_ids.end(), true);
+            if (!menu.officer_detail_open) {
             ImGui::SameLine();
             if (ImGui::Button(selected_count ? "선택 해제" : "전체 선택")) {
                 if (selected_count) {
@@ -3307,6 +3745,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             }
             ImGui::SameLine();
             ImGui::Text("(%zu명)", static_cast<std::size_t>(selected_count));
+            }
             if (menu.officer_open_request && !menu.pending && menu.pending_officer_edits.empty() &&
                 menu.ready && !menu.officer_roster->loading && scan_cursor < 0) {
                 const auto target = *menu.officer_open_request;
@@ -3320,6 +3759,8 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     bridge.publish_notice("해당 무장을 현재 목록에서 찾지 못했습니다. 목록 갱신 후 다시 선택하세요.");
                     menu.officer_open_request.reset();
                 } else if (select_officer(target)) {
+                    menu.officer_detail_open = true;
+                    menu.officer_detail_tab = 0;
                     menu.officer_search_result = static_cast<int>(found - menu.officer_filtered_indices.begin());
                     menu.officer_open_request.reset();
                     ImGui::SetScrollY(0);
@@ -3391,10 +3832,25 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 menu.officer_next_selection.reset();
                 menu.officer_reselect_pending = false;
             }
-            ImGui::Text("무장 %zu명", menu.officer_filtered_indices.size());
-            if (selected_visible) {
+            if (!menu.officer_detail_open) ImGui::Text("무장 %zu명", menu.officer_filtered_indices.size());
+            if (selected_visible && menu.officer_detail_open) {
                 const auto& officer = *menu.snapshot.selected_officer;
                 bridge.officer_detail_visible.store(true);
+                constexpr std::array detail_tabs{"기본", "기능", "관계", "명성"};
+                for (int tab = 0; tab < 4; ++tab) {
+                    if (tab != 0) ImGui::SameLine();
+                    if (menu_sprites::navigation_row(menu.ui_atlases, detail_tabs[tab],
+                        ImVec2(ImGui::GetFontSize() * 4.0f, ImGui::GetFrameHeight() * 1.4f), menu.officer_detail_tab == tab)) {
+                        menu.officer_detail_tab = tab;
+                    }
+                }
+                ImGui::Separator();
+                if (menu.officer_detail_tab == 2) {
+                    draw_officer_inspection(menu, bridge, officer.id, false);
+                }
+                if (menu.officer_detail_tab == 0) {
+                ImGui::BeginChild("##officer_profile", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0), true);
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
                 ImGui::Text("선택: #%u", static_cast<unsigned>(officer.id));
                 const char* status_name = nullptr;
                 switch (officer.status) {
@@ -3430,7 +3886,6 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 };
                 ImGui::Text("가문: %s | 부: %s | 모: %s", family_name(officer.family[0]),
                             family_name(officer.family[1]), family_name(officer.family[2]));
-                draw_officer_inspection(menu, bridge, officer.id, false);
                 constexpr std::array city_names{
                     "양평", "북평", "계", "남피", "업", "평원", "북해", "제남", "진양", "상당",
                     "하비", "소패", "복양", "진류", "허창", "초", "여남", "낙양", "홍농", "장안",
@@ -3566,6 +4021,10 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 if (menu.snapshot.ai_growth_preview && menu.snapshot.ai_growth_preview->officer_id == officer.id) {
                     draw_ai_growth_preview(*menu.snapshot.ai_growth_preview);
                 }
+                ImGui::PopItemWidth();
+                ImGui::EndChild();
+                ImGui::SameLine();
+                }
                 constexpr std::array labels{"통솔", "무력", "지력", "정치", "매력", "문명", "무명", "악명",
                                             "공적", "봉록", "충성", "전략포인트", "행동력",
                                             "얼굴 번호", "모델 번호", "모델 색상", "등장년도", "생년", "몰년(수명)"};
@@ -3574,10 +4033,22 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     menu.selected_basic_editing.fill(false);
                     menu.selected_aptitude_editing.fill(false);
                 }
-                if (ImGui::CollapsingHeader("선택 무장 능력/상태")) {
+                if (menu.officer_detail_tab == 0 || menu.officer_detail_tab == 3) {
                     ImGui::BeginDisabled(menu.pending.has_value() || !menu.pending_officer_edits.empty() || !menu.ready);
-                    if (ImGui::BeginChild("##selected_officer_basic", ImVec2(0, 220), true)) {
+                    if (menu.officer_detail_tab == 3) {
+                        constexpr std::array priorities{"무명", "문명", "문무불문", "악명", "무관심", "고명"};
+                        int priority = static_cast<int>(officer.priority) - 1;
+                        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+                        if (ImGui::Combo("중시 명성", &priority, priorities.data(), static_cast<int>(priorities.size()))) {
+                            queue_officer_edits(officer.id, [&](std::uint16_t id) -> domain::CommandPayload {
+                                return domain::SetRosterOfficerPriority{id, static_cast<std::uint8_t>(priority + 1)};
+                            });
+                        }
+                    }
+                    if (ImGui::BeginChild("##selected_officer_basic", ImVec2(0, 0), true)) {
                         for (std::size_t i = 0; i < labels.size(); ++i) {
+                            const bool fame = i >= 5 && i <= 7;
+                            if (fame != (menu.officer_detail_tab == 3)) continue;
                             auto& draft = menu.selected_basic_draft[i];
                             if (!menu.selected_basic_editing[i]) {
                                 draft = static_cast<int>(officer.basic[i]);
@@ -3614,9 +4085,9 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     ImGui::EndChild();
                     ImGui::EndDisabled();
                 }
-                if (ImGui::CollapsingHeader("선택 무장 전법/특기/소양")) {
+                if (menu.officer_detail_tab == 1) {
                     ImGui::BeginDisabled(menu.pending.has_value() || !menu.pending_officer_edits.empty() || !menu.ready);
-                    if (ImGui::BeginChild("##selected_officer_training", ImVec2(0, 220), true)) {
+                    if (ImGui::BeginChild("##selected_officer_training", ImVec2(0, 0), true)) {
                         const auto submit_training = [&](domain::OfficerTrainingKind kind, std::uint8_t index, std::uint8_t value) {
                             queue_officer_edits(officer.id, [&](std::uint16_t id) -> domain::CommandPayload {
                                 return domain::SetRosterOfficerTraining{id, kind, index, value};
@@ -3632,18 +4103,30 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                             "제사", "난사", "화시", "원사", "시람", "화전", "난전", "연환", "돌관", "폭선",
                             "열화", "격류", "낙석", "요격", "동토", "분기", "고무", "매성", "치료", "천계",
                             "풍변", "천변", "요술", "환술", "낙뢰", "충차", "정란", "투석", "운제", "상병"};
-                        if (ImGui::TreeNode("전법")) {
+                        ImGui::SeparatorText("전법 · 버튼을 누르면 Lv +1 / 사용 횟수는 Enter로 적용");
+                        constexpr std::array tactic_groups{"보병", "기병", "궁병", "함선", "군략", "보조", "둔갑", "병기"};
+                        if (ImGui::BeginTable("##tactic_grid", 6, ImGuiTableFlags_SizingStretchSame)) {
+                            ImGui::TableSetupColumn("계통", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 2.5f);
                             for (std::size_t i = 0; i < tactic_names.size(); ++i) {
+                                if (i % 5 == 0) {
+                                    ImGui::TableNextRow();
+                                    ImGui::TableSetColumnIndex(0);
+                                    ImGui::TextUnformatted(tactic_groups[i / 5]);
+                                }
+                                ImGui::TableSetColumnIndex(static_cast<int>(i % 5 + 1));
                                 ImGui::PushID(static_cast<int>(i));
-                                ImGui::TextUnformatted(tactic_names[i]);
-                                ImGui::SameLine();
+                                const float count_width = ImGui::CalcTextSize("99").x + ImGui::GetStyle().FramePadding.x * 2.0f;
                                 if (i < officer.tactic_levels.size()) {
-                                    const auto level = officer.tactic_levels[i];
-                                    const auto label = std::to_string(level) + "##level";
-                                    if (ImGui::Button(label.c_str())) {
+                                    const std::uint8_t level = officer.tactic_levels[i];
+                                    if (menu_sprites::sprite_button(menu.ui_atlases, tactic_names[i],
+                                            ImVec2(ImGui::GetContentRegionAvail().x - count_width - ImGui::GetStyle().ItemSpacing.x, ImGui::GetFrameHeight()))) {
                                         submit_training(domain::OfficerTrainingKind::Tactic, static_cast<std::uint8_t>(i),
                                                         static_cast<std::uint8_t>((level + 1) % 4));
                                     }
+                                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lv %u / 3", static_cast<unsigned>(level));
+                                    ImGui::SameLine();
+                                } else {
+                                    ImGui::TextUnformatted(tactic_names[i]);
                                     ImGui::SameLine();
                                 }
                                 int count = 0;
@@ -3657,32 +4140,43 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                                     }
                                 }
                                 ImGui::BeginDisabled(!menu.skill_counts);
-                                const auto label = (count ? std::to_string(count) : std::string("-")) + "##count";
-                                if (ImGui::Button(label.c_str())) {
-                                    submit_count(0x139 + i, (count + 1) % 10);
+                                ImGui::SetNextItemWidth(ImGui::CalcTextSize("99").x + ImGui::GetStyle().FramePadding.x * 2.0f);
+                                if (ImGui::InputInt("##count", &count, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                                    submit_count(0x139 + i, std::clamp(count, 0, 99));
+                                }
+                                if (ImGui::IsItemHovered()) {
+                                    ImGui::SetTooltip("사용 횟수 1~99, 0은 지정 해제. Enter로 적용합니다.");
                                 }
                                 ImGui::EndDisabled();
                                 ImGui::PopID();
                             }
-                            ImGui::TreePop();
+                            ImGui::EndTable();
                         }
                         constexpr std::array skill_names{
                             "경작", "상재", "축성", "경비", "발명", "천성", "교섭", "허보", "공작", "화술", "열변", "귀모",
                             "보장", "기장", "궁장", "수군", "조기", "신산", "원호", "파성", "행군", "여력", "과감", "위풍"};
-                        if (ImGui::TreeNode("특기")) {
+                        ImGui::SeparatorText("특기 · 버튼을 누르면 Lv +1");
+                        constexpr std::array skill_groups{"임무", "지모", "병과", "군사"};
+                        if (ImGui::BeginTable("##skill_grid", 7, ImGuiTableFlags_SizingStretchSame)) {
+                            ImGui::TableSetupColumn("계통", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 2.5f);
                             for (std::size_t i = 0; i < skill_names.size(); ++i) {
+                                if (i % 6 == 0) {
+                                    ImGui::TableNextRow();
+                                    ImGui::TableSetColumnIndex(0);
+                                    ImGui::TextUnformatted(skill_groups[i / 6]);
+                                }
+                                ImGui::TableSetColumnIndex(static_cast<int>(i % 6 + 1));
                                 ImGui::PushID(static_cast<int>(i));
-                                ImGui::TextUnformatted(skill_names[i]);
-                                ImGui::SameLine();
-                                const auto level = officer.skill_levels[i];
-                                const auto label = std::to_string(level);
-                                if (ImGui::Button(label.c_str())) {
+                                const std::uint8_t level = officer.skill_levels[i];
+                                if (menu_sprites::sprite_button(menu.ui_atlases, skill_names[i],
+                                        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight()))) {
                                     submit_training(domain::OfficerTrainingKind::Skill, static_cast<std::uint8_t>(i),
                                                     static_cast<std::uint8_t>((level + 1) % 4));
                                 }
+                                ImGui::Text("Lv%u", static_cast<unsigned>(level));
                                 ImGui::PopID();
                             }
-                            ImGui::TreePop();
+                            ImGui::EndTable();
                         }
                         constexpr std::array aptitude_names{"보병", "기병", "궁병", "함선", "군략", "보조", "둔갑", "임무", "지모", "병과", "군사"};
                         if (ImGui::TreeNode("소양")) {
@@ -3744,13 +4238,14 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                     ImGui::EndDisabled();
                 }
             }
+            if (!menu.officer_detail_open) {
             ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, IM_COL32(139, 112, 51, 255));
             ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(244, 207, 87, 210));
             ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(255, 226, 111, 230));
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10 * menu.dpi_scale, 5 * menu.dpi_scale));
             if (ImGui::BeginTable("##officer_roster", 4,
-                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_NoSavedSettings)) {
-                ImGui::TableSetupColumn("선택", ImGuiTableColumnFlags_WidthFixed, 48 * menu.dpi_scale);
+                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Sortable)) {
+                ImGui::TableSetupColumn("선택", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort, 48 * menu.dpi_scale);
                 ImGui::TableSetupColumn("번호", ImGuiTableColumnFlags_WidthFixed, 70 * menu.dpi_scale);
                 ImGui::TableSetupColumn("무장", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("상태", ImGuiTableColumnFlags_WidthFixed, 110 * menu.dpi_scale);
@@ -3758,6 +4253,32 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 245, 211, 255));
                 ImGui::TableHeadersRow();
                 ImGui::PopStyleColor();
+
+                ImGuiTableSortSpecs* sort = ImGui::TableGetSortSpecs();
+                if (sort && sort->SpecsCount > 0 && (sort->SpecsDirty || menu.officer_sort_dirty)) {
+                    const int column = sort->Specs[0].ColumnIndex;
+                    const bool descending = sort->Specs[0].SortDirection == ImGuiSortDirection_Descending;
+                    std::sort(menu.officer_filtered_indices.ids.begin(),
+                        menu.officer_filtered_indices.ids.begin() + menu.officer_filtered_indices.count,
+                        [&](std::size_t left, std::size_t right) {
+                            const domain::OfficerRosterEntry& a = menu.officer_roster->entries[left];
+                            const domain::OfficerRosterEntry& b = menu.officer_roster->entries[right];
+                            int order = static_cast<int>(a.id) - static_cast<int>(b.id);
+                            if (column == 3 && a.status != b.status) {
+                                order = static_cast<int>(a.status) - static_cast<int>(b.status);
+                            } else if (column == 2 && menu.officer_names) {
+                                const auto an = menu.officer_names->find(a.id);
+                                const auto bn = menu.officer_names->find(b.id);
+                                if (an != menu.officer_names->end() && bn != menu.officer_names->end()) {
+                                    const int name_order = an->second.compare(bn->second);
+                                    if (name_order != 0) order = name_order;
+                                }
+                            }
+                            return descending ? order > 0 : order < 0;
+                        });
+                    sort->SpecsDirty = false;
+                    menu.officer_sort_dirty = false;
+                }
 
                 const float row_height = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.y * 2;
                 if (run_search && menu.officer_search_result >= 0) {
@@ -3790,11 +4311,23 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
                         } else {
                             const bool clicked = ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, ImGui::GetFrameHeight()));
                             if (clicked && ImGui::IsMouseDoubleClicked(0) && !menu.officer_name_save_pending) {
-                                menu.officer_name_edit_id = officer.id;
-                                menu.officer_name_edit_list = true;
-                                menu.officer_name_focus = true;
-                                std::snprintf(menu.officer_name_draft.data(), menu.officer_name_draft.size(), "%s", display);
-                            } else if (clicked || (ImGui::IsItemFocused() && !selected)) {
+                                if (menu.officer_relation_selection && !menu.pending) {
+                                    domain::ReplaceOfficerRelation command = *menu.officer_relation_selection;
+                                    command.replacement_id = officer.id;
+                                    const domain::RequestId request{++menu.next_request};
+                                    const domain::Result<void> result = mailbox.push({request, menu.epoch, command});
+                                    if (result) {
+                                        menu.pending = request;
+                                        menu.officer_relation_selection.reset();
+                                        menu.officer_detail_open = true;
+                                    } else {
+                                        menu.error = result.error();
+                                    }
+                                } else if (!menu.officer_relation_selection && (selected || select_officer(officer.id))) {
+                                    menu.officer_detail_open = true;
+                                    menu.officer_detail_tab = 0;
+                                }
+                            } else if (!menu.officer_relation_selection && (clicked || (ImGui::IsItemFocused() && !selected))) {
                                 select_officer(officer.id);
                             }
                         }
@@ -3824,6 +4357,7 @@ void draw_officer_roster(FeatureMenu& menu, services::UiBridge& bridge) {
             }
             ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
+            }
         } else {
             ImGui::TextUnformatted("목록 갱신을 눌러 무장을 읽어오세요.");
         }

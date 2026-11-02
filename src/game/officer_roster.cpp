@@ -536,6 +536,17 @@ bool write_roster_officer_voice(const OfficerRosterScan& scan, std::uintptr_t mo
     return first && second;
 }
 
+bool write_roster_officer_priority(const OfficerRosterScan& scan, std::uintptr_t module_base,
+                                  std::uint16_t id, std::uint8_t priority) {
+    if (priority < 1 || priority > 6) {
+        return false;
+    }
+    const std::uintptr_t officer = roster_officer(scan, module_base, id);
+
+    return officer && platform::windows::write_data_memory(officer + 0xa4,
+        std::as_bytes(std::span(&priority, 1)));
+}
+
 bool set_roster_officer_ronin(const OfficerRosterScan& scan, std::uintptr_t module_base,
                               std::uint16_t id, bool undiscovered_only) {
     const auto officer = roster_officer(scan, module_base, id);
@@ -682,18 +693,15 @@ namespace {
 
 using RelationKind = domain::OfficerRelationKind;
 using RelationStatus = domain::OfficerRelationsStatus;
-constexpr std::size_t INSPECTION_WORK_ITEMS = 32;
 constexpr std::uintptr_t OFFICER_STRIDE = 0x3d0;
 constexpr std::uintptr_t OFFICER_POINTER_MASK = 0x0000ffffffffffffULL;
-constexpr std::array<std::uintptr_t, 2> DIRECT_OFFSETS{0x57ae38, 0x462ba8};
-constexpr std::array<std::uintptr_t, 2> DIRECT_BIASES{0x80, 0xc0};
+constexpr std::uintptr_t DIRECT_POINTER_TABLE = 0x57ae38;
 constexpr std::array<std::uintptr_t, 2> SYNERGY_OFFSETS{0x547330, 0x433210};
 constexpr std::array<RelationKind, 4> DIRECT_KINDS{
     RelationKind::Sworn, RelationKind::Spouse, RelationKind::Enemy, RelationKind::Rival};
 
 enum class InspectionStage {
-    Idle, DirectCandidate, DirectValidate, DirectScan,
-    SynergyCandidate, SynergyValidate, SynergyScan, Affinity, Publish
+    Idle, Publish
 };
 
 struct InspectionIdentity {
@@ -705,6 +713,7 @@ struct InspectionIdentity {
     std::uintptr_t officer = 0;
     std::uint16_t id = 0;
     bool protagonist = false;
+    bool registered = false;
     bool operator==(const InspectionIdentity&) const = default;
 };
 
@@ -732,8 +741,33 @@ template<class T, std::size_t N> T inspection_field(const std::array<std::byte, 
     return value;
 }
 
-std::optional<InspectionIdentity> inspection_identity(const OfficerRosterScan& scan,
+std::optional<InspectionIdentity> inspection_identity(const OfficerRosterScan&,
     const OfficerInspectionContext& context, std::uint16_t id, bool protagonist) {
+    // A confirmed absent scenario selects registration data. A broken live
+    // scenario never falls back to editing the registration template.
+    if (context.game_base == 0 && context.player == 0 && !protagonist && context.module_base != 0) {
+        std::uintptr_t observed_root = 0;
+        if (context.game_base_pointer &&
+            (!inspect_value(context.game_base_pointer, observed_root) || observed_root != 0)) {
+            return std::nullopt;
+        }
+        std::uintptr_t manager = 0;
+        std::uintptr_t registered = 0;
+        std::uintptr_t slot = 0;
+        if (id >= 3001 && id <= 3300) slot = 8 + (id - 3001) * 8;
+        else if (id >= 5101 && id <= 5200) slot = 0x12c8 + (id - 5101) * 8;
+        else if (id >= 2001 && id <= 2100) slot = 0x15e8 + (id - 2001) * 8;
+        else return std::nullopt;
+
+        std::uint16_t observed_id = 0;
+        if (!inspect_value(context.module_base + 0x2ea6840, manager) || !manager ||
+            !inspect_value(manager + slot, registered) || !registered ||
+            !inspect_value(registered + 8, observed_id) || observed_id != id) {
+            return std::nullopt;
+        }
+        return InspectionIdentity{context.epoch, context.module_base, context.game_base_pointer,
+            0, manager, registered, id, false, true};
+    }
     std::uintptr_t root = 0;
     if (id == 0 || id > domain::OFFICER_RELATION_CAPACITY || context.module_base == 0 ||
         context.module_base > std::numeric_limits<std::uintptr_t>::max() - 0x34c8630 ||
@@ -750,7 +784,11 @@ std::optional<InspectionIdentity> inspection_identity(const OfficerRosterScan& s
             return std::nullopt;
         }
     } else {
-        officer = roster_officer(scan, context.module_base, id);
+        std::uintptr_t center = 0;
+        if (!inspect_value(context.module_base + 0x2e98bc8, center) || !center ||
+            !inspect_value(center + 0x21bdf0 + id * sizeof(std::uintptr_t), officer)) {
+            return std::nullopt;
+        }
     }
     std::uint16_t observed_id = 0;
     if (roster <= 0x10000 ||
@@ -849,28 +887,29 @@ struct OfficerInspectionState {
     FactionColorRestore restore;
     std::uint64_t token_counter = 0;
     std::chrono::steady_clock::time_point color_after{};
+    std::chrono::steady_clock::time_point retry_after{};
     domain::OfficerRelations building;
     std::array<std::bitset<domain::OFFICER_RELATION_CAPACITY + 1>,
         static_cast<std::size_t>(RelationKind::Count)> seen;
     InspectionStage stage = InspectionStage::Idle;
-    std::size_t candidate_index = 0;
-    std::size_t cursor = 0;
-    std::size_t candidate_valid = 0;
-    std::size_t candidate_invalid = 0;
-    std::size_t affinity_group = 0;
-    std::uintptr_t candidate = 0;
-    std::uintptr_t candidate_slot = 0;
-    std::uintptr_t candidate_pointer = 0;
-    std::uintptr_t direct_slot = 0;
-    std::uintptr_t direct_pointer = 0;
+    struct Edge {
+        RelationKind kind;
+        std::uint16_t other;
+    };
+    std::array<std::vector<Edge>, domain::OFFICER_RELATION_CAPACITY + 1> indexed;
+    std::optional<domain::GameEpoch> indexed_epoch;
+    std::uintptr_t indexed_root = 0;
+    std::uintptr_t data_center = 0;
+    std::uintptr_t direct_base = 0;
     std::uintptr_t synergy_slot = 0;
     std::uintptr_t synergy_pointer = 0;
-    std::uintptr_t data_center = 0;
+    std::uintptr_t synergy_base = 0;
+    std::array<std::uintptr_t, 3000> direct_records{};
+    std::array<std::byte, 5000 * 0x20> synergy_records{};
     bool direct_ready = false;
     bool synergy_ready = false;
     bool direct_read_failed = false;
     bool synergy_read_failed = false;
-    bool affinity_clearing = false;
     bool refresh_requested = true;
 };
 
@@ -901,59 +940,13 @@ void begin_inspection_relations(OfficerInspectionCache& cache, const InspectionI
         state.building.groups[index].available = false;
         state.seen[index].reset();
     }
-    state.candidate_index = 0;
-    state.cursor = 0;
-    state.candidate = 0;
-    state.candidate_slot = 0;
-    state.candidate_pointer = 0;
-    state.direct_slot = 0;
-    state.direct_pointer = 0;
-    state.synergy_slot = 0;
-    state.synergy_pointer = 0;
-    state.direct_ready = false;
-    state.synergy_ready = false;
-    state.direct_read_failed = false;
-    state.synergy_read_failed = false;
-    state.affinity_clearing = false;
     state.refresh_requested = false;
-    state.stage = InspectionStage::DirectCandidate;
-    publish_inspection_status(cache, owner.epoch, owner.id, RelationStatus::Loading);
-}
-
-void begin_synergy_inspection(OfficerInspectionState& state) {
-    state.candidate_index = 0;
-    state.cursor = 0;
-    state.candidate_slot = 0;
-    state.stage = InspectionStage::SynergyCandidate;
-}
-
-void begin_inspection_affinity(OfficerInspectionState& state) {
-    state.data_center = 0;
-    if (!inspect_value(state.owner->module + 0x2e98bc8, state.data_center) ||
-        state.data_center <= 0x10000 ||
-        state.data_center > std::numeric_limits<std::uintptr_t>::max() - 0x200000) {
-        state.data_center = 0;
-    }
-    state.cursor = 0;
-    state.affinity_group = 0;
-    state.stage = InspectionStage::Affinity;
+    state.stage = InspectionStage::Publish;
 }
 
 bool inspection_pointer_unchanged(std::uintptr_t slot, std::uintptr_t expected) {
     std::uintptr_t pointer = 0;
     return slot == 0 || (inspect_value(slot, pointer) && pointer == expected);
-}
-
-bool discard_stale_inspection_affinity(OfficerInspectionState& state) {
-    if (state.data_center == 0 || state.affinity_clearing ||
-        inspection_pointer_unchanged(state.owner->module + 0x2e98bc8, state.data_center)) {
-        return false;
-    }
-    state.affinity_clearing = true;
-    state.affinity_group = 0;
-    state.cursor = 0;
-    state.stage = InspectionStage::Affinity;
-    return true;
 }
 
 void append_inspection_relation(OfficerInspectionState& state, RelationKind kind, std::uint16_t id) {
@@ -969,204 +962,228 @@ void append_inspection_relation(OfficerInspectionState& state, RelationKind kind
     }
 }
 
-void direct_inspection_failed(OfficerInspectionState& state) {
-    state.direct_read_failed = true;
-    state.direct_ready = false;
-    state.direct_slot = 0;
-    for (const RelationKind kind : DIRECT_KINDS) {
-        state.building.groups[relation_index(kind)].count = 0;
-        state.building.groups[relation_index(kind)].available = false;
-        state.seen[relation_index(kind)].reset();
-    }
-    begin_synergy_inspection(state);
-}
+void read_inspection_relations(OfficerInspectionState& state) {
+    const InspectionIdentity& owner = *state.owner;
+    if (owner.registered) {
+        state.indexed_epoch.reset();
+        std::array<std::byte, 0xdc> record{};
+        state.direct_ready = state.synergy_ready = inspect_value(owner.officer, record);
+        state.direct_read_failed = state.synergy_read_failed = !state.direct_ready;
+        if (!state.direct_ready) return;
 
-void synergy_inspection_failed(OfficerInspectionState& state) {
-    state.synergy_read_failed = true;
-    state.synergy_ready = false;
-    state.synergy_slot = 0;
-    for (const RelationKind kind : {RelationKind::Synergetic, RelationKind::Antipathetic}) {
-        state.building.groups[relation_index(kind)].count = 0;
-        state.building.groups[relation_index(kind)].available = false;
-        state.seen[relation_index(kind)].reset();
-    }
-    begin_inspection_affinity(state);
-}
-
-void inspect_relation_candidate(OfficerInspectionState& state, bool synergy) {
-    const std::size_t limit = synergy ? SYNERGY_OFFSETS.size() : DIRECT_OFFSETS.size() * DIRECT_BIASES.size();
-    if (state.candidate_index == limit) {
-        if (synergy) {
-            begin_inspection_affinity(state);
-        } else {
-            begin_synergy_inspection(state);
+        for (std::size_t slot = 0; slot < 3; ++slot) {
+            append_inspection_relation(state, RelationKind::Sworn,
+                inspection_field<std::uint16_t>(record, 0x76 + slot * 2));
+            append_inspection_relation(state, RelationKind::Spouse,
+                inspection_field<std::uint16_t>(record, 0x7c + slot * 2));
         }
-        return;
-    }
-    const std::size_t index = state.candidate_index++;
-    state.candidate_slot = state.owner->root + (synergy ? SYNERGY_OFFSETS[index] : DIRECT_OFFSETS[index / 2]);
-    if (!inspect_value(state.candidate_slot, state.candidate_pointer)) {
-        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
-        return;
-    }
-    if (state.candidate_pointer <= 0x100c0 ||
-        state.candidate_pointer > std::numeric_limits<std::uintptr_t>::max() - 0x40000) {
-        return;
-    }
-    state.candidate = synergy ? state.candidate_pointer + 0xa0 : state.candidate_pointer - DIRECT_BIASES[index % 2];
-    state.cursor = 0;
-    state.candidate_valid = 0;
-    state.candidate_invalid = 0;
-    state.stage = synergy ? InspectionStage::SynergyValidate : InspectionStage::DirectValidate;
-}
-
-void validate_inspection_candidate(OfficerInspectionState& state, bool synergy) {
-    const std::size_t limit = synergy ? 600 : 128;
-    const InspectionStage rejected = synergy ? InspectionStage::SynergyCandidate : InspectionStage::DirectCandidate;
-    if (!inspection_pointer_unchanged(state.candidate_slot, state.candidate_pointer)) {
-        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
-        state.stage = rejected;
-        return;
-    }
-    if (state.cursor == limit) {
-        if (state.candidate_valid == 0) {
-            state.stage = rejected;
-        } else {
-            (synergy ? state.synergy_slot : state.direct_slot) = state.candidate_slot;
-            (synergy ? state.synergy_pointer : state.direct_pointer) = state.candidate_pointer;
-            state.cursor = 0;
-            state.stage = synergy ? InspectionStage::SynergyScan : InspectionStage::DirectScan;
+        for (std::size_t slot = 0; slot < 20; ++slot) {
+            const std::uint8_t kind = inspection_field<std::uint8_t>(record, 0x8e + slot * 4);
+            if (kind == 1 || kind == 2) {
+                append_inspection_relation(state, kind == 1 ? RelationKind::Antipathetic : RelationKind::Synergetic,
+                    inspection_field<std::uint16_t>(record, 0x8c + slot * 4));
+            }
         }
-        return;
-    }
-    std::array<std::byte, 0x40> record{};
-    const std::size_t stride = synergy ? 0x20 : 0x40;
-    if (!platform::windows::read_memory(state.candidate + state.cursor++ * stride,
-            std::span(record).first(stride))) {
-        (synergy ? state.synergy_read_failed : state.direct_read_failed) = true;
-        state.stage = rejected;
-        return;
-    }
-    const std::uint8_t kind = inspection_field<std::uint8_t>(record, synergy ? 0x18 : 8);
-    if (kind == 0) {
-        return;
-    }
-    const std::size_t first = synergy ? 8 : 0x10;
-    if (kind > (synergy ? 2 : 4) ||
-        !inspection_roster_pointer(inspection_field<std::uintptr_t>(record, first), state.owner->roster) ||
-        !inspection_roster_pointer(inspection_field<std::uintptr_t>(record, first + 8), state.owner->roster)) {
-        if (++state.candidate_invalid > 3) {
-            state.stage = rejected;
-        }
-    } else {
-        ++state.candidate_valid;
-    }
-}
-
-void inspect_direct_relation(OfficerInspectionState& state) {
-    if (!inspection_pointer_unchanged(state.direct_slot, state.direct_pointer)) {
-        direct_inspection_failed(state);
-        return;
-    }
-    if (state.cursor == 3000) {
-        state.direct_ready = true;
-        for (const RelationKind kind : DIRECT_KINDS) {
+        for (const RelationKind kind : {RelationKind::Sworn, RelationKind::Spouse,
+                RelationKind::Synergetic, RelationKind::Antipathetic}) {
             state.building.groups[relation_index(kind)].available = true;
         }
-        begin_synergy_inspection(state);
         return;
     }
-    std::array<std::byte, 0x40> record{};
-    if (!inspect_value(state.candidate + state.cursor++ * record.size(), record)) {
-        direct_inspection_failed(state);
-        return;
-    }
-    const std::uint8_t kind = inspection_field<std::uint8_t>(record, 8);
-    if (kind < 1 || kind > DIRECT_KINDS.size()) {
-        return;
-    }
-    std::array<std::uint16_t, 5> members{};
-    bool contains_officer = false;
-    for (std::size_t index = 0; index < members.size(); ++index) {
-        if (!inspection_member_id(inspection_field<std::uintptr_t>(record, 0x10 + index * 8),
-                state.owner->roster, members[index])) {
-            direct_inspection_failed(state);
-            return;
+
+    // Index once per session/explicit refresh, not once per selected officer.
+    // Each entry is a native pair, never five adjacent pointer-shaped fields.
+    const bool new_session = !state.indexed_epoch || *state.indexed_epoch != owner.epoch || state.indexed_root != owner.root;
+    if (new_session || !state.direct_ready || !state.synergy_ready) {
+        if (new_session) {
+            for (std::vector<OfficerInspectionState::Edge>& edges : state.indexed) edges.clear();
+            state.indexed_epoch = owner.epoch;
+            state.indexed_root = owner.root;
+            state.direct_ready = state.synergy_ready = false;
+            state.direct_read_failed = state.synergy_read_failed = false;
+            state.synergy_slot = state.synergy_pointer = state.synergy_base = 0;
+            state.data_center = 0;
+            inspect_value(owner.module + 0x2e98bc8, state.data_center);
+            state.direct_base = state.data_center;
         }
-        contains_officer = contains_officer || members[index] == state.owner->id;
+        for (std::vector<OfficerInspectionState::Edge>& edges : state.indexed) {
+            std::erase_if(edges, [&](const OfficerInspectionState::Edge& edge) {
+                const bool destiny = edge.kind == RelationKind::Synergetic || edge.kind == RelationKind::Antipathetic;
+                return destiny ? !state.synergy_ready : !state.direct_ready;
+            });
+        }
+
+        if (!state.direct_ready) {
+            const bool pointers_read = state.data_center &&
+                inspect_value(state.data_center + DIRECT_POINTER_TABLE, state.direct_records);
+            state.direct_read_failed = !pointers_read;
+            if (pointers_read) {
+                for (const std::uintptr_t address : state.direct_records) {
+                    if (!address) continue;
+                    std::array<std::byte, 0x20> record{};
+                    if (!inspect_value(address, record)) { state.direct_read_failed = true; continue; }
+                    const std::uint8_t kind = inspection_field<std::uint8_t>(record, 8);
+                    if (kind == 0) continue;
+                    // Other native relationship kinds are valid, but not edited by these groups.
+                    if (kind > DIRECT_KINDS.size()) continue;
+                    std::uint16_t first = 0, second = 0;
+                    const std::uintptr_t a = inspection_field<std::uintptr_t>(record, 0x10);
+                    const std::uintptr_t b = inspection_field<std::uintptr_t>(record, 0x18);
+                    if (!a || !b || !inspect_value(a + 8, first) || !inspect_value(b + 8, second) ||
+                        first == 0 || second == 0 || first > domain::OFFICER_RELATION_CAPACITY ||
+                        second > domain::OFFICER_RELATION_CAPACITY) {
+                        state.direct_read_failed = true;
+                        continue;
+                    }
+                    state.indexed[first].push_back({DIRECT_KINDS[kind - 1], second});
+                    state.indexed[second].push_back({DIRECT_KINDS[kind - 1], first});
+                }
+                state.direct_ready = !state.direct_read_failed;
+            }
+        }
+
+        // Preserve the existing destiny-table layouts, but copy the table once.
+        // Validation and indexing use that same snapshot, not 5,000 native reads.
+        if (!state.synergy_ready) {
+            for (const std::uintptr_t offset : SYNERGY_OFFSETS) {
+                std::uintptr_t pointer = 0;
+                if (!inspect_value(owner.root + offset, pointer) || pointer <= 0x10000 ||
+                    !inspect_value(pointer + 0xa0, state.synergy_records)) continue;
+                bool valid = true;
+                for (std::size_t row = 0; row < 5000; ++row) {
+                    const std::size_t position = row * 0x20;
+                    const std::uint8_t kind = inspection_field<std::uint8_t>(state.synergy_records, position + 0x18);
+                    if (kind == 0) continue;
+                    if (kind > 2 ||
+                        !inspection_roster_pointer(inspection_field<std::uintptr_t>(state.synergy_records, position + 8), owner.roster) ||
+                        !inspection_roster_pointer(inspection_field<std::uintptr_t>(state.synergy_records, position + 0x10), owner.roster)) {
+                        valid = false;
+                        break;
+                    }
+                }
+                if (!valid) continue;
+                state.synergy_slot = owner.root + offset;
+                state.synergy_pointer = pointer;
+                state.synergy_base = pointer + 0xa0;
+                state.synergy_ready = true;
+                for (std::size_t row = 0; row < 5000; ++row) {
+                    const std::size_t position = row * 0x20;
+                    const std::uint8_t kind = inspection_field<std::uint8_t>(state.synergy_records, position + 0x18);
+                    if (kind == 0 || inspection_field<std::uint8_t>(state.synergy_records, position + 0x19) != 0) continue;
+                    std::uint16_t first = 0, second = 0;
+                    if (!inspection_member_id(inspection_field<std::uintptr_t>(state.synergy_records, position + 8), owner.roster, first) ||
+                        !inspection_member_id(inspection_field<std::uintptr_t>(state.synergy_records, position + 0x10), owner.roster, second) || !first || !second) {
+                        state.synergy_ready = false;
+                        break;
+                    }
+                    const RelationKind group = kind == 1 ? RelationKind::Antipathetic : RelationKind::Synergetic;
+                    state.indexed[first].push_back({group, second});
+                    state.indexed[second].push_back({group, first});
+                }
+                break;
+            }
+            state.synergy_read_failed = !state.synergy_ready;
+        }
     }
-    if (contains_officer) {
-        for (const std::uint16_t id : members) {
-            append_inspection_relation(state, DIRECT_KINDS[kind - 1], id);
+
+    for (const OfficerInspectionState::Edge& edge : state.indexed[owner.id]) {
+        const bool destiny = edge.kind == RelationKind::Synergetic || edge.kind == RelationKind::Antipathetic;
+        if (destiny ? !state.synergy_ready : !state.direct_ready) continue;
+        if (destiny) {
+            bool direct = false;
+            for (const RelationKind kind : DIRECT_KINDS) direct |= state.seen[relation_index(kind)].test(edge.other);
+            if (direct) continue;
+        }
+        append_inspection_relation(state, edge.kind, edge.other);
+    }
+    for (const RelationKind kind : DIRECT_KINDS) state.building.groups[relation_index(kind)].available = state.direct_ready;
+    state.building.groups[relation_index(RelationKind::Synergetic)].available = state.synergy_ready;
+    state.building.groups[relation_index(RelationKind::Antipathetic)].available = state.synergy_ready;
+    // Optional affinity is read only for the selected officer's actual members.
+    if (state.data_center) {
+        for (domain::OfficerRelationGroup& group : state.building.groups) {
+            for (std::size_t index = 0; index < group.count; ++index) {
+                domain::OfficerRelationMember& member = group.members[index];
+                const std::optional<std::uint32_t> offset = domain::affinity_pair_offset(owner.id, member.id);
+                std::uint8_t affinity = 0;
+                if (offset && inspect_value(state.data_center + 0x24206 + *offset, affinity) && affinity <= 100) member.affinity = affinity;
+            }
         }
     }
 }
 
-void inspect_synergy_relation(OfficerInspectionState& state) {
-    if (!inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
-        synergy_inspection_failed(state);
-        return;
-    }
-    if (state.cursor == 5000) {
-        state.synergy_ready = true;
-        state.building.groups[relation_index(RelationKind::Synergetic)].available = true;
-        state.building.groups[relation_index(RelationKind::Antipathetic)].available = true;
-        begin_inspection_affinity(state);
-        return;
-    }
-    std::array<std::byte, 0x20> record{};
-    if (!inspect_value(state.candidate + state.cursor++ * record.size(), record)) {
-        synergy_inspection_failed(state);
-        return;
-    }
-    const std::uint8_t kind = inspection_field<std::uint8_t>(record, 0x18);
-    if ((kind != 1 && kind != 2) || inspection_field<std::uint8_t>(record, 0x19) != 0) {
-        return;
-    }
-    std::uint16_t first = 0, second = 0;
-    if (!inspection_member_id(inspection_field<std::uintptr_t>(record, 8), state.owner->roster, first) ||
-        !inspection_member_id(inspection_field<std::uintptr_t>(record, 0x10), state.owner->roster, second)) {
-        synergy_inspection_failed(state);
-        return;
-    }
-    const std::uint16_t other = first == state.owner->id ? second : second == state.owner->id ? first : 0;
-    if (other == 0 || other == state.owner->id) {
-        return;
-    }
-    // The original viewer excludes every direct relation from destiny groups.
-    for (const RelationKind direct : DIRECT_KINDS) {
-        if (state.seen[relation_index(direct)].test(other)) {
-            return;
+// Keep SEH at the native-call boundary; no C++ owning objects in these frames.
+bool set_registered_relation(std::uintptr_t module, std::uintptr_t officer,
+    RelationKind kind, int slot, std::uint16_t replacement) {
+    const std::uintptr_t offset = kind == RelationKind::Sworn ? 0x1f03df0 :
+        kind == RelationKind::Spouse ? 0x1f02e30 : 0x1f024f0;
+    const std::uint8_t native_kind = replacement == 0 ? 0 : kind == RelationKind::Antipathetic ? 1 : 2;
+    using SlotSetter = void(__fastcall*)(std::uintptr_t, int, std::uint16_t);
+    using DestinySetter = void(__fastcall*)(std::uintptr_t, int, std::uint16_t, std::uint8_t);
+    __try {
+        if (kind == RelationKind::Sworn || kind == RelationKind::Spouse) {
+            reinterpret_cast<SlotSetter>(module + offset)(officer, slot, replacement);
+        } else {
+            reinterpret_cast<DestinySetter>(module + offset)(officer, slot, replacement, native_kind);
         }
+        return true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION || GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+            ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
     }
-    append_inspection_relation(state, kind == 1 ? RelationKind::Antipathetic : RelationKind::Synergetic, other);
 }
 
-void inspect_relation_affinity(OfficerInspectionState& state) {
-    if (state.affinity_group == state.building.groups.size()) {
-        state.stage = InspectionStage::Publish;
-        return;
-    }
-    domain::OfficerRelationGroup& group = state.building.groups[state.affinity_group];
-    if (state.cursor == group.count) {
-        ++state.affinity_group;
-        state.cursor = 0;
-        return;
-    }
-    domain::OfficerRelationMember& member = group.members[state.cursor++];
-    member.affinity.reset();
-    if (state.affinity_clearing || state.data_center == 0) {
-        return;
-    }
-    const std::optional<std::uint32_t> offset = domain::affinity_pair_offset(state.owner->id, member.id);
-    std::uint8_t affinity = 0;
-    if (offset && inspect_value(state.data_center + 0x24206 + *offset, affinity) && affinity <= 100) {
-        member.affinity = affinity;
+bool commit_native_pair(std::uintptr_t module, std::uintptr_t center, std::uintptr_t record,
+    std::uintptr_t owner, std::uintptr_t replacement, std::uint8_t kind,
+    const std::byte* previous) {
+    using MapPair = void(__fastcall*)(std::uintptr_t, std::uintptr_t, std::uintptr_t, std::int16_t);
+    using ResetPair = void(__fastcall*)(std::uintptr_t);
+    using FindPair = int(__fastcall*)(std::uintptr_t, std::uintptr_t, std::uintptr_t);
+    using CreatePair = bool(__fastcall*)(std::uintptr_t, std::uintptr_t, std::uintptr_t,
+        std::uint8_t, std::uint8_t, std::uintptr_t, std::uintptr_t, std::uint8_t);
+    __try {
+        const std::uint8_t old_kind = *reinterpret_cast<const std::uint8_t*>(previous + 8);
+        const std::uintptr_t first = *reinterpret_cast<const std::uintptr_t*>(previous + 0x10);
+        const std::uintptr_t second = *reinterpret_cast<const std::uintptr_t*>(previous + 0x18);
+        const std::uintptr_t vtable = *reinterpret_cast<const std::uintptr_t*>(previous);
+        if (replacement && replacement != first && replacement != second &&
+            reinterpret_cast<FindPair>(module + 0x16c7c70)(center, owner, replacement) >= 0) return false;
+        if (old_kind != 0) {
+            reinterpret_cast<MapPair>(module + 0x16c7d00)(center, first, second, -1);
+            reinterpret_cast<ResetPair>(*reinterpret_cast<const std::uintptr_t*>(vtable + 0x50))(record);
+        }
+        if (!replacement) {
+            return reinterpret_cast<FindPair>(module + 0x16c7c70)(center, first, second) == -1;
+        }
+        if (reinterpret_cast<CreatePair>(module + 0x16c5c50)(center, owner, replacement, kind, 0, 0, 0, 0)) {
+            const int slot = reinterpret_cast<FindPair>(module + 0x16c7c70)(center, owner, replacement);
+            if (slot < 0 || slot >= 3000) return false;
+            const std::uintptr_t applied = *reinterpret_cast<const std::uintptr_t*>(center + DIRECT_POINTER_TABLE + slot * 8);
+            return applied && *reinterpret_cast<const std::uint8_t*>(applied + 8) == kind;
+        }
+        // Native allocation failure: restore the removed relationship via the same initializer.
+        if (old_kind != 0) {
+            reinterpret_cast<CreatePair>(module + 0x16c5c50)(center, first, second, old_kind,
+                static_cast<std::uint8_t>(previous[0x38]),
+                *reinterpret_cast<const std::uintptr_t*>(previous + 0x20),
+                *reinterpret_cast<const std::uintptr_t*>(previous + 0x28),
+                static_cast<std::uint8_t>(previous[0x39]));
+        }
+        return false;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION || GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+            ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
     }
 }
 
 void refresh_inspected_color(OfficerInspectionCache& cache, const InspectionIdentity& owner) {
     OfficerInspectionState& state = *cache.state;
+    if (owner.registered) {
+        cache.faction_color = {};
+        cache.faction_color.officer_id = owner.id;
+        cache.faction_color.no_faction = true;
+        return;
+    }
     const std::optional<FactionObservation> current = inspect_faction(owner);
     cache.faction_color.officer_id = owner.id;
     cache.faction_color.available = false;
@@ -1192,6 +1209,7 @@ OfficerInspectionCache::~OfficerInspectionCache() = default;
 
 void request_officer_relations_refresh(OfficerInspectionCache& cache) {
     cache.state->refresh_requested = true;
+    cache.state->indexed_epoch.reset();
     if (cache.state->owner) {
         publish_inspection_status(cache, cache.state->owner->epoch, cache.state->owner->id, RelationStatus::Loading);
     }
@@ -1200,6 +1218,7 @@ void request_officer_relations_refresh(OfficerInspectionCache& cache) {
 void reset_officer_inspection(OfficerInspectionCache& cache, domain::GameEpoch) {
     OfficerInspectionState& state = *cache.state;
     state.owner.reset();
+    state.indexed_epoch.reset();
     state.faction.reset();
     state.stage = InspectionStage::Idle;
     state.color_after = {};
@@ -1252,11 +1271,10 @@ bool restore_officer_faction_color(OfficerInspectionCache& cache, const OfficerR
 
 bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRosterScan& scan,
     const OfficerInspectionContext& context, std::uint16_t officer_id, bool protagonist,
-    const domain::WorkBudget& budget) {
+    const domain::WorkBudget&) {
     const platform::windows::RealClockScope real_clock;
-    if (budget.exhausted()) {
-        return false;
-    }
+    // The selected detail is one bounded query. Roster/background work must
+    // not repeatedly exhaust the shared budget before this query is admitted.
     OfficerInspectionState& state = *cache.state;
     const domain::OfficerFactionColor previous_color = cache.faction_color;
     bool changed = false;
@@ -1274,11 +1292,17 @@ bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRoste
         return changed || previous_color != cache.faction_color;
     }
     const bool new_owner = !state.owner || *state.owner != *owner;
-    if (new_owner || state.refresh_requested || !cache.relations) {
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    const bool retry_failed = now >= state.retry_after && (!state.direct_ready || !state.synergy_ready);
+    if (!owner->registered && state.indexed_epoch &&
+        !inspection_pointer_unchanged(context.module_base + 0x2e98bc8, state.data_center)) {
+        state.indexed_epoch.reset();
+        state.refresh_requested = true;
+    }
+    if (new_owner || state.refresh_requested || !cache.relations || retry_failed) {
         begin_inspection_relations(cache, *owner);
         changed = true;
     }
-    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (new_owner || now >= state.color_after || state.restore.pending) {
         refresh_inspected_color(cache, *owner);
         state.color_after = now + std::chrono::milliseconds(250);
@@ -1286,47 +1310,187 @@ bool update_officer_inspection(OfficerInspectionCache& cache, const OfficerRoste
     if (state.stage == InspectionStage::Idle) {
         return changed || previous_color != cache.faction_color;
     }
-    if (!inspection_pointer_unchanged(state.direct_slot, state.direct_pointer) ||
-        !inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
-        state.stage = InspectionStage::Idle;
+    read_inspection_relations(state);
+    state.retry_after = now + std::chrono::seconds(2);
+    if (!same_inspection_owner(*state.owner, scan, context)) {
+        state.indexed_epoch.reset();
         changed = publish_inspection_status(cache, context.epoch, officer_id, RelationStatus::ReadFailed);
-        return changed || previous_color != cache.faction_color;
+    } else {
+        state.building.status = state.direct_ready && state.synergy_ready ? RelationStatus::Ready :
+            state.direct_ready || state.synergy_ready ? RelationStatus::Partial : RelationStatus::ReadFailed;
+        cache.relations = own::make_shared<domain::OfficerRelations>(state.building);
+        changed = true;
     }
-    if (state.stage == InspectionStage::Affinity) {
-        discard_stale_inspection_affinity(state);
+    state.stage = InspectionStage::Idle;
+    return changed || previous_color != cache.faction_color;
+}
+
+domain::Result<void> replace_officer_relation(OfficerInspectionCache& cache,
+    const OfficerRosterScan& scan, const OfficerInspectionContext& context,
+    std::uint16_t officer_id, domain::OfficerRelationKind kind,
+    std::uint16_t previous_id, std::uint16_t replacement_id) {
+    OfficerInspectionState& state = *cache.state;
+    const bool synergy = kind == RelationKind::Synergetic || kind == RelationKind::Antipathetic;
+    if ((!synergy && kind != RelationKind::Spouse && kind != RelationKind::Sworn) ||
+        (previous_id == 0 && replacement_id == 0) || replacement_id == officer_id || previous_id == officer_id) {
+        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
     }
-    for (std::size_t work = 0; work < INSPECTION_WORK_ITEMS && !budget.exhausted(); ++work) {
-        switch (state.stage) {
-        case InspectionStage::DirectCandidate: inspect_relation_candidate(state, false); break;
-        case InspectionStage::DirectValidate: validate_inspection_candidate(state, false); break;
-        case InspectionStage::DirectScan: inspect_direct_relation(state); break;
-        case InspectionStage::SynergyCandidate: inspect_relation_candidate(state, true); break;
-        case InspectionStage::SynergyValidate: validate_inspection_candidate(state, true); break;
-        case InspectionStage::SynergyScan: inspect_synergy_relation(state); break;
-        case InspectionStage::Affinity: inspect_relation_affinity(state); break;
-        case InspectionStage::Publish:
-            if (!same_inspection_owner(*state.owner, scan, context) ||
-                !inspection_pointer_unchanged(state.direct_slot, state.direct_pointer) ||
-                !inspection_pointer_unchanged(state.synergy_slot, state.synergy_pointer)) {
-                changed = publish_inspection_status(cache, context.epoch, officer_id, RelationStatus::ReadFailed);
-            } else if (discard_stale_inspection_affinity(state)) {
-                // Clear optional affinity values in bounded slices before
-                // publishing a result gathered across different data centers.
-                break;
-            } else {
-                state.building.status = state.direct_ready && state.synergy_ready ? RelationStatus::Ready :
-                    state.direct_ready || state.synergy_ready ? RelationStatus::Partial :
-                    state.direct_read_failed || state.synergy_read_failed ? RelationStatus::ReadFailed : RelationStatus::Unavailable;
-                cache.relations = own::make_shared<domain::OfficerRelations>(state.building);
-                changed = true;
+    if (!state.owner || state.owner->id != officer_id || state.stage != InspectionStage::Idle ||
+        !(synergy ? state.synergy_ready : state.direct_ready) ||
+        !same_inspection_owner(*state.owner, scan, context) ||
+        (!state.owner->registered && !inspection_pointer_unchanged(
+            synergy ? state.synergy_slot : context.module_base + 0x2e98bc8,
+            synergy ? state.synergy_pointer : state.data_center))) {
+        return std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+    }
+    if (previous_id == replacement_id) return {};
+    if (state.owner->registered) {
+        std::array<std::byte, 0xdc> before{};
+        if (!inspect_value(state.owner->officer, before)) {
+            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        }
+        const std::size_t count = synergy ? 20 : 3;
+        const std::size_t stride = synergy ? 4 : 2;
+        const std::size_t start = synergy ? 0x8c : kind == RelationKind::Sworn ? 0x76 : 0x7c;
+        const std::uint8_t native_kind = kind == RelationKind::Antipathetic ? 1 : 2;
+        int slot = -1;
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::uint16_t member = inspection_field<std::uint16_t>(before, start + index * stride);
+            const bool matches_kind = !synergy || member == 0 ||
+                inspection_field<std::uint8_t>(before, start + index * stride + 2) == native_kind;
+            if (replacement_id && member == replacement_id && matches_kind) {
+                if (previous_id == replacement_id) return {};
+                return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
             }
-            state.stage = InspectionStage::Idle;
-            return changed || previous_color != cache.faction_color;
-        case InspectionStage::Idle:
-            return changed || previous_color != cache.faction_color;
+            if (slot < 0 && member == previous_id && matches_kind) slot = static_cast<int>(index);
+        }
+        if (slot < 0 || replacement_id > 5200) {
+            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+        }
+        const bool applied = set_registered_relation(context.module_base, state.owner->officer, kind, slot, replacement_id);
+        request_officer_relations_refresh(cache);
+        std::array<std::byte, 0xdc> after{};
+        if (!applied || !inspect_value(state.owner->officer, after)) {
+            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        }
+        bool found = replacement_id == 0;
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::uint16_t member = inspection_field<std::uint16_t>(after, start + index * stride);
+            const bool matches_kind = !synergy ||
+                inspection_field<std::uint8_t>(after, start + index * stride + 2) == native_kind;
+            if (member == replacement_id && matches_kind) found = true;
+            if (previous_id && member == previous_id && matches_kind) {
+                return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+            }
+        }
+        if (!found) return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        return {};
+    }
+    std::uintptr_t replacement = 0;
+    if (replacement_id != 0 && replacement_id <= domain::OFFICER_RELATION_CAPACITY) {
+        inspect_value(state.data_center + 0x21bdf0 + replacement_id * sizeof(std::uintptr_t), replacement);
+    }
+    if (replacement_id != 0 && replacement == 0) {
+        return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+    }
+    const std::uintptr_t base = synergy ? state.synergy_base : state.direct_base;
+    const std::size_t stride = synergy ? 0x20 : 0x40;
+    const std::size_t count = synergy ? 5000 : 3000;
+    const std::size_t first = synergy ? 8 : 0x10;
+    const std::size_t members = 2;
+    const std::uint8_t native_kind = synergy ? (kind == RelationKind::Antipathetic ? 1 : 2) :
+        (kind == RelationKind::Sworn ? 1 : 2);
+    std::uintptr_t target = 0;
+    std::uintptr_t vacant = 0;
+    std::array<std::byte, 0x40> before{};
+    std::array<std::byte, 0x40> vacant_record{};
+    std::size_t target_member = 0;
+    for (std::size_t row = 0; row < count; ++row) {
+        std::array<std::byte, 0x40> record{};
+        std::uintptr_t address = base + row * stride;
+        if (!synergy && !inspect_value(base + DIRECT_POINTER_TABLE + row * sizeof(std::uintptr_t), address)) {
+            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        }
+        if (!address) continue;
+        if (!platform::windows::read_memory(address, std::span(record).first(stride))) {
+            return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        }
+        const std::uint8_t row_kind = inspection_field<std::uint8_t>(record, synergy ? 0x18 : 8);
+        bool empty = true;
+        bool contains_owner = false;
+        bool contains_replacement = false;
+        std::size_t member_slot = members;
+        for (std::size_t member = 0; member < members; ++member) {
+            const std::uintptr_t pointer = inspection_field<std::uintptr_t>(record, first + member * 8);
+            empty &= pointer == 0;
+            if (row_kind != native_kind) continue;
+            std::uint16_t id = 0;
+            if (pointer && !(synergy ? inspection_member_id(pointer, state.owner->roster, id) : inspect_value(pointer + 8, id))) {
+                return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+            }
+            contains_owner |= id == officer_id;
+            contains_replacement |= replacement_id != 0 && id == replacement_id;
+            if ((previous_id != 0 && id == previous_id) ||
+                (previous_id == 0 && pointer == 0 && member_slot == members)) member_slot = member;
+        }
+        // Reuse only an allocated, inactive record with no members.
+        if (row_kind == 0 && empty && vacant == 0 &&
+            inspection_field<std::uintptr_t>(record, 0) != 0) {
+            vacant = address;
+            vacant_record = record;
+        }
+        if (row_kind != native_kind || !contains_owner) continue;
+        if (contains_replacement && replacement_id != previous_id) {
+            return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+        }
+        if (member_slot != members) {
+            if (target != 0) return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
+            target = address;
+            target_member = member_slot;
+            before = record;
         }
     }
-    return changed || previous_color != cache.faction_color;
+    const bool new_record = target == 0 && previous_id == 0;
+    if (new_record) {
+        target = vacant;
+        before = vacant_record;
+        target_member = 1;
+    }
+    if (target == 0) return std::unexpected(domain::Error{domain::ErrorCode::StaleEpoch});
+    if (!synergy) {
+        const bool applied = commit_native_pair(context.module_base, state.data_center, target,
+            state.owner->officer, replacement, native_kind, before.data());
+        request_officer_relations_refresh(cache);
+        if (!applied) return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+        return {};
+    }
+    std::array<std::byte, 0x40> after = before;
+    if (new_record) {
+        const std::uintptr_t owner = state.owner->officer;
+        std::memcpy(after.data() + first, &owner, sizeof(owner));
+        after[synergy ? 0x18 : 8] = static_cast<std::byte>(native_kind);
+    }
+    std::memcpy(after.data() + first + target_member * 8, &replacement, sizeof(replacement));
+    if (replacement_id == 0) {
+        std::size_t remaining = 0;
+        for (std::size_t member = 0; member < members; ++member) {
+            const std::uintptr_t pointer = inspection_field<std::uintptr_t>(after, first + member * 8);
+            if (pointer != 0) {
+                std::memcpy(after.data() + first + remaining++ * 8, &pointer, sizeof(pointer));
+            }
+        }
+        if (remaining < 2) {
+            remaining = 0;
+            after[synergy ? 0x18 : 8] = std::byte{};
+        }
+        std::memset(after.data() + first + remaining * 8, 0, (members - remaining) * 8);
+    }
+    if (!platform::windows::write_memory(target, std::span<const std::byte>(after).first(stride))) {
+        platform::windows::write_memory(target, std::span<const std::byte>(before).first(stride));
+        return std::unexpected(domain::Error{domain::ErrorCode::PlatformFailure});
+    }
+    request_officer_relations_refresh(cache);
+    return {};
 }
 
 domain::Result<void> write_officer_faction_color(OfficerInspectionCache& cache,

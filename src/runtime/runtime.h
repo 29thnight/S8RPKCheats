@@ -222,6 +222,8 @@ struct Runtime {
     int skip_days = 0;
     bool battle_mods_refreshed = false;
     std::uint8_t battle_refresh_done = 0;
+    std::uint8_t battle_settings_pending = 0;
+    std::array<std::uint64_t, 6> battle_retry_after_ms{};
     std::size_t next_battle_refresh = 0;
     std::size_t next_battle_job = 0;
     bool stratagem_refresh_next = true;

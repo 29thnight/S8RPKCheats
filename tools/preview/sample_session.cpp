@@ -148,6 +148,22 @@ void SampleSession::publish_roster() {
 void SampleSession::publish_selected(std::uint16_t id) {
     if (const auto it = officers.find(id); it != officers.end()) {
         config.selected_officer = it->second;
+        auto relations = own::make_shared<domain::OfficerRelations>();
+        relations->epoch = epoch;
+        relations->officer_id = id;
+        relations->status = domain::OfficerRelationsStatus::Ready;
+        for (domain::OfficerRelationGroup& group : relations->groups) {
+            group.available = true;
+        }
+        if (id == 8) {
+            relations->groups[1].members[0] = {2, 90};
+            relations->groups[1].count = 1;
+            relations->groups[2].members[0] = {6, 80};
+            relations->groups[2].count = 1;
+            relations->groups[3].members[0] = {1, 10};
+            relations->groups[3].count = 1;
+        }
+        config.selected_officer_relations = std::move(relations);
         config.selected_faction_color = {id, 1, 2, config.protagonist_id.has_value(),
             !config.protagonist_id.has_value(), false};
     }
