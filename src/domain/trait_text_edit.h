@@ -20,6 +20,7 @@ struct TraitTextEdit {
     std::string name;
     std::string description;
     std::optional<std::array<TraitEffect, 6>> effects;
+    std::optional<std::uint16_t> voice;
 };
 
 using TraitTextEdits = std::vector<TraitTextEdit>;

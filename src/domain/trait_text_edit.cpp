@@ -208,6 +208,7 @@ TraitTextEdits make_embedded_trait_text_rows(const TraitRuntimeCatalog& catalog)
             if (entry.present) {
                 row.effects = entry.trait.effects;
             }
+            if (metadata.voice >= 0) row.voice = static_cast<std::uint16_t>(metadata.voice);
             rows.push_back(std::move(row));
         }
     }
@@ -253,7 +254,8 @@ Result<TraitRuntimeCatalog> apply_embedded_trait_text_edits(const TraitRuntimeCa
         if (row.effects) {
             updated.traits[row.trait_id - 1] = {true, Trait{row.trait_id, *row.effects}};
         }
-        if (!row.name.empty() || !row.description.empty()) {
+        if (row.voice) metadata.voice = *row.voice;
+        if (!row.name.empty() || !row.description.empty() || row.voice) {
             metadata.present = true;
         }
         if (!row.name.empty()) {

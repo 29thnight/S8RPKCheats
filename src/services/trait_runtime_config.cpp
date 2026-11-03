@@ -122,7 +122,8 @@ domain::Result<domain::TraitRuntimeCatalog> read_trait_runtime_config(std::strin
             !text_field(*row, "name", entry.name) || !text_field(*row, "desc", entry.description) ||
             !optional_integer(*row, "cloneSrc", entry.clone_source) ||
             !optional_integer(*row, "bgTrait", entry.background_trait) ||
-            !optional_integer(*row, "grade", entry.grade)) {
+            !optional_integer(*row, "grade", entry.grade) ||
+            (row->contains("voice") && !integer(*row, "voice", 0, 140, entry.voice))) {
             return std::unexpected(domain::Error{domain::ErrorCode::InvalidData});
         }
         entry.present = true;

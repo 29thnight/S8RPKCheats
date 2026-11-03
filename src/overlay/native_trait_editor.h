@@ -34,6 +34,7 @@ public:
     domain::TraitTextValidation set_name(std::string text);
     domain::TraitTextValidation set_description(std::string text);
     void set_effect(std::size_t slot, domain::TraitEffect effect);
+    void set_voice(std::uint16_t voice) { row_.voice = voice; }
 
     // SAN8RPK 0x69A67ED1 only. Caller validates the image once and invokes on
     // the game's UI thread. Only one child input may be outstanding per draft.

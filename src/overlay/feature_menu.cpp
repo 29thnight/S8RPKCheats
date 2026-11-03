@@ -1,11 +1,10 @@
-#include "feature_menu.h"
+﻿#include "feature_menu.h"
 #include "menu_sprites.h"
 #include "native_trait_editor.h"
 
 #include "../../third_party/imgui_legacy/imgui.h"
 #include "../domain/secondary_jewel_definitions.h"
 #include "../domain/native_ui_layout.h"
-#include "../domain/jewel_layout.h"
 #include "../platform/windows/process_memory.h"
 #include "../platform/windows/hook.h"
 
@@ -25,6 +24,7 @@
 #include <cstdio>
 
 namespace s8::overlay {
+void bind_native_jewel_button(void* window);
 namespace {
 
 void open_officer_details(FeatureMenu& menu, std::uint16_t id);
@@ -594,7 +594,7 @@ struct FeatureMenuDraw {
     void draw_overview();
     void draw_connection_status();
     void draw_tengi_settings();
-    void draw_secondary_jewels();
+    void draw_jewel_diagnostics();
     void draw_domestic();
     void draw_scenario();
     void draw_information();
@@ -1084,189 +1084,37 @@ void FeatureMenuDraw::draw_tengi_settings() {
     }
 }
 
-void FeatureMenuDraw::draw_secondary_jewels() {
-    if (!menu.secondary_jewel_window || !menu.open) return;
-    const ImGuiViewport& viewport = *ImGui::GetMainViewport();
-    const float scale = std::min(viewport.WorkSize.x / 1920.0f, viewport.WorkSize.y / 1080.0f);
-    const ImVec2 origin = viewport.WorkPos;
-    ImGui::SetNextWindowPos(origin, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(viewport.WorkSize, ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("보주 편집###JewelTree", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
-    ImDrawList& draw = *ImGui::GetWindowDrawList();
-    draw.AddRectFilled(origin, ImVec2(origin.x + viewport.WorkSize.x, origin.y + viewport.WorkSize.y), IM_COL32(15, 12, 10, 140));
-    draw_screen_heading(menu, domain::native_ui::EDIT, "보주", "보주를 눌러 개방 상태와 보조계통 적용을 변경합니다", scale);
-    const ImVec2 minimum(origin.x + viewport.WorkSize.x * 0.06f, origin.y + viewport.WorkSize.y * 0.115f);
-    const ImVec2 maximum(origin.x + viewport.WorkSize.x * 0.94f, origin.y + viewport.WorkSize.y * 0.86f);
-    menu_sprites::draw_panel(menu.ui_atlases, minimum, maximum, scale);
-    constexpr std::array<const char*, 11> categories{"공통", "재야", "두령", "일반", "군사", "태수", "도독", "군주", "악한", "무인", "문인"};
-    ImGui::SetCursorScreenPos(ImVec2(minimum.x + 10 * scale, minimum.y + 12 * scale));
-    ImGui::BeginChild("##jewel_categories", ImVec2(288 * scale, maximum.y - minimum.y - 24 * scale), false, ImGuiWindowFlags_NoBackground);
-    const ImVec2 category_origin = ImGui::GetCursorScreenPos();
-    for (int category = 0; category < static_cast<int>(categories.size()); ++category) {
-        unsigned total = 0, opened = 0;
-        for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-            if (static_cast<int>(definition.category) != category) continue;
-            ++total;
-            if (menu.snapshot.jewel_bitmap && ((*menu.snapshot.jewel_bitmap)[definition.raw_id >> 3] & (1u << (definition.raw_id & 7)))) ++opened;
+void FeatureMenuDraw::draw_jewel_diagnostics() {
+    if (!ImGui::CollapsingHeader("보주 상태 (디버그)")) return;
+    ImGui::Text("전체 개방 자동 유지: %s", menu.snapshot.all_jewels_open ? "ON" : "OFF");
+    draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::SecondaryJewels, false);
+    if (!menu.snapshot.jewel_bitmap) {
+        ImGui::TextDisabled("보주 상태 없음");
+        return;
+    }
+    constexpr std::array<const char*, 11> categories{
+        "공통", "재야", "두령", "일반", "군사", "태수", "도독", "군주", "악한", "무인", "문인"};
+    std::array<unsigned, 11> total{}, opened{}, forced{};
+    const auto mask = menu.snapshot.secondary_jewels.value_or(domain::SecondaryJewelMask{});
+    for (const auto& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
+        const auto category = static_cast<std::size_t>(definition.category);
+        ++total[category];
+        if ((*menu.snapshot.jewel_bitmap)[definition.raw_id >> 3] & (1u << (definition.raw_id & 7)))
+            ++opened[category];
+        if (domain::secondary_jewel_selected(mask, definition.id)) ++forced[category];
+    }
+    if (ImGui::BeginTable("##jewel_diagnostics", 3, ImGuiTableFlags_BordersInnerV)) {
+        ImGui::TableSetupColumn("계통");
+        ImGui::TableSetupColumn("개방 / 전체");
+        ImGui::TableSetupColumn("강제적용");
+        ImGui::TableHeadersRow();
+        for (std::size_t category = 0; category < categories.size(); ++category) {
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(categories[category]);
+            ImGui::TableNextColumn(); ImGui::Text("%u / %u", opened[category], total[category]);
+            ImGui::TableNextColumn(); ImGui::Text("%u", forced[category]);
         }
-        const ImVec2 button_min(category_origin.x + 16 * scale, category_origin.y + (16 + category * 94) * scale);
-        const ImVec2 button_max(button_min.x + 248 * scale, button_min.y + 72 * scale);
-        ImGui::SetCursorScreenPos(button_min);
-        const bool pressed = menu_sprites::detail::button_item(categories[category], ImVec2(248 * scale, 72 * scale));
-        if (pressed) menu.jewel_category = category;
-        const bool hovered = ImGui::IsItemHovered();
-        const bool selected = menu.jewel_category == category;
-        ImDrawList& sidebar = *ImGui::GetWindowDrawList();
-        const unsigned state = hovered ? 1 : selected ? 2 : 0;
-        menu_sprites::detail::nine_slice(sidebar, menu.ui_atlases[0],
-            atlas_rect(domain::native_ui::JEWEL_CATEGORY_BUTTONS[state].atlas), button_min, button_max,
-            12, 10, scale, IM_COL32_WHITE);
-        if (hovered) {
-            // Native thin chamfered focus rim from compact_controls (0x5889d015).
-            menu_sprites::detail::nine_slice(sidebar, menu.ui_atlases[3], {1816, 0, 1932, 42},
-                ImVec2(button_min.x - 2 * scale, button_min.y - 2 * scale),
-                ImVec2(button_max.x + 2 * scale, button_max.y + 2 * scale), 10, 10, scale, IM_COL32_WHITE);
-        }
-        const ImU32 ink = hovered ? IM_COL32(66, 40, 10, 255) : IM_COL32(255, 249, 224, 255);
-        const float name_size = 25 * scale;
-        const ImVec2 name_extent = ImGui::GetFont()->CalcTextSizeA(name_size, 1000, 0, categories[category]);
-        sidebar.AddText(ImGui::GetFont(), name_size, ImVec2(button_min.x + (248 * scale - name_extent.x) * 0.5f, button_min.y + 8 * scale), ink, categories[category]);
-        std::array<char, 64> count_label{};
-        if (menu.snapshot.jewel_bitmap) std::snprintf(count_label.data(), count_label.size(), "개방 %u / %u", opened, total);
-        else std::snprintf(count_label.data(), count_label.size(), "개방 — / %u", total);
-        const float count_size = 22 * scale;
-        const ImVec2 count_extent = ImGui::GetFont()->CalcTextSizeA(count_size, 1000, 0, count_label.data());
-        sidebar.AddText(ImGui::GetFont(), count_size, ImVec2(button_min.x + (248 * scale - count_extent.x) * 0.5f, button_min.y + 38 * scale), ink, count_label.data());
-        const char* badge = category == 0 ? "공통" : category == 1 ? "신분" : category == 8 ? "보조" : nullptr;
-        if (badge) {
-            const ImVec2 badge_min(button_min.x - 10 * scale, button_min.y - 14 * scale);
-            const ImVec2 badge_max(badge_min.x + 84 * scale, badge_min.y + 28 * scale);
-            const bool auxiliary = category == 8;
-            sidebar.AddRectFilled(badge_min, badge_max, auxiliary ? IM_COL32(238, 235, 221, 255) : IM_COL32(103, 61, 56, 255), 14 * scale);
-            sidebar.AddRect(badge_min, badge_max, auxiliary ? IM_COL32(68, 58, 46, 255) : IM_COL32(178, 146, 130, 255), 14 * scale, 0, 1.5f * scale);
-            const float badge_size = 22 * scale;
-            const ImVec2 badge_extent = ImGui::GetFont()->CalcTextSizeA(badge_size, 1000, 0, badge);
-            sidebar.AddText(ImGui::GetFont(), badge_size, ImVec2(badge_min.x + (84 * scale - badge_extent.x) * 0.5f, badge_min.y + 3 * scale),
-                auxiliary ? IM_COL32(43, 36, 29, 255) : IM_COL32(255, 248, 225, 255), badge);
-        }
+        ImGui::EndTable();
     }
-    ImGui::EndChild();
-    const float side = std::min(maximum.y - minimum.y - 70 * scale, maximum.x - minimum.x - 624 * scale);
-    const ImVec2 tree_min(minimum.x + 312 * scale, minimum.y + 28 * scale);
-    const ImVec2 tree_max(tree_min.x + side, tree_min.y + side);
-    menu_sprites::detail::image(draw, menu.ui_atlases[2], atlas_rect(domain::native_ui::JEWEL_BACKDROP), tree_min, tree_max, IM_COL32_WHITE);
-    const float tree_scale = side / 1080;
-    const unsigned category = static_cast<unsigned>(menu.jewel_category);
-    const float left = static_cast<float>(2048 + category % 4 * 512);
-    const float top = static_cast<float>(category / 4 * 512);
-    menu_sprites::detail::image(draw, menu.ui_atlases[2], {left, top, left + 512, top + 512}, tree_min, tree_max, IM_COL32_WHITE);
-    for (const domain::JewelLineLayout& line : domain::JEWEL_LINE_LAYOUTS) {
-        if (line.category != category) continue;
-        draw.AddLine(ImVec2(tree_min.x + line.x0 * tree_scale, tree_min.y + line.y0 * tree_scale),
-            ImVec2(tree_min.x + line.x1 * tree_scale, tree_min.y + line.y1 * tree_scale), IM_COL32(137, 160, 157, 230), 4 * scale);
-    }
-    domain::SecondaryJewelMask mask = menu.snapshot.secondary_jewels.value_or(domain::SecondaryJewelMask{});
-    for (const domain::JewelStartLayout& start : domain::JEWEL_START_LAYOUTS) {
-        if (start.category != category) continue;
-        const ImVec2 center(tree_min.x + start.x * tree_scale, tree_min.y + start.y * tree_scale);
-        const float half = 20 * tree_scale;
-        menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(domain::native_ui::JEWEL_START.atlas),
-            ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), IM_COL32_WHITE);
-    }
-    for (std::size_t i = 0; i < domain::SECONDARY_JEWEL_DEFINITIONS.size(); ++i) {
-        const domain::SecondaryJewelDefinition& definition = domain::SECONDARY_JEWEL_DEFINITIONS[i];
-        if (static_cast<unsigned>(definition.category) != category) continue;
-        const domain::JewelNodeLayout& node = domain::JEWEL_NODE_LAYOUTS[i];
-        const ImVec2 center(tree_min.x + node.x * tree_scale, tree_min.y + node.y * tree_scale);
-        const float radius = domain::JEWEL_ICON_DIAMETERS[node.icon] * tree_scale * 0.5f;
-        const bool open = menu.snapshot.jewel_bitmap &&
-            ((*menu.snapshot.jewel_bitmap)[definition.raw_id >> 3] & (1u << (definition.raw_id & 7))) != 0;
-        const bool forced = domain::secondary_jewel_selected(mask, definition.id);
-        // Frames 0..4 are closed; 5..9 are their native opened counterparts.
-        const unsigned frame = node.icon % 5 + (open ? 5 : 0);
-        const domain::native_ui::Rect ring = domain::native_ui::JEWEL_FRAMES[frame].atlas;
-        const float frame_half = static_cast<float>(ring.right - ring.left) * tree_scale * 0.5f;
-
-        menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(ring),
-            ImVec2(center.x - frame_half, center.y - frame_half),
-            ImVec2(center.x + frame_half, center.y + frame_half), IM_COL32_WHITE);
-        if (open) {
-            const unsigned size = node.icon % 5 == 0 ? 0 : node.icon % 5 <= 2 ? 1 : 2;
-            // Native gold jewels (0..2) and red jewels (15..17), without tinting.
-            const domain::native_ui::Rect gem = domain::native_ui::JEWEL_GEMS[(forced ? 15 : 0) + size].atlas;
-            const float half = static_cast<float>(gem.right - gem.left) * tree_scale * 0.5f;
-
-            menu_sprites::detail::image(draw, menu.ui_atlases[0], atlas_rect(gem),
-                ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), IM_COL32_WHITE);
-        }
-        ImGui::PushID(static_cast<int>(definition.id));
-        ImGui::SetCursorScreenPos(ImVec2(center.x - radius - 4 * scale, center.y - radius - 4 * scale));
-        ImGui::BeginDisabled(!can_submit() || !menu.snapshot.jewel_bitmap);
-        std::array<char, 40> node_label{};
-        std::snprintf(node_label.data(), node_label.size(), "보주 %u##node", static_cast<unsigned>(definition.id));
-        if (ImGui::InvisibleButton(node_label.data(), ImVec2((radius + 4 * scale) * 2, (radius + 4 * scale) * 2))) {
-            menu.jewel_selected_id = definition.id;
-            const int next = !open ? 1 : forced ? 0 : 2;
-            const std::uint64_t bit = std::uint64_t{1} << (definition.id & 63);
-            if (next == 2) mask.words[definition.id >> 6] |= bit;
-            else mask.words[definition.id >> 6] &= ~bit;
-            submit(domain::SetSecondaryJewels{mask, definition.raw_id, next != 0});
-        }
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-            menu.jewel_selected_id = definition.id;
-            ImGui::SetTooltip("%s · %s", definition.name, open ? forced ? "보조계통 강제 적용" : "개방" : "미개방");
-        }
-        if (menu.jewel_selected_id == definition.id) draw.AddCircle(center, radius + 6 * scale, IM_COL32(255, 245, 202, 255), 0, 2 * scale);
-        ImGui::PopID();
-    }
-    const ImVec2 info_min(tree_max.x + 24 * scale, minimum.y + 28 * scale);
-    draw_native_card(menu, info_min, ImVec2(maximum.x - 24 * scale, maximum.y - 28 * scale), scale);
-    ImGui::SetCursorScreenPos(ImVec2(info_min.x + 18 * scale, info_min.y + 20 * scale));
-    ImGui::BeginChild("##jewel_description", ImVec2(maximum.x - info_min.x - 58 * scale, maximum.y - info_min.y - 70 * scale), false, ImGuiWindowFlags_NoBackground);
-    ImGui::Text("%s 계통", categories[category]);
-    ImGui::Separator();
-    for (const domain::SecondaryJewelDefinition& definition : domain::SECONDARY_JEWEL_DEFINITIONS) {
-        if (definition.id != menu.jewel_selected_id) continue;
-        ImGui::TextWrapped("%s", definition.name);
-        break;
-    }
-    ImGui::Spacing();
-    ImGui::TextWrapped("클릭 순서\n미개방 → 개방 → 보조계통 강제 적용 → 미개방");
-    ImGui::TextColored(ImVec4(0.65f, 0.44f, 0.02f, 1), "● 노랑: 개방");
-    ImGui::TextColored(ImVec4(0.72f, 0.12f, 0.10f, 1), "● 빨강: 보조계통 강제 적용");
-    ImGui::TextWrapped("강제 적용은 개방된 보주에만 적용됩니다.");
-    if (menu.snapshot.all_jewels_open) ImGui::TextWrapped("보주를 개별 편집하면 전체 개방 자동 유지가 꺼집니다.");
-    draw_menu_heading("적용 상태");
-    const domain::LegacyFeatureStatus& jewel_status = menu.snapshot.legacy_features[
-        static_cast<std::size_t>(domain::LegacyFeatureGroup::SecondaryJewels)];
-    if (jewel_status.phase == domain::LegacyFeaturePhase::Disabled) {
-        ImGui::TextDisabled("보조계통 강제 적용 선택 없음");
-    } else {
-        draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::SecondaryJewels, false);
-    }
-    ImGui::BeginDisabled(!can_submit());
-    const ImVec2 retry_size(ImGui::GetContentRegionAvail().x, 34 * menu.dpi_scale);
-    if (menu_sprites::sprite_button(menu.ui_atlases, "보조계통 적용 재시도", retry_size)) {
-        submit(domain::SetSecondaryJewels{mask});
-    }
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("현재 보조계통 선택으로 적용을 다시 요청합니다.");
-    }
-    if (menu.snapshot.all_jewels_open &&
-        menu_sprites::sprite_button(menu.ui_atlases, "전체 개방 다시 적용", retry_size)) {
-        submit(domain::SetAllJewelsOpen{true});
-    }
-    ImGui::EndDisabled();
-    draw_previous_request_error(menu);
-    ImGui::EndChild();
-    const float edge = 88 * scale;
-    ImGui::SetCursorScreenPos(ImVec2(origin.x + (viewport.WorkSize.x - edge) * 0.5f, origin.y + viewport.WorkSize.y * 0.93f - edge * 0.5f));
-    if (menu_sprites::back_button(menu.ui_atlases, "뒤로##jewels", edge, scale)) menu.secondary_jewel_window = false;
-    ImGui::End();
-    ImGui::PopStyleVar();
 }
 
 void FeatureMenuDraw::draw_domestic() {
@@ -1371,18 +1219,6 @@ void FeatureMenuDraw::draw_player_options() {
     draw_menu_heading("보주 · 추가 규칙");
     if (menu.pk_editors_unlocked) draw_resources();
     draw_feature({"보주 교체 무제한", domain::FeatureId::FastJewel});
-
-    bool all_jewels_open = menu.snapshot.all_jewels_open;
-
-    if (command_checkbox("보주 전체 개방", &all_jewels_open)) {
-        if (submit(domain::SetAllJewelsOpen{all_jewels_open})) {
-            menu.pending_notice = all_jewels_open ? "보주 전체 개방 ON" : "보주 전체 개방 OFF";
-        }
-    }
-    if (ImGui::Button("보주 개방 · 보조계통")) {
-        menu.secondary_jewel_window = true;
-    }
-    draw_legacy_status(menu.snapshot, domain::LegacyFeatureGroup::SecondaryJewels, false);
 }
 
 void FeatureMenuDraw::draw_scenario() {
@@ -1494,10 +1330,6 @@ void FeatureMenuDraw::draw_officer_section(OfficerToolsSection section) {
 
 void FeatureMenuDraw::draw_traits() {
     if (ImGui::BeginTabBar("##trait_growth_sections")) {
-        if (ImGui::BeginTabItem("기재 편집")) {
-            draw_trait_text_editor_content(menu, mailbox);
-            ImGui::EndTabItem();
-        }
         if (ImGui::BeginTabItem("기재 성장 · 랜덤 배정")) {
             draw_feature({"기재 3칸 표시", domain::FeatureId::TraitViewer});
             draw_feature({"능력치 한계 돌파", domain::FeatureId::AutoStatUp99});
@@ -2150,6 +1982,8 @@ void FeatureMenuDraw::draw_footer(float content_width) {
     menu.officer_tools.manual_editing = menu.pk_editors_unlocked;
     ImGui::TextWrapped("기본값은 게임 내 편집을 사용합니다. 시나리오에서 편집을 제한한 경우 이 항목으로 자체 편집기를 표시할 수 있습니다.");
     draw_menu_heading("도구");
+    ImGui::Checkbox("기재 디버그 모드", &menu.trait_text_editor.debug_enabled);
+    draw_jewel_diagnostics();
     if (menu_sprites::sprite_button(menu.ui_atlases, "메모장 / 메모리 도구",
             ImVec2(std::min(content_width, 280.0f * menu.dpi_scale), 30.0f * menu.dpi_scale))) {
         menu.debug_tools.open = true;
@@ -2165,7 +1999,7 @@ struct MenuPageInfo {
 constexpr std::array<MenuPageInfo, static_cast<std::size_t>(MenuPage::Count)> MENU_PAGES{{
     {"개요", "연결 상태와 적용 결과를 확인합니다.", 0},
     {"무장", "무장 목록, 주인공 자원과 관계 정보를 편집합니다.", 1},
-    {"기재 · 성장", "기재 문구, 일괄 전법과 성장 설정을 관리합니다.", 2},
+    {"기재 · 성장", "일괄 전법과 기재 성장 설정을 관리합니다.", 2},
     {"도시 · 내정", "도시와 군단, 명품 및 내정 설정을 관리합니다.", 4},
     {"평정 · 교류", "평정 규칙과 무장 간 교류를 설정합니다.", 0},
     {"전투", "전투 규칙, 환경과 책략을 설정합니다.", 2},
@@ -2580,6 +2414,12 @@ using NativeEditClick = void(*)(void*, void**);
 
 void native_edit_controls(void* group, const NativeEditControl* controls, int count, void* parent) {
     const auto original = reinterpret_cast<NativeEditFactory>(native_edit_factory_hook.original);
+    if (native_trait_menu_installed && count == 8 && parent &&
+        *static_cast<std::uintptr_t*>(parent) == native_edit_base + 0x2590970) {
+        original(group, controls, count, parent);
+        bind_native_jewel_button(parent);
+        return;
+    }
     if (native_trait_menu_installed && count == 6 && parent &&
         *static_cast<std::uintptr_t*>(parent) == native_edit_base + 0x271EDC0) {
         std::array<NativeEditControl, 7> extended;
@@ -2950,7 +2790,7 @@ void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
     }
     menu.city_management.manual_editing = menu.pk_editors_unlocked;
     menu.officer_tools.manual_editing = menu.pk_editors_unlocked;
-    draw.draw_secondary_jewels();
+    draw_trait_debug_window(menu);
     if (!menu.open) {
         return;
     }
@@ -2971,7 +2811,7 @@ void draw_feature_menu(FeatureMenu& menu, services::UiBridge& bridge) {
             menu.auto_load_collapse = false;
         }
     }
-    if (menu.collapsed || menu.officer_list_open || menu.protagonist_detail || menu.secondary_jewel_window) {
+    if (menu.collapsed || menu.officer_list_open || menu.protagonist_detail) {
         draw_menu_launcher(menu, popup_open, launcher);
         return;
     }

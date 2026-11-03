@@ -1,6 +1,7 @@
-#include "trait_control.h"
+﻿#include "trait_control.h"
 
 #include "../services/ui_bridge.h"
+#include "../platform/windows/process_memory.h"
 
 #include <span>
 #include <utility>
@@ -289,6 +290,32 @@ bool reconcile_trait_control(TraitControl& control, std::uintptr_t module_base,
             publish_status(control, "기본 기재 텍스트", control.view.legacy_text);
         }
 
+        return true;
+    }
+
+    // VERSION.dll owns the trait records in external mode and does not read our
+    // voice metadata. Apply only explicit voice overrides at the game boundary,
+    // including after its reload replaces/reinitializes those records.
+    if (control.external_runtime && control.catalog && game_root &&
+        (control.runtime.last_tick_ms == 0 || now_ms - control.runtime.last_tick_ms >= 500)) {
+        control.runtime.last_tick_ms = now_ms;
+        for (std::size_t index = 0; index < control.catalog->metadata.size(); ++index) {
+            const auto& metadata = control.catalog->metadata[index];
+            if (metadata.voice < 0) continue;
+            std::uintptr_t record = 0;
+            const auto pointer = game_root + control.runtime.trait_pointer_offset + (index + 1) * sizeof(record);
+            if (!platform::windows::read_memory(pointer, std::as_writable_bytes(std::span(&record, 1))) || !record)
+                continue;
+            std::uint16_t current = 0;
+            if (!platform::windows::read_memory(record + 0x30, std::as_writable_bytes(std::span(&current, 1))))
+                continue;
+            const auto voice = static_cast<std::uint16_t>(metadata.voice);
+            if (current != voice && !platform::windows::write_data_memory(
+                record + 0x30, std::as_bytes(std::span(&voice, 1)))) {
+                control.notice = "기재 발동 음성을 반영하지 못했습니다.";
+                return false;
+            }
+        }
         return true;
     }
 

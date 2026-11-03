@@ -22,6 +22,7 @@ struct TraitRuntimeMetadata {
     int clone_source = -1;
     int background_trait = -1;
     int grade = -1;
+    int voice = -1;
 };
 
 struct TraitRuntimeCatalog {

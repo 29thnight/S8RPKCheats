@@ -965,6 +965,10 @@ bool apply_records(TraitRuntimeNative& state, const TraitRuntimeNative::Records&
             std::memcpy(desired[index].data() + METADATA_OFFSET,
                 desired[static_cast<std::size_t>(metadata.background_trait)].data() + METADATA_OFFSET, METADATA_SIZE);
         }
+        if (metadata.voice >= 0) {
+            const auto voice = static_cast<std::uint16_t>(metadata.voice);
+            std::memcpy(desired[index].data() + 0x30, &voice, sizeof(voice));
+        }
         std::memcpy(desired[index].data() + TRAIT_ID_OFFSET, &id, sizeof(id));
         if (entry.present) {
             std::memcpy(desired[index].data() + EFFECT_OFFSET, entry.trait.effects.data(),

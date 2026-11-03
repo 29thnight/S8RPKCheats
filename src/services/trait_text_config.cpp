@@ -264,12 +264,13 @@ domain::Result<std::string> update_embedded_trait_text_config(std::string_view s
     nlohmann::json metadata = root["customNames"];
 
     for (const domain::TraitTextEdit& row : rows) {
-        if (row.name.empty() && row.description.empty()) {
+        if (row.name.empty() && row.description.empty() && !row.voice) {
             continue;
         }
 
         nlohmann::json& entry = metadata[std::to_string(row.trait_id - 1)];
 
+        if (row.voice) entry["voice"] = *row.voice;
         if (!row.name.empty()) {
             entry["name"] = row.name;
         }
