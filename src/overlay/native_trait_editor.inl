@@ -653,6 +653,9 @@ void finish_native_trait_page(void* state) {
     auto& frame = session.frame();
     const bool accepted = trait_native_field<int>(state, 8) == 0x7FFFFFFD;
     if (frame.page == TraitPage::JewelTree) {
+        // Native tree construction pushes its caption; Exit only destroys layouts.
+        reinterpret_cast<void(*)(void*, int)>(native_trait_module + 0x16913E0)(
+            *reinterpret_cast<void**>(native_trait_module + 0x350A4C0), 0);
         reinterpret_cast<void(*)(void*)>(native_trait_module + 0x183B0E0)(frame.jewel_state.data());
         native_jewel_edit.tree = nullptr;
         void* parent = native_jewel_edit.editor_parent;
@@ -664,8 +667,11 @@ void finish_native_trait_page(void* state) {
         void* animation = trait_native_field<void*>(root, 0x1C8);
         const bool managed = trait_native_field<bool>(animation, 0x1CC);
         trait_native_field<bool>(animation, 0x1CC) = false;
+        const auto caption_flags = trait_native_field<std::uint32_t>(animation, 0x1C0);
+        trait_native_field<std::uint32_t>(animation, 0x1C0) = caption_flags & ~0x5u;
         reinterpret_cast<void(*)(void*, int, int)>(native_trait_module + 0x1697F90)(
             animation, trait_native_field<int>(animation, 0x1C4), 0);
+        trait_native_field<std::uint32_t>(animation, 0x1C0) = caption_flags;
         trait_native_field<bool>(animation, 0x1CC) = managed;
         auto* root_vtable = trait_native_field<std::uintptr_t*>(root, 0);
         reinterpret_cast<void(*)(void*, bool)>(root_vtable[0x108 / 8])(root, true);
@@ -878,7 +884,13 @@ void update_native_jewel_layout(void* layout, void* event) {
         auto* vtable = trait_native_field<std::uintptr_t*>(layout, 0);
         reinterpret_cast<void(*)(void*, bool)>(vtable[0x108 / 8])(layout, true);
         // Show reattaches the shared footer only if its owner is active already.
+        // The retained CDataSelect owns the shared caption stack. Showing this
+        // unmanaged tree must not push another caption on every child return:
+        // destroying the tree does not pop those entries, leaking the title.
+        const auto animation_flags = trait_native_field<std::uint32_t>(animation, 0x1C0);
+        trait_native_field<std::uint32_t>(animation, 0x1C0) = animation_flags & ~0x5u;
         reinterpret_cast<void(*)(void*, int, int)>(native_trait_module + 0x1697F90)(animation, 0x589, 0);
+        trait_native_field<std::uint32_t>(animation, 0x1C0) = animation_flags;
         auto* dialog_vtable = trait_native_field<std::uintptr_t*>(dialog, 0);
         reinterpret_cast<void(*)(void*, bool)>(dialog_vtable[0x120 / 8])(dialog, true);
         // Hiding the paper's texture pane alone leaves its two native BG
